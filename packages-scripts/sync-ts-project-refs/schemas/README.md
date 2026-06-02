@@ -9,7 +9,7 @@ Use these URLs in your YAML configuration files for IDE support:
 ### Package-level Configuration
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/reekystive/simple-web-demos/main/packages-scripts/sync-ts-project-refs/schemas/stspr.package.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lennondotw/interaction-lab/main/packages-scripts/sync-ts-project-refs/schemas/stspr.package.schema.json
 
 exclude: false
 canonicalTsconfig:
@@ -27,7 +27,7 @@ references:
 ### TypeScript Config-level Configuration
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/reekystive/simple-web-demos/main/packages-scripts/sync-ts-project-refs/schemas/tsconfig.stspr.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lennondotw/interaction-lab/main/packages-scripts/sync-ts-project-refs/schemas/tsconfig.stspr.schema.json
 
 exclude: false
 includeWorkspaceDeps: false
@@ -42,7 +42,7 @@ references:
 ### Root-level Configuration
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/reekystive/simple-web-demos/main/packages-scripts/sync-ts-project-refs/schemas/stspr.root.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lennondotw/interaction-lab/main/packages-scripts/sync-ts-project-refs/schemas/stspr.root.schema.json
 
 graph:
   includeIndirectDeps: false

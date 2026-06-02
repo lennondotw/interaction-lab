@@ -35,5 +35,6 @@
   "tailwindCSS.classFunctions": ["cva", "cx", "cn", "clsx", "twMerge", "tw"],
   "tailwindCSS.experimental.configFile": "packages/tailwindcss/tailwindcss.css",
   "typescript.experimental.useTsgo": true,
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.native-preview.tsdk": "/Users/reeky/Workspace/Projects/interaction-lab/node_modules/@typescript/native-preview"
 }

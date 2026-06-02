@@ -1,8 +1,10 @@
-# React + TypeScript + Vite
+# interaction-lab
 
-## About this template
+A monorepo for interaction experiments — UI motion, gestures, view transitions, prototypes — built on a modern web/Node toolchain.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules. It features a modern development environment with:
+## About this workspace
+
+This workspace ships several apps and shared packages under one roof. Each app is a self-contained experiment built on the same toolchain:
 
 - Vite 6 for fast development and optimized builds
 - Vitest for testing

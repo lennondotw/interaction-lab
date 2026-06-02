@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/reekystive/simple-web-demos/main/packages-scripts/sync-ts-project-refs/schemas/tsconfig.stspr.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lennondotw/interaction-lab/main/packages-scripts/sync-ts-project-refs/schemas/tsconfig.stspr.schema.json
 
 references:
   add:

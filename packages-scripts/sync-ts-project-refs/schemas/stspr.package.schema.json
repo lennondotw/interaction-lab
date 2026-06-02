@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/reekystive/simple-web-demos/main/packages-scripts/sync-ts-project-refs/schemas/stspr.package.schema.json",
+  "$id": "https://raw.githubusercontent.com/lennondotw/interaction-lab/main/packages-scripts/sync-ts-project-refs/schemas/stspr.package.schema.json",
   "title": "stspr Package Configuration",
   "description": "Package-level configuration for the stspr (sync-ts-project-refs) tool.",
   "type": "object",
