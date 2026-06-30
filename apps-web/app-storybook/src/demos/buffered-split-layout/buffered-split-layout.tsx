@@ -61,8 +61,10 @@ const SAMPLE_TEXT = [
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const ratioToLeadingPx = (ratio: number, viewportWidth: number) =>
-  clamp(viewportWidth * ratio, MIN_LEADING_PX, viewportWidth - MIN_TRAILING_PX);
+const clampLeadingPx = (leadingPx: number, viewportWidth: number) =>
+  clamp(leadingPx, MIN_LEADING_PX, viewportWidth - MIN_TRAILING_PX);
+
+const ratioToLeadingPx = (ratio: number, viewportWidth: number) => clampLeadingPx(viewportWidth * ratio, viewportWidth);
 
 const formatPx = (value: number) => `${Math.round(value)}px`;
 
@@ -93,6 +95,10 @@ interface LayoutMetrics {
   rightCommittedVisiblePx: number;
   rightContentRenderPx: number;
   rightContentVisiblePx: number;
+}
+
+interface VisualEffectsOptions {
+  centerLeftCommitted?: boolean;
 }
 
 const buildParagraphs = (prefix: string) =>
@@ -130,6 +136,12 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   // resize update these through CSS variables without going through React.
   const liveLeadingPxRef = useRef<number | null>(null);
   const liveTrailingPxRef = useRef<number | null>(null);
+
+  // This is the durable split intent. Window resize derives a clamped live value
+  // from this ratio, but does not rewrite it. That means a narrow viewport can
+  // temporarily clamp the split, then a later wider viewport can recover the
+  // original ratio without the user touching the divider again.
+  const preferredLeadingRatioRef = useRef(initialLeadingRatio);
 
   const commitAnimationControlsRef = useRef<{
     leftX?: { stop: () => void };
@@ -181,6 +193,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       `live ${formatPx(metrics.leftCommittedVisiblePx)} | committed ${formatPx(metrics.leftCommittedRenderPx)}`,
       `content ${formatPx(metrics.leftContentVisiblePx)} | committed ${formatPx(metrics.leftContentRenderPx)}`,
       `diff ${formatPx(leftContentDiffPx)} | container ${formatPx(leftContainerDiffPx)}`,
+      `preferred ${(preferredLeadingRatioRef.current * 100).toFixed(1)}%`,
       `resizer ${dragActiveRef.current ? 'dragging' : 'idle'}`,
     ].join('\n');
 
@@ -188,6 +201,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       `live ${formatPx(metrics.rightCommittedVisiblePx)} | committed ${formatPx(metrics.rightCommittedRenderPx)}`,
       `content ${formatPx(metrics.rightContentVisiblePx)} | committed ${formatPx(metrics.rightContentRenderPx)}`,
       `diff ${formatPx(rightContentDiffPx)} | container ${formatPx(rightContainerDiffPx)}`,
+      `preferred ${((1 - preferredLeadingRatioRef.current) * 100).toFixed(1)}%`,
       `resizer ${dragActiveRef.current ? 'dragging' : 'idle'}`,
     ].join('\n');
   };
@@ -225,9 +239,11 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
 
   // Any new live movement interrupts the "commit is settling" grace window and
   // moves the layout back into a pending commit. The current width animation is
-  // allowed to keep running until the next commit target replaces it.
+  // allowed to keep running until the next commit target replaces it, but the
+  // left x spring is stopped so the live-centering compensation can take over.
   const beginPendingCommit = () => {
     pendingCommitRef.current = true;
+    commitAnimationControlsRef.current.leftX?.stop();
 
     if (!commitAnimationActiveRef.current) return;
 
@@ -242,16 +258,32 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   // All expensive derived visual state is calculated from refs and MotionValues.
   // React state only controls structural concerns like whether the trailing pane
   // is mounted/open; drag and resize should not trigger React commits.
-  const writeVisualEffects = (leadingLivePx: number, trailingLivePx: number) => {
+  const writeVisualEffects = (leadingLivePx: number, trailingLivePx: number, options: VisualEffectsOptions = {}) => {
     liveLeadingPxRef.current = leadingLivePx;
     liveTrailingPxRef.current = trailingLivePx;
 
+    const centerLeftCommitted = options.centerLeftCommitted ?? trailingOpen;
     const leftPaneVisiblePx = Math.max(0, leadingLivePx - PANE_VISUAL_GAP_TOTAL_PX);
     const rightPaneVisiblePx = Math.max(0, trailingLivePx - PANE_VISUAL_GAP_TOTAL_PX);
     const leftCommittedVisiblePx = Math.max(0, leftPaneVisiblePx - COMMITTED_HORIZONTAL_INSET_PX);
     const rightCommittedVisiblePx = Math.max(0, rightPaneVisiblePx - COMMITTED_HORIZONTAL_INSET_PX);
     const leftCommittedRenderPx = committedLeadingWidthPxRef.current ?? leftCommittedVisiblePx;
     const rightCommittedRenderPx = committedTrailingWidthPxRef.current ?? rightCommittedVisiblePx;
+
+    if (centerLeftCommitted && pendingCommitRef.current && !commitAnimationActiveRef.current) {
+      // During the live phase the shell follows drag/window resize immediately,
+      // while committed width is still buffered. Move only x so the buffered
+      // left panel remains visually centered in the changing live shell; the
+      // next commit hands x and width back to the layout spring.
+      const nextLeftXPx = (leftPaneVisiblePx - leftCommittedRenderPx) / 2;
+      const currentLeftXPx = committedLeadingXPxRef.current ?? leftCommittedXPx.get();
+
+      if (Math.abs(nextLeftXPx - currentLeftXPx) > WIDTH_DIFF_EPSILON_PX) {
+        leftCommittedXPx.jump(nextLeftXPx);
+        committedLeadingXPxRef.current = nextLeftXPx;
+      }
+    }
+
     const leftContentVisiblePx = Math.min(
       Math.max(0, leftCommittedVisiblePx - CONTENT_HORIZONTAL_INSET_PX),
       CONTENT_MAX_WIDTH_PX
@@ -400,12 +432,17 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     commitLayout(viewportWidth, trailingWidthPx, options);
   };
 
+  const getPreferredLeadingPx = (viewportWidth: number) =>
+    ratioToLeadingPx(preferredLeadingRatioRef.current, viewportWidth);
+
+  const getPreferredTrailingPx = (viewportWidth: number) => viewportWidth - getPreferredLeadingPx(viewportWidth);
+
   const writeLiveSplit = (leadingPx: number, viewportWidth?: number, open = trailingOpen) => {
     const root = rootRef.current;
     if (!root) return;
 
     const width = viewportWidth ?? root.getBoundingClientRect().width;
-    const clampedLeadingPx = clamp(leadingPx, MIN_LEADING_PX, width - MIN_TRAILING_PX);
+    const clampedLeadingPx = clampLeadingPx(leadingPx, width);
     const trailingWidthPx = open
       ? width - clampedLeadingPx
       : (committedTrailingPxRef.current ?? width - clampedLeadingPx);
@@ -417,12 +454,14 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     root.style.setProperty('--split-leading-live-width', formatPx(leadingLivePx));
     root.style.setProperty('--split-trailing-live-width', formatPx(trailingWidthPx));
     root.style.setProperty('--split-divider-x', formatPx(dividerXPx));
-    writeVisualEffects(leadingLivePx, trailingWidthPx);
+    writeVisualEffects(leadingLivePx, trailingWidthPx, { centerLeftCommitted: open });
   };
 
   // Trailing-only debounce: every live movement replaces the pending timer, and
   // only the final target becomes a committed layout.
-  const scheduleCommit = (leadingPx: number) => {
+  type CommitLeadingTarget = number | ((viewportWidth: number) => number);
+
+  const scheduleCommit = (leadingTarget: CommitLeadingTarget) => {
     if (commitTimerRef.current != null) {
       clearTimeout(commitTimerRef.current);
     }
@@ -433,8 +472,25 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       if (!root) return;
 
       const viewportWidth = root.getBoundingClientRect().width;
-      const nextLeadingPx = clamp(leadingPx, MIN_LEADING_PX, viewportWidth - MIN_TRAILING_PX);
+      const targetLeadingPx = typeof leadingTarget === 'function' ? leadingTarget(viewportWidth) : leadingTarget;
+      const nextLeadingPx = clampLeadingPx(targetLeadingPx, viewportWidth);
       commitLayout(nextLeadingPx, viewportWidth - nextLeadingPx);
+    }, COMMIT_DELAY_MS);
+  };
+
+  const schedulePreferredCollapsedCommit = () => {
+    if (commitTimerRef.current != null) {
+      clearTimeout(commitTimerRef.current);
+    }
+
+    commitTimerRef.current = setTimeout(() => {
+      commitTimerRef.current = null;
+      const root = rootRef.current;
+      if (!root) return;
+
+      const viewportWidth = root.getBoundingClientRect().width;
+      commitCollapsedLayout(viewportWidth, getPreferredTrailingPx(viewportWidth));
+      renderMetricsPanels();
     }, COMMIT_DELAY_MS);
   };
 
@@ -443,7 +499,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     if (!root) return;
 
     const viewportWidth = root.getBoundingClientRect().width;
-    const nextLeadingPx = ratioToLeadingPx(initialLeadingRatio, viewportWidth);
+    preferredLeadingRatioRef.current = initialLeadingRatio;
+
+    const nextLeadingPx = getPreferredLeadingPx(viewportWidth);
     if (initialTrailingOpen) {
       commitLayout(nextLeadingPx, viewportWidth - nextLeadingPx, { animateCommit: false });
     } else {
@@ -468,37 +526,26 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     const handleResize = () => {
       // Window resize follows the same model as divider drag: update the live
       // shell immediately, then commit the stabilized geometry after debounce.
+      // The important difference is that resize reads the durable preferred
+      // ratio and leaves it untouched, so temporary min-width clamps do not
+      // become the user's saved split.
       beginPendingCommit();
 
       const viewportWidth = root.getBoundingClientRect().width;
-      const trailingWidthPx = clamp(
-        committedTrailingPxRef.current ?? viewportWidth * (1 - initialLeadingRatio),
-        MIN_TRAILING_PX,
-        viewportWidth - MIN_LEADING_PX
-      );
+      const preferredLeadingPx = getPreferredLeadingPx(viewportWidth);
+      const preferredTrailingPx = viewportWidth - preferredLeadingPx;
 
       if (!trailingOpen) {
         root.style.setProperty('--split-leading-live-width', formatPx(viewportWidth));
-        root.style.setProperty('--split-trailing-live-width', formatPx(trailingWidthPx));
+        root.style.setProperty('--split-trailing-live-width', formatPx(preferredTrailingPx));
         root.style.setProperty('--split-divider-x', formatPx(viewportWidth));
-        writeVisualEffects(viewportWidth, trailingWidthPx);
-
-        if (commitTimerRef.current != null) {
-          clearTimeout(commitTimerRef.current);
-        }
-
-        commitTimerRef.current = setTimeout(() => {
-          commitTimerRef.current = null;
-          commitCollapsedLayout(viewportWidth, trailingWidthPx);
-          renderMetricsPanels();
-        }, COMMIT_DELAY_MS);
+        writeVisualEffects(viewportWidth, preferredTrailingPx, { centerLeftCommitted: false });
+        schedulePreferredCollapsedCommit();
         return;
       }
 
-      const currentLeadingPx = committedLeadingPxRef.current ?? ratioToLeadingPx(initialLeadingRatio, viewportWidth);
-      const nextLeadingPx = clamp(currentLeadingPx, MIN_LEADING_PX, viewportWidth - trailingWidthPx);
-      writeLiveSplit(nextLeadingPx, viewportWidth, true);
-      scheduleCommit(nextLeadingPx);
+      writeLiveSplit(preferredLeadingPx, viewportWidth, true);
+      scheduleCommit(getPreferredLeadingPx);
     };
 
     window.addEventListener('resize', handleResize);
@@ -539,11 +586,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     // Prop/open-state changes need a live shell refresh, but they should not
     // create a pending commit by themselves.
     const viewportWidth = root.getBoundingClientRect().width;
-    const fallbackLeadingPx =
-      trailingOpen && committedLeadingPxRef.current != null
-        ? committedLeadingPxRef.current
-        : viewportWidth - (committedTrailingPxRef.current ?? viewportWidth * (1 - initialLeadingRatio));
-    writeLiveSplit(fallbackLeadingPx, viewportWidth, trailingOpen);
+    writeLiveSplit(getPreferredLeadingPx(viewportWidth), viewportWidth, trailingOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialLeadingRatio, trailingOpen]);
 
@@ -575,8 +618,10 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       beginPendingCommit();
 
       const nextLeadingPx = moveEvent.clientX - rootRect.left - dragOffsetRef.current;
-      writeLiveSplit(nextLeadingPx, dragViewportWidthRef.current, true);
-      scheduleCommit(nextLeadingPx);
+      const nextEffectiveLeadingPx = clampLeadingPx(nextLeadingPx, dragViewportWidthRef.current);
+      preferredLeadingRatioRef.current = nextEffectiveLeadingPx / dragViewportWidthRef.current;
+      writeLiveSplit(nextEffectiveLeadingPx, dragViewportWidthRef.current, true);
+      scheduleCommit(nextEffectiveLeadingPx);
     };
 
     const handleUp = (upEvent: globalThis.PointerEvent) => {
@@ -605,23 +650,20 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     }
 
     const viewportWidth = root.getBoundingClientRect().width;
-    const currentTrailingWidthPx =
-      committedTrailingPxRef.current ??
-      viewportWidth - (committedLeadingPxRef.current ?? ratioToLeadingPx(initialLeadingRatio, viewportWidth));
-    const fallbackLeadingPx = viewportWidth - currentTrailingWidthPx;
+    const preferredLeadingPx = getPreferredLeadingPx(viewportWidth);
+    const preferredTrailingPx = viewportWidth - preferredLeadingPx;
     const nextOpen = !trailingOpen;
     setTrailingOpen(nextOpen);
 
     if (nextOpen) {
-      const legalLeadingPx = clamp(fallbackLeadingPx, MIN_LEADING_PX, viewportWidth - MIN_TRAILING_PX);
-      commitLayout(legalLeadingPx, viewportWidth - legalLeadingPx);
-      writeLiveSplit(legalLeadingPx, viewportWidth, true);
+      commitLayout(preferredLeadingPx, preferredTrailingPx);
+      writeLiveSplit(preferredLeadingPx, viewportWidth, true);
     } else {
       // Collapse keeps the right pane rendered off-screen. That preserves the
       // sidebar's internal state and makes the next expansion cheap.
       const currentLeftCommittedXPx =
         committedLeadingXPxRef.current ??
-        paneWidthToCenteredCommittedBox(committedLeadingPxRef.current ?? fallbackLeadingPx).xPx;
+        paneWidthToCenteredCommittedBox(committedLeadingPxRef.current ?? preferredLeadingPx).xPx;
       const collapsedLiveWidthPx = Math.max(0, viewportWidth - PANE_VISUAL_GAP_TOTAL_PX);
       const collapsedRightInsetPx = COMMITTED_HORIZONTAL_INSET_PX / 2;
       const leftCommittedBox = {
@@ -630,10 +672,10 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       };
 
       root.style.setProperty('--split-leading-live-width', formatPx(viewportWidth));
-      root.style.setProperty('--split-trailing-live-width', formatPx(currentTrailingWidthPx));
+      root.style.setProperty('--split-trailing-live-width', formatPx(preferredTrailingPx));
       root.style.setProperty('--split-divider-x', formatPx(viewportWidth));
-      writeVisualEffects(viewportWidth, currentTrailingWidthPx);
-      commitCollapsedLayout(viewportWidth, currentTrailingWidthPx, { leftCommittedBox });
+      writeVisualEffects(viewportWidth, preferredTrailingPx, { centerLeftCommitted: false });
+      commitCollapsedLayout(viewportWidth, preferredTrailingPx, { leftCommittedBox });
     }
   };
 
