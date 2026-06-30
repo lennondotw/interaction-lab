@@ -20,7 +20,7 @@ export function useTickSound() {
       .then((buffer) => {
         rawBufferRef.current = buffer;
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.error('Failed to prefetch tick sound:', error);
       });
   }, []);
