@@ -66,11 +66,23 @@ const ratioToLeadingPx = (ratio: number, viewportWidth: number) =>
 
 const formatPx = (value: number) => `${Math.round(value)}px`;
 
-// The committed motion values drive the inner committed container width, not
-// the whole pane width. Keep this translation in one place so the visual
-// metrics and DOM width agree.
-const paneWidthToCommittedWidth = (paneWidthPx: number) =>
-  Math.max(0, paneWidthPx - PANE_VISUAL_GAP_TOTAL_PX - COMMITTED_HORIZONTAL_INSET_PX);
+interface CommittedBox {
+  widthPx: number;
+  xPx: number;
+}
+
+// The committed motion values drive the inner committed container box, not the
+// whole pane. Keep this translation in one place so visual metrics and DOM
+// geometry agree.
+const paneWidthToCenteredCommittedBox = (paneWidthPx: number): CommittedBox => {
+  const liveWidthPx = Math.max(0, paneWidthPx - PANE_VISUAL_GAP_TOTAL_PX);
+  const widthPx = Math.max(0, liveWidthPx - COMMITTED_HORIZONTAL_INSET_PX);
+
+  return {
+    widthPx,
+    xPx: Math.max(0, (liveWidthPx - widthPx) / 2),
+  };
+};
 
 interface LayoutMetrics {
   leftCommittedRenderPx: number;
@@ -110,6 +122,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   // These are the currently rendered committed container widths. During a
   // commit animation they move frame-by-frame via MotionValue, and the metrics
   // read from these refs so the debug panel reflects the actual DOM width.
+  const committedLeadingXPxRef = useRef<number | null>(null);
   const committedLeadingWidthPxRef = useRef<number | null>(null);
   const committedTrailingWidthPxRef = useRef<number | null>(null);
 
@@ -119,6 +132,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const liveTrailingPxRef = useRef<number | null>(null);
 
   const commitAnimationControlsRef = useRef<{
+    leftX?: { stop: () => void };
     left?: { stop: () => void };
     right?: { stop: () => void };
   }>({});
@@ -140,6 +154,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const metricsRef = useRef<LayoutMetrics | null>(null);
   const rightMetricsRef = useRef<HTMLPreElement>(null);
   const [trailingOpen, setTrailingOpen] = useState(initialTrailingOpen);
+  const leftCommittedXPx = useMotionValue(0);
   const leftCommittedWidthPx = useMotionValue(0);
   const rightCommittedWidthPx = useMotionValue(0);
   const leftBlurPx = useMotionValue(0);
@@ -286,6 +301,10 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     writeVisualEffects(leadingLivePx, trailingLivePx);
   };
 
+  useMotionValueEvent(leftCommittedXPx, 'change', (latest) => {
+    committedLeadingXPxRef.current = latest;
+  });
+
   useMotionValueEvent(leftCommittedWidthPx, 'change', (latest) => {
     committedLeadingWidthPxRef.current = latest;
     refreshVisualEffects();
@@ -296,10 +315,17 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     refreshVisualEffects();
   });
 
-  const writeCommittedWidths = (leadingWidthPx: number, trailingWidthPx: number, shouldAnimate: boolean) => {
-    const nextLeftWidthPx = paneWidthToCommittedWidth(leadingWidthPx);
-    const nextRightWidthPx = paneWidthToCommittedWidth(trailingWidthPx);
+  const writeCommittedWidths = (
+    leadingWidthPx: number,
+    trailingWidthPx: number,
+    shouldAnimate: boolean,
+    leftCommittedBox = paneWidthToCenteredCommittedBox(leadingWidthPx)
+  ) => {
+    const nextLeftXPx = leftCommittedBox.xPx;
+    const nextLeftWidthPx = leftCommittedBox.widthPx;
+    const nextRightWidthPx = paneWidthToCenteredCommittedBox(trailingWidthPx).widthPx;
 
+    commitAnimationControlsRef.current.leftX?.stop();
     commitAnimationControlsRef.current.left?.stop();
     commitAnimationControlsRef.current.right?.stop();
 
@@ -315,6 +341,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       commitAnimationActiveRef.current = true;
       leftBlurPx.set(0);
       rightBlurPx.set(0);
+      commitAnimationControlsRef.current.leftX = animate(leftCommittedXPx, nextLeftXPx, LAYOUT_SPRING);
       commitAnimationControlsRef.current.left = animate(leftCommittedWidthPx, nextLeftWidthPx, LAYOUT_SPRING);
       commitAnimationControlsRef.current.right = animate(rightCommittedWidthPx, nextRightWidthPx, LAYOUT_SPRING);
       commitAnimationSettledTimerRef.current = setTimeout(() => {
@@ -327,8 +354,10 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       // geometry without playing catch-up from zero.
       pendingCommitRef.current = false;
       commitAnimationActiveRef.current = false;
+      leftCommittedXPx.jump(nextLeftXPx);
       leftCommittedWidthPx.jump(nextLeftWidthPx);
       rightCommittedWidthPx.jump(nextRightWidthPx);
+      committedLeadingXPxRef.current = nextLeftXPx;
       committedLeadingWidthPxRef.current = nextLeftWidthPx;
       committedTrailingWidthPxRef.current = nextRightWidthPx;
     }
@@ -344,6 +373,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     trailingWidthPx: number,
     options: {
       animateCommit?: boolean;
+      leftCommittedBox?: CommittedBox;
     } = {}
   ) => {
     const shouldAnimate = options.animateCommit ?? true;
@@ -355,7 +385,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       commitCountTextRef.current.textContent = `commit ${layoutCommitCountRef.current}`;
     }
     flashCommitIndicator();
-    writeCommittedWidths(leadingWidthPx, trailingWidthPx, shouldAnimate);
+    writeCommittedWidths(leadingWidthPx, trailingWidthPx, shouldAnimate, options.leftCommittedBox);
     renderMetricsPanels();
   };
 
@@ -364,6 +394,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     trailingWidthPx: number,
     options: {
       animateCommit?: boolean;
+      leftCommittedBox?: CommittedBox;
     } = {}
   ) => {
     commitLayout(viewportWidth, trailingWidthPx, options);
@@ -495,6 +526,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
         clearTimeout(commitAnimationSettledTimerRef.current);
       }
 
+      commitAnimationControls.leftX?.stop();
       commitAnimationControls.left?.stop();
       commitAnimationControls.right?.stop();
     };
@@ -586,11 +618,21 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     } else {
       // Collapse keeps the right pane rendered off-screen. That preserves the
       // sidebar's internal state and makes the next expansion cheap.
+      const currentLeftCommittedXPx =
+        committedLeadingXPxRef.current ??
+        paneWidthToCenteredCommittedBox(committedLeadingPxRef.current ?? fallbackLeadingPx).xPx;
+      const collapsedLiveWidthPx = Math.max(0, viewportWidth - PANE_VISUAL_GAP_TOTAL_PX);
+      const collapsedRightInsetPx = COMMITTED_HORIZONTAL_INSET_PX / 2;
+      const leftCommittedBox = {
+        xPx: currentLeftCommittedXPx,
+        widthPx: Math.max(0, collapsedLiveWidthPx - currentLeftCommittedXPx - collapsedRightInsetPx),
+      };
+
       root.style.setProperty('--split-leading-live-width', formatPx(viewportWidth));
       root.style.setProperty('--split-trailing-live-width', formatPx(currentTrailingWidthPx));
       root.style.setProperty('--split-divider-x', formatPx(viewportWidth));
       writeVisualEffects(viewportWidth, currentTrailingWidthPx);
-      commitCollapsedLayout(viewportWidth, currentTrailingWidthPx);
+      commitCollapsedLayout(viewportWidth, currentTrailingWidthPx, { leftCommittedBox });
     }
   };
 
@@ -625,14 +667,11 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       >
         <span className={EDGE_LABEL_CLASS}>left-live</span>
         <div className="absolute inset-0 overflow-hidden">
-          {/* Committed is centered inside live. While pending, live can clip it without relaying out the content. */}
+          {/* Resize targets center this box; collapse targets keep its left edge fixed and spring the right edge out. */}
           <motion.div
             data-demo-left-committed
-            style={{ filter: leftBufferedFilter, width: leftCommittedWidthPx }}
-            className={`
-              absolute top-7 bottom-7 left-1/2 -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300
-              outline-dashed
-            `}
+            style={{ filter: leftBufferedFilter, width: leftCommittedWidthPx, x: leftCommittedXPx }}
+            className="absolute top-7 bottom-7 left-0 outline-[1px] -outline-offset-1 outline-sky-300 outline-dashed"
           >
             <span className={EDGE_LABEL_CLASS}>left-committed</span>
             {/* The committed container owns scrolling, so the content label and width move with committed geometry. */}
