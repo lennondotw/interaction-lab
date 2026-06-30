@@ -553,12 +553,13 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
 
     const pointerId = event.pointerId;
     const rootRect = root.getBoundingClientRect();
+    const divider = event.currentTarget;
     const currentLeadingStylePx = Number.parseFloat(root.style.getPropertyValue('--split-leading-live-width'));
     const currentLeadingPx = Number.isNaN(currentLeadingStylePx)
       ? (committedLeadingPxRef.current ?? ratioToLeadingPx(initialLeadingRatio, rootRect.width))
       : currentLeadingStylePx;
 
-    event.currentTarget.setPointerCapture(pointerId);
+    divider.setPointerCapture(pointerId);
     dragOffsetRef.current = event.clientX - rootRect.left - currentLeadingPx;
     dragViewportWidthRef.current = rootRect.width;
     dragActiveRef.current = true;
@@ -589,7 +590,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       // debounce gap and leave when the commit actually starts.
       refreshVisualEffects();
       renderMetricsPanels();
-      event.currentTarget.releasePointerCapture(pointerId);
+      divider.releasePointerCapture(pointerId);
     };
 
     window.addEventListener('pointermove', handleMove);
