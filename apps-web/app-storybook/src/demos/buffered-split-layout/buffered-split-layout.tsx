@@ -9,7 +9,16 @@ export interface BufferedSplitLayoutDemoProps {
 
 const MIN_LEADING_PX = 360;
 const MIN_TRAILING_PX = 360;
+
+// The demo intentionally separates the immediately visible split from the
+// committed render width. Dragging writes the live CSS variables on every
+// pointer move, while the committed width only catches up after this trailing
+// debounce fires.
 const COMMIT_DELAY_MS = 200;
+
+// These insets make the nested boxes visible in the demo, but they also mirror
+// the production layout idea: the outer pane can resize or clip without forcing
+// the inner content width to change on every frame.
 const PANE_VISUAL_GAP_TOTAL_PX = 20;
 const COMMITTED_HORIZONTAL_INSET_PX = 40;
 const CONTENT_HORIZONTAL_INSET_PX = 40;
@@ -17,18 +26,28 @@ const CLIP_BLUR_PX = 4;
 const WIDTH_DIFF_EPSILON_PX = 0.5;
 const CONTENT_MAX_WIDTH_PX = 640;
 const EDGE_LABEL_CLASS = 'pointer-events-none absolute top-0 left-3 z-20 -translate-y-1/2 bg-white px-1 leading-none';
+
+// Blur is a state affordance, not the layout animation itself. It should feel
+// responsive and should not inherit the slower committed-width spring.
 const CRITICAL_SPRING = {
   type: 'spring',
   stiffness: 900,
   damping: 60,
   mass: 1,
 } as const;
+
+// Layout movement uses a slower spring because it is the visible reconciliation
+// between "live" and "committed" geometry.
 const LAYOUT_SPRING = {
   type: 'spring',
   stiffness: 400,
   damping: 40,
   mass: 1,
 } as const;
+
+// This is not the physical duration of the spring. It is the window during
+// which we consider the committed layout to be settling, so buffered blur is
+// prevented from reappearing on small spring overshoots.
 const COMMIT_ANIMATION_MS = 500;
 
 const SAMPLE_TEXT = [
@@ -47,6 +66,9 @@ const ratioToLeadingPx = (ratio: number, viewportWidth: number) =>
 
 const formatPx = (value: number) => `${Math.round(value)}px`;
 
+// The committed motion values drive the inner committed container width, not
+// the whole pane width. Keep this translation in one place so the visual
+// metrics and DOM width agree.
 const paneWidthToCommittedWidth = (paneWidthPx: number) =>
   Math.max(0, paneWidthPx - PANE_VISUAL_GAP_TOTAL_PX - COMMITTED_HORIZONTAL_INSET_PX);
 
@@ -78,12 +100,24 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const commitAnimationSettledTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitCountTextRef = useRef<HTMLSpanElement>(null);
   const commitIndicatorRef = useRef<HTMLSpanElement>(null);
+
+  // Full pane widths are the committed split contract. They are used for the
+  // next resize/toggle calculation, but they are not written to the DOM every
+  // animation frame.
   const committedLeadingPxRef = useRef<number | null>(null);
   const committedTrailingPxRef = useRef<number | null>(null);
+
+  // These are the currently rendered committed container widths. During a
+  // commit animation they move frame-by-frame via MotionValue, and the metrics
+  // read from these refs so the debug panel reflects the actual DOM width.
   const committedLeadingWidthPxRef = useRef<number | null>(null);
   const committedTrailingWidthPxRef = useRef<number | null>(null);
+
+  // Live widths are the immediately visible shell. Pointer moves and window
+  // resize update these through CSS variables without going through React.
   const liveLeadingPxRef = useRef<number | null>(null);
   const liveTrailingPxRef = useRef<number | null>(null);
+
   const commitAnimationControlsRef = useRef<{
     left?: { stop: () => void };
     right?: { stop: () => void };
@@ -91,7 +125,15 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const dragOffsetRef = useRef(0);
   const dragViewportWidthRef = useRef(0);
   const dragActiveRef = useRef(false);
+
+  // Pending commit means the live layout has diverged from the committed render
+  // width and the trailing debounce has not fired yet. Blur belongs to this
+  // state, not to the pointer-down state.
   const pendingCommitRef = useRef(false);
+
+  // Once the commit starts, the blur should leave immediately and stay gone
+  // while the committed width spring settles, even if the spring briefly
+  // overshoots and creates another width diff.
   const commitAnimationActiveRef = useRef(false);
   const layoutCommitCountRef = useRef(0);
   const leftMetricsRef = useRef<HTMLPreElement>(null);
@@ -107,6 +149,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const leftBufferedFilter = useMotionTemplate`blur(${leftBlur}px)`;
   const rightBufferedFilter = useMotionTemplate`blur(${rightBlur}px)`;
 
+  // Metrics are written imperatively so the demo can show live frame data
+  // without turning the debug panel into a React re-render source.
   const renderMetricsPanels = () => {
     const metrics = metricsRef.current;
     const leftMetrics = leftMetricsRef.current;
@@ -133,6 +177,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     ].join('\n');
   };
 
+  // The indicator marks the commit event itself, not the full spring. That
+  // makes it useful for seeing when the debounce actually fired.
   const flashCommitIndicator = () => {
     const indicator = commitIndicatorRef.current;
     if (indicator == null) return;
@@ -162,6 +208,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     }, 80);
   };
 
+  // Any new live movement interrupts the "commit is settling" grace window and
+  // moves the layout back into a pending commit. The current width animation is
+  // allowed to keep running until the next commit target replaces it.
   const beginPendingCommit = () => {
     pendingCommitRef.current = true;
 
@@ -175,6 +224,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     }
   };
 
+  // All expensive derived visual state is calculated from refs and MotionValues.
+  // React state only controls structural concerns like whether the trailing pane
+  // is mounted/open; drag and resize should not trigger React commits.
   const writeVisualEffects = (leadingLivePx: number, trailingLivePx: number) => {
     liveLeadingPxRef.current = leadingLivePx;
     liveTrailingPxRef.current = trailingLivePx;
@@ -204,6 +256,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     const leftContentDiffPx = Math.abs(leftContentVisiblePx - leftContentRenderPx);
     const rightContentDiffPx = Math.abs(rightContentVisiblePx - rightContentRenderPx);
 
+    // Blur expresses "the live shell is ahead of the committed content". It
+    // remains after pointer up during the debounce gap, then starts leaving as
+    // soon as the commit animation begins.
     const shouldShowBufferedBlur = pendingCommitRef.current && !commitAnimationActiveRef.current;
 
     leftBlurPx.set(shouldShowBufferedBlur && leftContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
@@ -221,6 +276,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     renderMetricsPanels();
   };
 
+  // MotionValue subscribers keep refs and labels in sync with the actual DOM
+  // width animation. They intentionally do not mirror into React state.
   const refreshVisualEffects = () => {
     const leadingLivePx = liveLeadingPxRef.current;
     const trailingLivePx = liveTrailingPxRef.current;
@@ -252,6 +309,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     }
 
     if (shouldAnimate) {
+      // Commit is the hand-off point: pending blur exits immediately, then the
+      // committed containers spring toward the target width.
       pendingCommitRef.current = false;
       commitAnimationActiveRef.current = true;
       leftBlurPx.set(0);
@@ -264,6 +323,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
         refreshVisualEffects();
       }, COMMIT_ANIMATION_MS + 20);
     } else {
+      // Initial layout and non-animated resets should establish the committed
+      // geometry without playing catch-up from zero.
       pendingCommitRef.current = false;
       commitAnimationActiveRef.current = false;
       leftCommittedWidthPx.jump(nextLeftWidthPx);
@@ -275,6 +336,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     refreshVisualEffects();
   };
 
+  // A commit updates the canonical split refs immediately, then reconciles the
+  // visual committed containers via MotionValue. This keeps future calculations
+  // deterministic even while the UI is still animating.
   const commitLayout = (
     leadingWidthPx: number,
     trailingWidthPx: number,
@@ -316,12 +380,17 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       : (committedTrailingPxRef.current ?? width - clampedLeadingPx);
     const leadingLivePx = open ? clampedLeadingPx : width;
     const dividerXPx = open ? clampedLeadingPx : width;
+
+    // Live layout is the hot path. CSS variables update the outer shell and
+    // divider directly; React only sees the eventual committed result.
     root.style.setProperty('--split-leading-live-width', formatPx(leadingLivePx));
     root.style.setProperty('--split-trailing-live-width', formatPx(trailingWidthPx));
     root.style.setProperty('--split-divider-x', formatPx(dividerXPx));
     writeVisualEffects(leadingLivePx, trailingWidthPx);
   };
 
+  // Trailing-only debounce: every live movement replaces the pending timer, and
+  // only the final target becomes a committed layout.
   const scheduleCommit = (leadingPx: number) => {
     if (commitTimerRef.current != null) {
       clearTimeout(commitTimerRef.current);
@@ -366,6 +435,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     if (!root) return;
 
     const handleResize = () => {
+      // Window resize follows the same model as divider drag: update the live
+      // shell immediately, then commit the stabilized geometry after debounce.
       beginPendingCommit();
 
       const viewportWidth = root.getBoundingClientRect().width;
@@ -433,6 +504,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     const root = rootRef.current;
     if (!root) return;
 
+    // Prop/open-state changes need a live shell refresh, but they should not
+    // create a pending commit by themselves.
     const viewportWidth = root.getBoundingClientRect().width;
     const fallbackLeadingPx =
       trailingOpen && committedLeadingPxRef.current != null
@@ -463,6 +536,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     const handleMove = (moveEvent: globalThis.PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
 
+      // Dragging never mutates React state. The shell follows the pointer
+      // through CSS variables, and the pending commit timer captures the final
+      // target after the hand stops moving.
       beginPendingCommit();
 
       const nextLeadingPx = moveEvent.clientX - rootRect.left - dragOffsetRef.current;
@@ -476,6 +552,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
       dragActiveRef.current = false;
+
+      // Pointer up is not the end of buffering. Blur should remain through the
+      // debounce gap and leave when the commit actually starts.
       refreshVisualEffects();
       renderMetricsPanels();
       event.currentTarget.releasePointerCapture(pointerId);
@@ -505,6 +584,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       commitLayout(legalLeadingPx, viewportWidth - legalLeadingPx);
       writeLiveSplit(legalLeadingPx, viewportWidth, true);
     } else {
+      // Collapse keeps the right pane rendered off-screen. That preserves the
+      // sidebar's internal state and makes the next expansion cheap.
       root.style.setProperty('--split-leading-live-width', formatPx(viewportWidth));
       root.style.setProperty('--split-trailing-live-width', formatPx(currentTrailingWidthPx));
       root.style.setProperty('--split-divider-x', formatPx(viewportWidth));
@@ -544,6 +625,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       >
         <span className={EDGE_LABEL_CLASS}>left-live</span>
         <div className="absolute inset-0 overflow-hidden">
+          {/* Committed is centered inside live. While pending, live can clip it without relaying out the content. */}
           <motion.div
             data-demo-left-committed
             style={{ filter: leftBufferedFilter, width: leftCommittedWidthPx }}
@@ -553,6 +635,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
             `}
           >
             <span className={EDGE_LABEL_CLASS}>left-committed</span>
+            {/* The committed container owns scrolling, so the content label and width move with committed geometry. */}
             <div data-demo-left-committed-scroll className="absolute inset-0 overflow-y-auto">
               <div
                 data-demo-left-content
@@ -605,6 +688,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       >
         <span className={EDGE_LABEL_CLASS}>right-live</span>
         <div className="absolute inset-0 overflow-hidden">
+          {/* Only right-live uses Motion FLIP. The committed width below is a direct MotionValue width animation. */}
           <motion.div
             data-demo-right-committed
             style={{ filter: rightBufferedFilter, width: rightCommittedWidthPx }}
@@ -662,6 +746,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
         )}
       />
 
+      {/* The toggle is intentionally independent from the divider so collapse can keep the right pane alive off-screen. */}
       <button
         type="button"
         aria-label={trailingOpen ? 'Collapse right pane' : 'Expand right pane'}
