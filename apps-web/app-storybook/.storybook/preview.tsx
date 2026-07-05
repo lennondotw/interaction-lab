@@ -77,7 +77,11 @@ const preview: Preview = {
 
 export default preview;
 
-if (import.meta.env.DEV) {
+const shouldEnableReactScan =
+  new URLSearchParams(window.location.search).get('reactScan') !== 'false' &&
+  window.localStorage.getItem('reactScan') !== 'false';
+
+if (import.meta.env.DEV && shouldEnableReactScan) {
   scan({ enabled: true });
 }
 
