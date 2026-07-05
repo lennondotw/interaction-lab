@@ -1,4 +1,5 @@
 import { cn } from '@monorepo/utils';
+import { motion } from 'motion/react';
 import { type CSSProperties, type FC, type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -17,7 +18,18 @@ const BLUR_ENTER_MS = 140;
 const BLUR_EXIT_MS = 360;
 const CONTENT_MAX_WIDTH_PX = 640;
 const VIEW_TRANSITION_MS = BLUR_EXIT_MS;
+const TOGGLE_LAYOUT_MS = 500;
+const TOGGLE_CROSS_DISSOLVE_MS = 90;
+const TOGGLE_BLUR_ENTER_MS = 80;
+const TOGGLE_BLUR_EXIT_MS = 460;
 const EDGE_LABEL_CLASS = 'pointer-events-none absolute top-0 left-3 z-20 -translate-y-1/2 bg-white px-1 leading-none';
+
+const LAYOUT_SPRING = {
+  type: 'spring',
+  stiffness: 400,
+  damping: 40,
+  mass: 1,
+} as const;
 
 const SAMPLE_TEXT = [
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer congue, lorem vitae interdum pulvinar, mi risus lacinia massa, non cursus leo augue at massa.',
@@ -86,6 +98,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
   const commitFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitTransitionCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blurExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toggleTransitionCleanupRef = useRef<(() => void) | null>(null);
   const dragOffsetRef = useRef(0);
   const dragViewportWidthRef = useRef(0);
   const dragActiveRef = useRef(false);
@@ -170,7 +183,8 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     const root = rootRef.current;
     if (!root) return;
 
-    root.style.setProperty('--split-blur-transition-duration', `${durationMs}ms`);
+    root.style.setProperty('--split-left-blur-transition-duration', `${durationMs}ms`);
+    root.style.setProperty('--split-right-blur-transition-duration', `${durationMs}ms`);
   };
 
   const startBlurExit = () => {
@@ -180,7 +194,28 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     cancelBlurExit();
     writeBlurTransitionDuration(BLUR_EXIT_MS);
     root.getBoundingClientRect();
-    root.style.setProperty('--split-blur', '0px');
+    root.style.setProperty('--split-left-blur', '0px');
+    root.style.setProperty('--split-right-blur', '0px');
+  };
+
+  const startToggleBlurExit = () => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    cancelBlurExit();
+    root.style.setProperty('--split-left-blur-transition-duration', `${TOGGLE_BLUR_EXIT_MS}ms`);
+    root.style.setProperty('--split-right-blur-transition-duration', `${TOGGLE_BLUR_EXIT_MS}ms`);
+    root.getBoundingClientRect();
+    root.style.setProperty('--split-left-blur', '0px');
+    root.style.setProperty('--split-right-blur', '0px');
+  };
+
+  const clearToggleTransitionMode = () => {
+    const root = rootRef.current;
+    root?.removeAttribute('data-demo-toggle-transition');
+    document.documentElement.removeAttribute('data-buffered-split-toggle-transition');
+    document.documentElement.style.removeProperty('--split-left-toggle-from-scale');
+    toggleTransitionCleanupRef.current = null;
   };
 
   const writeMetrics = (leadingVisualPx: number, trailingVisualPx: number) => {
@@ -223,7 +258,8 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     root.style.setProperty('--split-left-scale', String(leftScale));
     root.style.setProperty('--split-right-scale', String(rightScale));
     writeBlurTransitionDuration(blur ? BLUR_ENTER_MS : BLUR_EXIT_MS);
-    root.style.setProperty('--split-blur', blur ? `${CLIP_BLUR_PX}px` : '0px');
+    root.style.setProperty('--split-left-blur', blur ? `${CLIP_BLUR_PX}px` : '0px');
+    root.style.setProperty('--split-right-blur', blur ? `${CLIP_BLUR_PX}px` : '0px');
     writeMetrics(clampedLeadingPx, trailingVisualPx);
   };
 
@@ -253,7 +289,8 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     if (options.clearBlur ?? true) {
       cancelBlurExit();
       writeBlurTransitionDuration(BLUR_EXIT_MS);
-      root.style.setProperty('--split-blur', '0px');
+      root.style.setProperty('--split-left-blur', '0px');
+      root.style.setProperty('--split-right-blur', '0px');
     }
 
     layoutCommitCountRef.current += 1;
@@ -348,6 +385,8 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
       if (blurExitTimerRef.current != null) {
         clearTimeout(blurExitTimerRef.current);
       }
+
+      toggleTransitionCleanupRef.current?.();
     };
   }, []);
 
@@ -369,7 +408,8 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     dragActiveRef.current = true;
     cancelBlurExit();
     writeBlurTransitionDuration(BLUR_ENTER_MS);
-    root.style.setProperty('--split-blur', `${CLIP_BLUR_PX}px`);
+    root.style.setProperty('--split-left-blur', `${CLIP_BLUR_PX}px`);
+    root.style.setProperty('--split-right-blur', `${CLIP_BLUR_PX}px`);
     event.preventDefault();
     renderMetricsPanels();
 
@@ -409,19 +449,60 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     const preferredLeadingPx = getPreferredLeadingPx(viewportWidth);
     const preferredTrailingPx = viewportWidth - preferredLeadingPx;
     const nextOpen = !trailingOpenRef.current;
+    const currentLeadingPx = liveLeadingPxRef.current ?? (trailingOpenRef.current ? preferredLeadingPx : viewportWidth);
+    const nextLeadingPx = nextOpen ? preferredLeadingPx : viewportWidth;
+    const currentLeftVisiblePx = Math.max(1, paneWidthToVisiblePx(currentLeadingPx));
+    const nextLeftVisiblePx = Math.max(1, paneWidthToVisiblePx(nextLeadingPx));
+    const leftToggleFromScale = currentLeftVisiblePx / nextLeftVisiblePx;
 
-    setTrailingOpenSync(nextOpen);
+    toggleTransitionCleanupRef.current?.();
+    root.setAttribute('data-demo-toggle-transition', nextOpen ? 'expand' : 'collapse');
+    document.documentElement.setAttribute('data-buffered-split-toggle-transition', nextOpen ? 'expand' : 'collapse');
+    document.documentElement.style.setProperty('--split-left-toggle-from-scale', String(leftToggleFromScale));
+    root.style.setProperty('--split-left-blur-transition-duration', `${TOGGLE_BLUR_ENTER_MS}ms`);
+    root.style.setProperty('--split-right-blur-transition-duration', `${TOGGLE_BLUR_ENTER_MS}ms`);
+    root.style.setProperty('--split-left-blur', `${CLIP_BLUR_PX}px`);
+    root.style.setProperty('--split-right-blur', '0px');
+    root.getBoundingClientRect();
 
-    if (nextOpen) {
-      commitLayout(preferredLeadingPx, preferredTrailingPx, { open: true });
+    // Toggle is a hybrid path: the right pane uses Motion FLIP on the live DOM,
+    // while the left pane uses the target View Transition snapshot scaled back
+    // to the current width, cross-dissolved, then transformed to the target.
+    const updateLayout = () => {
+      setTrailingOpenSync(nextOpen);
+
+      if (nextOpen) {
+        commitLayout(preferredLeadingPx, preferredTrailingPx, { clearBlur: false, open: true });
+      } else {
+        commitLayout(viewportWidth, preferredTrailingPx, { clearBlur: false, open: false });
+      }
+    };
+
+    const transition = runViewTransitionCommit(updateLayout);
+    toggleTransitionCleanupRef.current = clearToggleTransitionMode;
+
+    if (transition) {
+      void transition.finished.then(
+        () => {
+          clearToggleTransitionMode();
+          startToggleBlurExit();
+        },
+        () => {
+          clearToggleTransitionMode();
+          startToggleBlurExit();
+        }
+      );
     } else {
-      commitLayout(viewportWidth, preferredTrailingPx, { open: false });
+      clearToggleTransitionMode();
+      startToggleBlurExit();
     }
   };
 
   const rootStyle = {
-    '--split-blur': '0px',
-    '--split-blur-transition-duration': `${BLUR_ENTER_MS}ms`,
+    '--split-left-blur': '0px',
+    '--split-left-blur-transition-duration': `${BLUR_ENTER_MS}ms`,
+    '--split-right-blur': '0px',
+    '--split-right-blur-transition-duration': `${BLUR_ENTER_MS}ms`,
     '--split-divider-x': '60%',
     '--split-leading-layout-width': '60%',
     '--split-leading-visual-width': '60%',
@@ -437,12 +518,12 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
 
   const leftViewTransitionStyle = {
     bottom: 0,
-    filter: 'blur(var(--split-blur))',
+    filter: 'blur(var(--split-left-blur))',
     left: 0,
     position: 'absolute',
     right: 0,
     top: 0,
-    transition: `filter var(--split-blur-transition-duration) ease`,
+    transition: `filter var(--split-left-blur-transition-duration) ease`,
     viewTransitionName: 'buffered-split-left',
   } as CSSProperties;
 
@@ -467,12 +548,12 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
 
   const rightViewTransitionStyle = {
     bottom: 0,
-    filter: 'blur(var(--split-blur))',
+    filter: 'blur(var(--split-right-blur))',
     left: 0,
     position: 'absolute',
     right: 0,
     top: 0,
-    transition: `filter var(--split-blur-transition-duration) ease`,
+    transition: `filter var(--split-right-blur-transition-duration) ease`,
     viewTransitionName: 'buffered-split-right',
   } as CSSProperties;
 
@@ -551,6 +632,30 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
             mix-blend-mode: normal;
           }
 
+          [data-buffered-split-layout-view-transition-demo][data-demo-toggle-transition] [data-demo-right-transition-surface] {
+            view-transition-name: none !important;
+          }
+
+          html[data-buffered-split-toggle-transition]::view-transition-group(buffered-split-left) {
+            animation: none;
+          }
+
+          html[data-buffered-split-toggle-transition]::view-transition-image-pair(buffered-split-left) {
+            animation: buffered-split-left-toggle-transform ${TOGGLE_LAYOUT_MS}ms cubic-bezier(0.22, 1, 0.36, 1) both;
+            transform-origin: left center;
+          }
+
+          html[data-buffered-split-toggle-transition]::view-transition-old(buffered-split-left) {
+            animation: none;
+            opacity: 0;
+            mix-blend-mode: normal;
+          }
+
+          html[data-buffered-split-toggle-transition]::view-transition-new(buffered-split-left) {
+            animation: buffered-split-toggle-fade-in ${TOGGLE_CROSS_DISSOLVE_MS}ms ease both;
+            mix-blend-mode: normal;
+          }
+
           @keyframes buffered-split-fade-out {
             from { opacity: 1; }
             to { opacity: 0; }
@@ -559,6 +664,21 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
           @keyframes buffered-split-fade-in {
             from { opacity: 0; }
             to { opacity: 1; }
+          }
+
+          @keyframes buffered-split-toggle-fade-out {
+            from { opacity: 1; }
+            to { opacity: 0; }
+          }
+
+          @keyframes buffered-split-toggle-fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+
+          @keyframes buffered-split-left-toggle-transform {
+            from { transform: scaleX(var(--split-left-toggle-from-scale)); }
+            to { transform: scaleX(1); }
           }
         `}
       </style>
@@ -626,8 +746,12 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         </div>
       </section>
 
-      <section
+      <motion.section
         data-demo-right-live
+        layout="position"
+        layoutDependency={trailingOpen}
+        initial={false}
+        transition={{ layout: LAYOUT_SPRING }}
         style={rightLiveStyle}
         className={cn(
           `
@@ -683,7 +807,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         >
           <pre ref={rightMetricsRef} className="whitespace-pre-wrap" />
         </div>
-      </section>
+      </motion.section>
 
       <div
         data-demo-divider
