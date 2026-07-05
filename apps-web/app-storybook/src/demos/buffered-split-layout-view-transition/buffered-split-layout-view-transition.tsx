@@ -22,6 +22,7 @@ const TOGGLE_LAYOUT_MS = 500;
 const TOGGLE_CROSS_DISSOLVE_MS = 90;
 const TOGGLE_BLUR_ENTER_MS = 80;
 const TOGGLE_BLUR_EXIT_MS = 460;
+const WINDOW_RESIZE_COMMIT_DELAY_MS = 200;
 const EDGE_LABEL_CLASS = 'pointer-events-none absolute top-0 left-3 z-20 -translate-y-1/2 bg-white px-1 leading-none';
 
 const LAYOUT_SPRING = {
@@ -98,10 +99,12 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
   const commitFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitTransitionCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blurExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const windowResizeCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toggleTransitionCleanupRef = useRef<(() => void) | null>(null);
   const dragOffsetRef = useRef(0);
   const dragViewportWidthRef = useRef(0);
   const dragActiveRef = useRef(false);
+  const windowResizeActiveRef = useRef(false);
   const layoutLeadingPxRef = useRef<number | null>(null);
   const layoutTrailingPxRef = useRef<number | null>(null);
   const liveLeadingPxRef = useRef<number | null>(null);
@@ -114,6 +117,13 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
   const trailingOpenRef = useRef(initialTrailingOpen);
   const [trailingOpen, setTrailingOpen] = useState(initialTrailingOpen);
 
+  const getInteractionMode = () => {
+    if (dragActiveRef.current) return 'dragging';
+    if (windowResizeActiveRef.current) return 'window resize';
+
+    return 'idle';
+  };
+
   const renderMetricsPanels = () => {
     const metrics = metricsRef.current;
     const leftMetrics = leftMetricsRef.current;
@@ -124,14 +134,14 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
       `visual ${formatPx(metrics.leftVisualPx)} | locked ${formatPx(metrics.leftLockedPx)}`,
       `content locked ${formatPx(metrics.leftContentLockedPx)} | scale ${formatScale(metrics.leftScale)}`,
       `preferred ${(preferredLeadingRatioRef.current * 100).toFixed(1)}%`,
-      `resizer ${dragActiveRef.current ? 'dragging' : 'idle'}`,
+      `mode ${getInteractionMode()}`,
     ].join('\n');
 
     rightMetrics.textContent = [
       `visual ${formatPx(metrics.rightVisualPx)} | locked ${formatPx(metrics.rightLockedPx)}`,
       `content locked ${formatPx(metrics.rightContentLockedPx)} | scale ${formatScale(metrics.rightScale)}`,
       `preferred ${((1 - preferredLeadingRatioRef.current) * 100).toFixed(1)}%`,
-      `resizer ${dragActiveRef.current ? 'dragging' : 'idle'}`,
+      `mode ${getInteractionMode()}`,
     ].join('\n');
   };
 
@@ -263,6 +273,28 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     writeMetrics(clampedLeadingPx, trailingVisualPx);
   };
 
+  const writeCollapsedLiveTransform = (viewportWidth: number, trailingVisualPx: number, blur: boolean) => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const leadingLockedPx = layoutLeadingPxRef.current ?? viewportWidth;
+    const trailingLockedPx = layoutTrailingPxRef.current ?? trailingVisualPx;
+    const leftScale = getScale(paneWidthToVisiblePx(viewportWidth), paneWidthToVisiblePx(leadingLockedPx));
+    const rightScale = getScale(paneWidthToVisiblePx(trailingVisualPx), paneWidthToVisiblePx(trailingLockedPx));
+
+    liveLeadingPxRef.current = viewportWidth;
+    liveTrailingPxRef.current = trailingVisualPx;
+    root.style.setProperty('--split-leading-visual-width', formatPx(viewportWidth));
+    root.style.setProperty('--split-trailing-visual-width', formatPx(trailingVisualPx));
+    root.style.setProperty('--split-divider-x', formatPx(viewportWidth));
+    root.style.setProperty('--split-left-scale', String(leftScale));
+    root.style.setProperty('--split-right-scale', String(rightScale));
+    writeBlurTransitionDuration(blur ? BLUR_ENTER_MS : BLUR_EXIT_MS);
+    root.style.setProperty('--split-left-blur', blur ? `${CLIP_BLUR_PX}px` : '0px');
+    root.style.setProperty('--split-right-blur', '0px');
+    writeMetrics(viewportWidth, trailingVisualPx);
+  };
+
   const commitLayout = (
     leadingLayoutPx: number,
     trailingLayoutPx: number,
@@ -328,6 +360,43 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     }
   };
 
+  const commitCollapsedSplitWithViewTransition = (viewportWidth: number, trailingLayoutPx: number) => {
+    const transition = runViewTransitionCommit(() => {
+      commitLayout(viewportWidth, trailingLayoutPx, { clearBlur: false, open: false });
+    });
+    if (transition) {
+      void transition.ready.then(startBlurExit, startBlurExit);
+    } else {
+      startBlurExit();
+    }
+  };
+
+  const scheduleWindowResizeCommit = () => {
+    if (windowResizeCommitTimerRef.current != null) {
+      clearTimeout(windowResizeCommitTimerRef.current);
+    }
+
+    windowResizeCommitTimerRef.current = setTimeout(() => {
+      windowResizeCommitTimerRef.current = null;
+      const root = rootRef.current;
+      if (!root) {
+        windowResizeActiveRef.current = false;
+        return;
+      }
+
+      const viewportWidth = root.getBoundingClientRect().width;
+      const preferredLeadingPx = getPreferredLeadingPx(viewportWidth);
+      const preferredTrailingPx = viewportWidth - preferredLeadingPx;
+
+      windowResizeActiveRef.current = false;
+      if (trailingOpenRef.current) {
+        commitOpenSplitWithViewTransition(preferredLeadingPx, viewportWidth);
+      } else {
+        commitCollapsedSplitWithViewTransition(viewportWidth, preferredTrailingPx);
+      }
+    }, WINDOW_RESIZE_COMMIT_DELAY_MS);
+  };
+
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -360,11 +429,17 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
       const preferredLeadingPx = getPreferredLeadingPx(viewportWidth);
       const preferredTrailingPx = viewportWidth - preferredLeadingPx;
 
+      // Window resize has no reliable pointer-up signal. Treat the first event
+      // as the leading edge for live resize feedback, then debounce the
+      // expensive committed layout reconciliation to the trailing edge.
+      cancelBlurExit();
+      windowResizeActiveRef.current = true;
       if (trailingOpenRef.current) {
-        commitLayout(preferredLeadingPx, preferredTrailingPx, { open: true });
+        writeLiveTransform(preferredLeadingPx, viewportWidth, true);
       } else {
-        commitLayout(viewportWidth, preferredTrailingPx, { open: false });
+        writeCollapsedLiveTransform(viewportWidth, preferredTrailingPx, true);
       }
+      scheduleWindowResizeCommit();
     };
 
     window.addEventListener('resize', handleResize);
@@ -386,6 +461,11 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         clearTimeout(blurExitTimerRef.current);
       }
 
+      if (windowResizeCommitTimerRef.current != null) {
+        clearTimeout(windowResizeCommitTimerRef.current);
+      }
+      windowResizeActiveRef.current = false;
+
       toggleTransitionCleanupRef.current?.();
     };
   }, []);
@@ -406,6 +486,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     dragOffsetRef.current = event.clientX - rootRect.left - currentLeadingPx;
     dragViewportWidthRef.current = rootRect.width;
     dragActiveRef.current = true;
+    windowResizeActiveRef.current = false;
     cancelBlurExit();
     writeBlurTransitionDuration(BLUR_ENTER_MS);
     root.style.setProperty('--split-left-blur', `${CLIP_BLUR_PX}px`);
