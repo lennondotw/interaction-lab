@@ -456,6 +456,10 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     width: 'max(0px, calc(var(--split-leading-layout-width) - 20px))',
   } as CSSProperties;
 
+  const leftMetricsStyle = {
+    viewTransitionName: 'buffered-split-left-metrics',
+  } as CSSProperties;
+
   const rightLiveStyle = {
     left: trailingOpen ? 'calc(100% - var(--split-trailing-visual-width) + 8px)' : '100%',
     width: 'max(0px, calc(var(--split-trailing-visual-width) - 20px))',
@@ -482,6 +486,10 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     width: 'max(0px, calc(var(--split-trailing-layout-width) - 20px))',
   } as CSSProperties;
 
+  const rightMetricsStyle = {
+    viewTransitionName: 'buffered-split-right-metrics',
+  } as CSSProperties;
+
   return (
     <div
       ref={rootRef}
@@ -496,8 +504,25 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
           ::view-transition-old(root),
           ::view-transition-new(root),
           ::view-transition-group(buffered-split-left),
-          ::view-transition-group(buffered-split-right) {
+          ::view-transition-group(buffered-split-right),
+          ::view-transition-group(buffered-split-left-metrics),
+          ::view-transition-group(buffered-split-right-metrics) {
             animation: none;
+          }
+
+          ::view-transition-group(buffered-split-left),
+          ::view-transition-group(buffered-split-right) {
+            z-index: 10;
+          }
+
+          /*
+            The metrics panels are live debug overlays, but ordinary DOM cannot paint above
+            the View Transition overlay. They participate only to preserve the intended
+            stacking order during the pane cross-dissolve; all their animations are disabled.
+          */
+          ::view-transition-group(buffered-split-left-metrics),
+          ::view-transition-group(buffered-split-right-metrics) {
+            z-index: 20;
           }
 
           ::view-transition-old(buffered-split-left),
@@ -509,6 +534,20 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
           ::view-transition-new(buffered-split-left),
           ::view-transition-new(buffered-split-right) {
             animation: buffered-split-fade-in ${VIEW_TRANSITION_MS}ms ease both;
+            mix-blend-mode: normal;
+          }
+
+          ::view-transition-old(buffered-split-left-metrics),
+          ::view-transition-old(buffered-split-right-metrics) {
+            animation: none;
+            opacity: 0;
+            mix-blend-mode: normal;
+          }
+
+          ::view-transition-new(buffered-split-left-metrics),
+          ::view-transition-new(buffered-split-right-metrics) {
+            animation: none;
+            opacity: 1;
             mix-blend-mode: normal;
           }
 
@@ -577,6 +616,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         </div>
         <div
           data-demo-left-metrics
+          style={leftMetricsStyle}
           className={`
             pointer-events-none absolute right-4 bottom-4 left-4 z-30 bg-white/90 p-2 text-left text-[11px]/4
             text-slate-600 outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
@@ -635,6 +675,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         </div>
         <div
           data-demo-right-metrics
+          style={rightMetricsStyle}
           className={`
             pointer-events-none absolute right-4 bottom-4 left-4 z-30 bg-white/90 p-2 text-left text-[11px]/4
             text-slate-600 outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
