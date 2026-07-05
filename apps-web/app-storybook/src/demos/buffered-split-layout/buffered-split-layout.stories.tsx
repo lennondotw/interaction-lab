@@ -33,17 +33,3 @@ export const Collapsed: Story = {
     initialTrailingOpen: false,
   },
 };
-
-export const NarrowLeading: Story = {
-  args: {
-    initialLeadingRatio: 0.42,
-    initialTrailingOpen: true,
-  },
-};
-
-export const WideLeading: Story = {
-  args: {
-    initialLeadingRatio: 0.7,
-    initialTrailingOpen: true,
-  },
-};

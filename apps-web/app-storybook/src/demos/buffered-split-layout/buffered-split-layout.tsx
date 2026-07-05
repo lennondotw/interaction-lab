@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import { animate, motion, useMotionTemplate, useMotionValue, useMotionValueEvent, useSpring } from 'motion/react';
+import { animate, motion, useMotionTemplate, useMotionValue, useMotionValueEvent } from 'motion/react';
 import { type CSSProperties, type FC, type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export interface BufferedSplitLayoutDemoProps {
@@ -27,15 +27,6 @@ const WIDTH_DIFF_EPSILON_PX = 0.5;
 const CONTENT_MAX_WIDTH_PX = 640;
 const EDGE_LABEL_CLASS = 'pointer-events-none absolute top-0 left-3 z-20 -translate-y-1/2 bg-white px-1 leading-none';
 
-// Blur is a state affordance, not the layout animation itself. It should feel
-// responsive and should not inherit the slower committed-width spring.
-const CRITICAL_SPRING = {
-  type: 'spring',
-  stiffness: 900,
-  damping: 60,
-  mass: 1,
-} as const;
-
 // Layout movement uses a slower spring because it is the visible reconciliation
 // between "live" and "committed" geometry.
 const LAYOUT_SPRING = {
@@ -49,6 +40,8 @@ const LAYOUT_SPRING = {
 // which we consider the committed layout to be settling, so buffered blur is
 // prevented from reappearing on small spring overshoots.
 const COMMIT_ANIMATION_MS = 500;
+const BLUR_EXIT_MS = 180;
+const BLUR_EXIT_DELAY_MS = Math.max(0, COMMIT_ANIMATION_MS - BLUR_EXIT_MS);
 
 const SAMPLE_TEXT = [
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer congue, lorem vitae interdum pulvinar, mi risus lacinia massa, non cursus leo augue at massa.',
@@ -61,8 +54,18 @@ const SAMPLE_TEXT = [
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const clampLeadingPx = (leadingPx: number, viewportWidth: number) =>
-  clamp(leadingPx, MIN_LEADING_PX, viewportWidth - MIN_TRAILING_PX);
+const getLeadingBounds = (viewportWidth: number) => {
+  const minPx = Math.min(MIN_LEADING_PX, viewportWidth);
+  const maxPx = Math.max(minPx, viewportWidth - MIN_TRAILING_PX);
+
+  return { maxPx, minPx };
+};
+
+const clampLeadingPx = (leadingPx: number, viewportWidth: number) => {
+  const { maxPx, minPx } = getLeadingBounds(viewportWidth);
+
+  return clamp(leadingPx, minPx, maxPx);
+};
 
 const ratioToLeadingPx = (ratio: number, viewportWidth: number) => clampLeadingPx(viewportWidth * ratio, viewportWidth);
 
@@ -116,6 +119,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const commitFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitTransitionCleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitAnimationSettledTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blurExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitCountTextRef = useRef<HTMLSpanElement>(null);
   const commitIndicatorRef = useRef<HTMLSpanElement>(null);
 
@@ -148,6 +152,10 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     left?: { stop: () => void };
     right?: { stop: () => void };
   }>({});
+  const blurExitAnimationControlsRef = useRef<{
+    left?: { stop: () => void };
+    right?: { stop: () => void };
+  }>({});
   const dragOffsetRef = useRef(0);
   const dragViewportWidthRef = useRef(0);
   const dragActiveRef = useRef(false);
@@ -171,10 +179,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const rightCommittedWidthPx = useMotionValue(0);
   const leftBlurPx = useMotionValue(0);
   const rightBlurPx = useMotionValue(0);
-  const leftBlur = useSpring(leftBlurPx, CRITICAL_SPRING);
-  const rightBlur = useSpring(rightBlurPx, CRITICAL_SPRING);
-  const leftBufferedFilter = useMotionTemplate`blur(${leftBlur}px)`;
-  const rightBufferedFilter = useMotionTemplate`blur(${rightBlur}px)`;
+  const leftBufferedFilter = useMotionTemplate`blur(${leftBlurPx}px)`;
+  const rightBufferedFilter = useMotionTemplate`blur(${rightBlurPx}px)`;
 
   // Metrics are written imperatively so the demo can show live frame data
   // without turning the debug panel into a React re-render source.
@@ -237,11 +243,40 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     }, 80);
   };
 
+  const stopBlurExitAnimation = () => {
+    if (blurExitTimerRef.current != null) {
+      clearTimeout(blurExitTimerRef.current);
+      blurExitTimerRef.current = null;
+    }
+
+    blurExitAnimationControlsRef.current.left?.stop();
+    blurExitAnimationControlsRef.current.right?.stop();
+  };
+
+  const scheduleBlurExitAnimation = () => {
+    stopBlurExitAnimation();
+
+    blurExitTimerRef.current = setTimeout(() => {
+      blurExitTimerRef.current = null;
+      blurExitAnimationControlsRef.current.left?.stop();
+      blurExitAnimationControlsRef.current.right?.stop();
+      blurExitAnimationControlsRef.current.left = animate(leftBlurPx, 0, {
+        duration: BLUR_EXIT_MS / 1000,
+        ease: 'easeOut',
+      });
+      blurExitAnimationControlsRef.current.right = animate(rightBlurPx, 0, {
+        duration: BLUR_EXIT_MS / 1000,
+        ease: 'easeOut',
+      });
+    }, BLUR_EXIT_DELAY_MS);
+  };
+
   // Any new live movement interrupts the "commit is settling" grace window and
   // moves the layout back into a pending commit. The current width animation is
   // allowed to keep running until the next commit target replaces it, but the
   // left x spring is stopped so the live-centering compensation can take over.
   const beginPendingCommit = () => {
+    stopBlurExitAnimation();
     pendingCommitRef.current = true;
     commitAnimationControlsRef.current.leftX?.stop();
 
@@ -304,12 +339,16 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     const rightContentDiffPx = Math.abs(rightContentVisiblePx - rightContentRenderPx);
 
     // Blur expresses "the live shell is ahead of the committed content". It
-    // remains after pointer up during the debounce gap, then starts leaving as
-    // soon as the commit animation begins.
+    // remains after pointer up during the debounce gap and most of the layout
+    // reconciliation, then exits during the final blur window of that layout
+    // animation.
     const shouldShowBufferedBlur = pendingCommitRef.current && !commitAnimationActiveRef.current;
 
-    leftBlurPx.set(shouldShowBufferedBlur && leftContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
-    rightBlurPx.set(shouldShowBufferedBlur && rightContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
+    if (!commitAnimationActiveRef.current) {
+      leftBlurPx.set(shouldShowBufferedBlur && leftContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
+      rightBlurPx.set(shouldShowBufferedBlur && rightContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
+    }
+
     metricsRef.current = {
       leftCommittedRenderPx,
       leftCommittedVisiblePx,
@@ -367,15 +406,20 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     }
 
     if (shouldAnimate) {
-      // Commit is the hand-off point: pending blur exits immediately, then the
-      // committed containers spring toward the target width.
+      // Commit is the hand-off point: pending blur is held while committed
+      // containers spring, then exits in the final blur window.
+      //
+      // This strategy does not reduce the amount of expensive inner layout work:
+      // committed content still reflows on every animation frame. The point is
+      // to move that cost out of the user's live resize interaction. Pointer
+      // movement updates only the lightweight outer shell, then the heavier
+      // content reconciliation happens after the hand stops.
       pendingCommitRef.current = false;
       commitAnimationActiveRef.current = true;
-      leftBlurPx.set(0);
-      rightBlurPx.set(0);
       commitAnimationControlsRef.current.leftX = animate(leftCommittedXPx, nextLeftXPx, LAYOUT_SPRING);
       commitAnimationControlsRef.current.left = animate(leftCommittedWidthPx, nextLeftWidthPx, LAYOUT_SPRING);
       commitAnimationControlsRef.current.right = animate(rightCommittedWidthPx, nextRightWidthPx, LAYOUT_SPRING);
+      scheduleBlurExitAnimation();
       commitAnimationSettledTimerRef.current = setTimeout(() => {
         commitAnimationActiveRef.current = false;
         commitAnimationSettledTimerRef.current = null;
@@ -384,8 +428,11 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     } else {
       // Initial layout and non-animated resets should establish the committed
       // geometry without playing catch-up from zero.
+      stopBlurExitAnimation();
       pendingCommitRef.current = false;
       commitAnimationActiveRef.current = false;
+      leftBlurPx.set(0);
+      rightBlurPx.set(0);
       leftCommittedXPx.jump(nextLeftXPx);
       leftCommittedWidthPx.jump(nextLeftWidthPx);
       rightCommittedWidthPx.jump(nextRightWidthPx);
@@ -573,9 +620,15 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
         clearTimeout(commitAnimationSettledTimerRef.current);
       }
 
+      if (blurExitTimerRef.current != null) {
+        clearTimeout(blurExitTimerRef.current);
+      }
+
       commitAnimationControls.leftX?.stop();
       commitAnimationControls.left?.stop();
       commitAnimationControls.right?.stop();
+      blurExitAnimationControlsRef.current.left?.stop();
+      blurExitAnimationControlsRef.current.right?.stop();
     };
   }, []);
 
@@ -705,6 +758,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
         className={`
           absolute inset-y-4 left-3 z-10
           [width:max(0px,calc(var(--split-leading-live-width)-20px))]
+          [contain:layout]
           outline-[1px] -outline-offset-1 outline-slate-300
         `}
       >
@@ -714,7 +768,10 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
           <motion.div
             data-demo-left-committed
             style={{ filter: leftBufferedFilter, width: leftCommittedWidthPx, x: leftCommittedXPx }}
-            className="absolute top-7 bottom-7 left-0 outline-[1px] -outline-offset-1 outline-sky-300 outline-dashed"
+            className={`
+              absolute top-7 bottom-7 left-0 [contain:layout] outline-[1px] -outline-offset-1 outline-sky-300
+              outline-dashed
+            `}
           >
             <span className={EDGE_LABEL_CLASS}>left-committed</span>
             {/* The committed container owns scrolling, so the content label and width move with committed geometry. */}
@@ -763,6 +820,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
           `
             absolute inset-y-4 z-10
             [width:max(0px,calc(var(--split-trailing-live-width)-20px))]
+            [contain:layout]
             outline-[1px] -outline-offset-1 outline-slate-300
           `,
           !trailingOpen && `pointer-events-none`
@@ -776,7 +834,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
             style={{ filter: rightBufferedFilter, width: rightCommittedWidthPx }}
             className={`
               absolute top-7 bottom-7 left-1/2 -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300
-              outline-dashed
+              outline-dashed [contain:layout]
             `}
           >
             <span className={EDGE_LABEL_CLASS}>right-committed</span>
