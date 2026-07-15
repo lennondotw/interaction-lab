@@ -1,7 +1,7 @@
 import { cn } from '@monorepo/utils';
 import type { CSSProperties, FC } from 'react';
 
-interface NativeScrollRulerProps {
+export interface NativeScrollRulerProps {
   className?: string;
   side?: 'left' | 'right';
 }
@@ -26,7 +26,7 @@ const getRulerStyle = (side: 'left' | 'right') => {
   const rulerMaskImage = getRulerMaskImage(side);
 
   return {
-    backgroundColor: 'rgb(var(--orbit-ruler-tick) / 0.42)',
+    backgroundColor: 'rgb(var(--native-scroll-ruler-tick) / 0.42)',
     maskImage: rulerMaskImage,
     maskPosition: `${side} top`,
     maskRepeat: 'repeat-y',
@@ -44,8 +44,8 @@ export const NativeScrollRuler: FC<NativeScrollRulerProps> = ({ className, side 
     className={cn(
       `
         pointer-events-none
-        [--orbit-ruler-tick:0_0_0]
-        dark:[--orbit-ruler-tick:255_255_255]
+        [--native-scroll-ruler-tick:0_0_0]
+        dark:[--native-scroll-ruler-tick:255_255_255]
       `,
       className
     )}

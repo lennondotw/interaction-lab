@@ -11,11 +11,11 @@ import {
   type MotionValue,
 } from 'motion/react';
 import { FC, Fragment, useEffect, useRef, useState } from 'react';
-import { NativeScrollRuler } from './native-scroll-ruler.js';
+import { NativeScrollRuler } from '../../components/native-scroll-ruler/native-scroll-ruler.js';
 
 const ITEM_COUNT = 9;
 const ITEM_WIDTH = 280;
-const ITEM_HEIGHT = 354;
+const ITEM_HEIGHT = 360;
 const CONTAINER_HEIGHT = 614;
 const ORBIT_PLACEHOLDER_HEIGHT = ITEM_HEIGHT * 1.5;
 const REFERENCE_CONTAINER_WIDTH = 1440;
@@ -69,7 +69,14 @@ const getYOnTopArc = ({
   return centerY - Math.sqrt(radius * radius - clampedDx * clampedDx);
 };
 
-const getOrbitRadius = (containerWidth: number): number => (containerWidth * RING_RADIUS) / REFERENCE_CONTAINER_WIDTH;
+const getOrbitRadius = (containerWidth: number): number =>
+  // Items are placed by vertical guide lines, not by equal angular intervals.
+  // Each item center first chooses an x coordinate, then projects onto the top
+  // half of the circle to derive y. At minimum, the circle diameter must cover
+  // the viewport plus one item width: half an item can be visible beyond each
+  // side edge. The configured radius is intentionally larger than that minimum
+  // so the visible arc stays flatter and easier to inspect.
+  (containerWidth * RING_RADIUS) / REFERENCE_CONTAINER_WIDTH;
 
 const getSurfaceHeight = ({
   itemHeight = ITEM_HEIGHT,
@@ -82,6 +89,11 @@ const getSurfaceHeight = ({
   containerWidth: number;
   radius?: number;
 }): number => {
+  // The clipped surface needs to include the lowest item that can still be
+  // visually relevant. With vertical-line placement, that happens when an item
+  // is just entering or leaving through a side edge: its center sits half an
+  // item width outside the viewport. Project that center onto the orbit, then
+  // add half the item height to get the item bottom edge.
   const edgeEnteringItemDx = containerWidth / 2 + itemWidth / 2;
   return Math.ceil(getYOnTopArc({ dx: edgeEnteringItemDx, radius }) + itemHeight / 2);
 };
@@ -119,6 +131,9 @@ const getOrbitInstanceCount = ({
   const boundedSpan = Math.max(0, destroyX - spawnX);
   const requiredInstanceCount = Math.ceil(boundedSpan / spacing);
 
+  // Keep the instance pool as complete content cycles. Otherwise the item that
+  // wraps from the destroy side back to the spawn side could break sequence
+  // order when the geometry requires a count that is not divisible by itemCount.
   return Math.ceil(Math.max(itemCount, requiredInstanceCount) / itemCount) * itemCount;
 };
 
@@ -172,6 +187,9 @@ const projectItemSlotOnCircle = ({
     value: anchorIndex + slotOffset,
   });
 
+  // Stable integer slots preserve DOM identity while the anchor role advances.
+  // Each slot wraps across an interval wider than the viewport plus safety
+  // buffers, so the discontinuity happens offscreen.
   return {
     itemIndex,
     dx,
@@ -439,12 +457,13 @@ const OrbitItem: FC<OrbitItemProps> = ({ containerWidth, orbitProgress, slotCoun
     <motion.div
       aria-label={`Orbit item slot ${slotOffset}`}
       className={`
-        absolute top-0 left-0 h-[354px] w-[280px] outline-1 -outline-offset-1 outline-black/45 will-change-transform
-        outline-dashed
+        absolute top-0 left-0 outline-1 -outline-offset-1 outline-black/45 will-change-transform outline-dashed
       `}
       style={{
+        height: ITEM_HEIGHT,
         outlineColor,
         outlineWidth,
+        width: ITEM_WIDTH,
         x,
         y,
       }}
