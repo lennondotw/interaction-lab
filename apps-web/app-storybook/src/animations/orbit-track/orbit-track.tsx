@@ -10,7 +10,7 @@ import {
   useTransform,
   type MotionValue,
 } from 'motion/react';
-import { FC, Fragment, useEffect, useRef, useState } from 'react';
+import { FC, Fragment, useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { NativeScrollRuler } from '../../components/native-scroll-ruler/native-scroll-ruler.js';
 
 const ITEM_COUNT = 9;
@@ -23,6 +23,12 @@ const RING_RADIUS = 1200;
 const ITEM_CENTER_SPACING = 329;
 const ANCHOR_ITEM_INDEX = Math.floor(ITEM_COUNT / 2);
 const ANCHOR_SPEED_RADIANS_PER_MS = 0.096 / RING_RADIUS;
+const HOVER_SLOW_MULTIPLIER = 0.25;
+const HOVER_INFLUENCE_SPRING = {
+  damping: 26,
+  mass: 1,
+  stiffness: 169,
+} as const;
 const SCROLL_DOWN_DISTANCE_TO_ORBIT_DISTANCE = 0.54;
 const SCROLL_UP_DISTANCE_TO_ORBIT_DISTANCE = 0.61;
 const SCROLL_SPRING = {
@@ -55,6 +61,43 @@ const getScrollOrbitDistanceDelta = ({ scrollDelta }: { scrollDelta: number }): 
   scrollDelta * (scrollDelta >= 0 ? SCROLL_DOWN_DISTANCE_TO_ORBIT_DISTANCE : SCROLL_UP_DISTANCE_TO_ORBIT_DISTANCE);
 
 const getOrbitCenterY = (radius: number): number => ITEM_HEIGHT / 2 + radius;
+
+const getItemTouchRingMetrics = ({
+  itemHeight = ITEM_HEIGHT,
+  itemWidth = ITEM_WIDTH,
+  radius = RING_RADIUS,
+}: {
+  itemHeight?: number;
+  itemWidth?: number;
+  radius?: number;
+}) => {
+  const itemCornerDistance = Math.hypot(itemWidth / 2, itemHeight / 2);
+
+  return {
+    innerRadius: Math.max(0, radius - itemCornerDistance),
+    outerRadius: radius + itemCornerDistance,
+  };
+};
+
+const isPointInItemTouchRing = ({
+  centerX,
+  centerY,
+  innerRadius,
+  outerRadius,
+  pointX,
+  pointY,
+}: {
+  centerX: number;
+  centerY: number;
+  innerRadius: number;
+  outerRadius: number;
+  pointX: number;
+  pointY: number;
+}) => {
+  const distanceFromCenter = Math.hypot(pointX - centerX, pointY - centerY);
+
+  return distanceFromCenter >= innerRadius && distanceFromCenter <= outerRadius;
+};
 
 const getYOnTopArc = ({
   dx,
@@ -211,6 +254,9 @@ export const OrbitTrack: FC<OrbitTrackProps> = ({
   const { scrollY } = useScroll();
   const scrollOrbitTarget = useMotionValue(0);
   const scrollOrbitOffset = useSpring(scrollOrbitTarget, SCROLL_SPRING);
+  const hoverInfluenceTarget = useMotionValue(0);
+  const hoverInfluence = useSpring(hoverInfluenceTarget, HOVER_INFLUENCE_SPRING);
+  const speedMultiplier = useTransform(() => 1 - hoverInfluence.get() * (1 - HOVER_SLOW_MULTIPLIER));
   const orbitProgress = useTransform(() => baseOrbitProgress.get() + scrollOrbitOffset.get());
   const shouldReduceMotion = useReducedMotion();
   const [slotOffsets, setSlotOffsets] = useState(() =>
@@ -225,9 +271,41 @@ export const OrbitTrack: FC<OrbitTrackProps> = ({
   const orbitDiameter = useTransform(() => orbitRadius.get() * 2);
   const orbitTop = useTransform(() => orbitCenterY.get() - orbitRadius.get());
   const orbitCenterVerticalTop = useTransform(() => orbitCenterY.get() - 52);
+  const touchRingInnerRadius = useTransform(() => getItemTouchRingMetrics({ radius: orbitRadius.get() }).innerRadius);
+  const touchRingOuterRadius = useTransform(() => getItemTouchRingMetrics({ radius: orbitRadius.get() }).outerRadius);
+  const touchRingInnerDiameter = useTransform(() => touchRingInnerRadius.get() * 2);
+  const touchRingOuterDiameter = useTransform(() => touchRingOuterRadius.get() * 2);
+  const touchRingInnerTop = useTransform(() => orbitCenterY.get() - touchRingInnerRadius.get());
+  const touchRingOuterTop = useTransform(() => orbitCenterY.get() - touchRingOuterRadius.get());
   const surfaceHeight = useTransform(() =>
     getSurfaceHeight({ containerWidth: containerWidth.get(), radius: orbitRadius.get() })
   );
+  const handlePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const bounds = container.getBoundingClientRect();
+      const pointX = event.clientX - bounds.left;
+      const pointY = event.clientY - bounds.top;
+      const nextHoverInfluence = isPointInItemTouchRing({
+        centerX: containerWidth.get() / 2,
+        centerY: orbitCenterY.get(),
+        innerRadius: touchRingInnerRadius.get(),
+        outerRadius: touchRingOuterRadius.get(),
+        pointX,
+        pointY,
+      })
+        ? 1
+        : 0;
+
+      hoverInfluenceTarget.set(nextHoverInfluence);
+    },
+    [containerWidth, hoverInfluenceTarget, orbitCenterY, touchRingInnerRadius, touchRingOuterRadius]
+  );
+  const handlePointerLeave = useCallback(() => {
+    hoverInfluenceTarget.set(0);
+  }, [hoverInfluenceTarget]);
 
   useEffect(() => {
     previousScrollYRef.current = scrollY.get();
@@ -280,7 +358,7 @@ export const OrbitTrack: FC<OrbitTrackProps> = ({
     if (shouldReduceMotion) return;
 
     const radius = getOrbitRadius(containerWidth.get());
-    const baseDistanceDelta = delta * ANCHOR_SPEED_RADIANS_PER_MS * radius;
+    const baseDistanceDelta = delta * ANCHOR_SPEED_RADIANS_PER_MS * radius * speedMultiplier.get();
 
     baseOrbitProgress.set(baseOrbitProgress.get() + baseDistanceDelta);
   });
@@ -299,6 +377,8 @@ export const OrbitTrack: FC<OrbitTrackProps> = ({
         `,
         className
       )}
+      onPointerLeave={handlePointerLeave}
+      onPointerMove={handlePointerMove}
       style={{ height: ORBIT_PLACEHOLDER_HEIGHT }}
     >
       <div
@@ -320,6 +400,24 @@ export const OrbitTrack: FC<OrbitTrackProps> = ({
                 top: orbitTop,
                 transform: 'translateX(-50%)',
                 width: orbitDiameter,
+              }}
+            />
+            <motion.div
+              className="absolute left-1/2 rounded-full border border-dashed border-amber-500/70"
+              style={{
+                height: touchRingOuterDiameter,
+                top: touchRingOuterTop,
+                transform: 'translateX(-50%)',
+                width: touchRingOuterDiameter,
+              }}
+            />
+            <motion.div
+              className="absolute left-1/2 rounded-full border border-dashed border-amber-500/70"
+              style={{
+                height: touchRingInnerDiameter,
+                top: touchRingInnerTop,
+                transform: 'translateX(-50%)',
+                width: touchRingInnerDiameter,
               }}
             />
             <motion.div
