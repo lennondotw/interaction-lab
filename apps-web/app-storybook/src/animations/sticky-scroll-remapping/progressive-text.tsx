@@ -2,11 +2,23 @@ import { cn } from '@monorepo/utils';
 import { motion, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useEffect, useMemo, type FC } from 'react';
 
-import { createProgressiveTextMapping, getProgressiveTextUnitOpacity } from './progressive-text-utils.js';
+import {
+  createProgressiveTextMapping,
+  getProgressiveTextUnitColor,
+  getProgressiveTextUnitOpacity,
+} from './progressive-text-utils.js';
 
 export interface ProgressiveTextProps {
+  activeColor?: string;
+  colorGradientWidth?: number;
   className?: string;
+  getActiveColor?: (unit: {
+    content: string;
+    originalIndex: number;
+    visibleIndex: number | null;
+  }) => string | undefined;
   gradientWidth?: number;
+  inactiveColor?: string;
   inactiveOpacity?: number;
   progress: MotionValue<number> | number;
   sequenceLength?: number;
@@ -15,8 +27,11 @@ export interface ProgressiveTextProps {
 }
 
 interface ProgressiveTextUnitProps {
+  activeColor?: string;
+  colorGradientWidth: number;
   content: string;
   gradientWidth: number;
+  inactiveColor: string;
   inactiveOpacity: number;
   progress: MotionValue<number>;
   visibleIndex: number | null;
@@ -24,8 +39,11 @@ interface ProgressiveTextUnitProps {
 }
 
 const ProgressiveTextUnit: FC<ProgressiveTextUnitProps> = ({
+  activeColor,
+  colorGradientWidth,
   content,
   gradientWidth,
+  inactiveColor,
   inactiveOpacity,
   progress,
   visibleIndex,
@@ -40,13 +58,30 @@ const ProgressiveTextUnit: FC<ProgressiveTextUnitProps> = ({
       visibleLength,
     })
   );
+  const color = useTransform(progress, (latestProgress) =>
+    activeColor
+      ? getProgressiveTextUnitColor({
+          activeColor,
+          gradientWidth: colorGradientWidth,
+          inactiveColor,
+          progress: latestProgress,
+          sequenceGradientWidth: gradientWidth,
+          visibleIndex,
+          visibleLength,
+        })
+      : inactiveColor
+  );
 
-  return <motion.span style={{ opacity }}>{content}</motion.span>;
+  return <motion.span style={{ color: activeColor ? color : undefined, opacity }}>{content}</motion.span>;
 };
 
 export const ProgressiveText: FC<ProgressiveTextProps> = ({
+  activeColor,
+  colorGradientWidth = 1,
   className,
+  getActiveColor,
   gradientWidth = 6,
+  inactiveColor = '#171717',
   inactiveOpacity = 0.24,
   progress,
   sequenceLength,
@@ -66,8 +101,11 @@ export const ProgressiveText: FC<ProgressiveTextProps> = ({
       {mapping.units.map((unit) => (
         <ProgressiveTextUnit
           key={unit.originalIndex}
+          activeColor={getActiveColor?.(unit) ?? activeColor}
+          colorGradientWidth={colorGradientWidth}
           content={unit.content}
           gradientWidth={gradientWidth}
+          inactiveColor={inactiveColor}
           inactiveOpacity={inactiveOpacity}
           progress={progressValue}
           visibleIndex={unit.visibleIndex === null ? null : unit.visibleIndex + sequenceOffset}

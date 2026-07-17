@@ -602,6 +602,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
 
   useEffect(() => {
     const commitAnimationControls = commitAnimationControlsRef.current;
+    const blurExitAnimationControls = blurExitAnimationControlsRef.current;
 
     return () => {
       if (commitTimerRef.current != null) {
@@ -627,8 +628,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       commitAnimationControls.leftX?.stop();
       commitAnimationControls.left?.stop();
       commitAnimationControls.right?.stop();
-      blurExitAnimationControlsRef.current.left?.stop();
-      blurExitAnimationControlsRef.current.right?.stop();
+      blurExitAnimationControls.left?.stop();
+      blurExitAnimationControls.right?.stop();
     };
   }, []);
 
@@ -758,8 +759,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
         className={`
           absolute inset-y-4 left-3 z-10
           [width:max(0px,calc(var(--split-leading-live-width)-20px))]
-          [contain:layout]
           outline-[1px] -outline-offset-1 outline-slate-300
+          [contain:layout]
         `}
       >
         <span className={EDGE_LABEL_CLASS}>left-live</span>
@@ -769,7 +770,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
             data-demo-left-committed
             style={{ filter: leftBufferedFilter, width: leftCommittedWidthPx, x: leftCommittedXPx }}
             className={`
-              absolute top-7 bottom-7 left-0 [contain:layout] outline-[1px] -outline-offset-1 outline-sky-300
+              absolute top-7 bottom-7 left-0 outline-[1px] -outline-offset-1 outline-sky-300
+              [contain:layout]
               outline-dashed
             `}
           >
@@ -820,8 +822,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
           `
             absolute inset-y-4 z-10
             [width:max(0px,calc(var(--split-trailing-live-width)-20px))]
-            [contain:layout]
             outline-[1px] -outline-offset-1 outline-slate-300
+            [contain:layout]
           `,
           !trailingOpen && `pointer-events-none`
         )}
@@ -834,7 +836,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
             style={{ filter: rightBufferedFilter, width: rightCommittedWidthPx }}
             className={`
               absolute top-7 bottom-7 left-1/2 -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300
-              outline-dashed [contain:layout]
+              [contain:layout]
+              outline-dashed
             `}
           >
             <span className={EDGE_LABEL_CLASS}>right-committed</span>

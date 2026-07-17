@@ -825,9 +825,8 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         data-demo-left-live
         style={leftLiveStyle}
         className={`
-          absolute inset-y-4 left-3 z-10
+          absolute inset-y-4 left-3 z-10 outline-[1px] -outline-offset-1 outline-slate-300
           [contain:layout]
-          outline-[1px] -outline-offset-1 outline-slate-300
         `}
       >
         <span className={EDGE_LABEL_CLASS}>left-live</span>
@@ -837,8 +836,11 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
               <div
                 data-demo-left-content-layer
                 className={`
-                  absolute top-7 bottom-7 left-1/2 [width:max(0px,calc(100%-40px))] -translate-x-1/2 [contain:layout]
-                  outline-[1px] -outline-offset-1 outline-sky-300 outline-dashed
+                  absolute top-7 bottom-7 left-1/2
+                  [width:max(0px,calc(100%-40px))]
+                  -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300
+                  [contain:layout]
+                  outline-dashed
                 `}
               >
                 <span className={EDGE_LABEL_CLASS}>left-content-layer</span>
@@ -886,9 +888,8 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         style={rightLiveStyle}
         className={cn(
           `
-            absolute inset-y-4 z-10
+            absolute inset-y-4 z-10 outline-[1px] -outline-offset-1 outline-slate-300
             [contain:layout]
-            outline-[1px] -outline-offset-1 outline-slate-300
           `,
           !trailingOpen && `pointer-events-none`
         )}
@@ -900,8 +901,11 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
               <div
                 data-demo-right-content-layer
                 className={`
-                  absolute top-7 bottom-7 left-1/2 [width:max(0px,calc(100%-40px))] -translate-x-1/2 [contain:layout]
-                  outline-[1px] -outline-offset-1 outline-emerald-300 outline-dashed
+                  absolute top-7 bottom-7 left-1/2
+                  [width:max(0px,calc(100%-40px))]
+                  -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300
+                  [contain:layout]
+                  outline-dashed
                 `}
               >
                 <span className={EDGE_LABEL_CLASS}>right-content-layer</span>

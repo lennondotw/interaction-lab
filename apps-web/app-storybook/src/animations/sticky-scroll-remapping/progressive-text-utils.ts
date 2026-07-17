@@ -53,6 +53,28 @@ export const createProgressiveTextMapping = (
 
 const clampUnitInterval = (value: number) => Math.min(1, Math.max(0, value));
 
+export const getProgressiveTextUnitProgress = ({
+  gradientWidth,
+  progress,
+  sequenceGradientWidth = gradientWidth,
+  visibleIndex,
+  visibleLength,
+}: {
+  gradientWidth: number;
+  progress: number;
+  sequenceGradientWidth?: number;
+  visibleIndex: number | null;
+  visibleLength: number;
+}) => {
+  if (visibleIndex === null) return 1;
+
+  const safeGradientWidth = Math.max(Number.EPSILON, gradientWidth);
+  const safeSequenceGradientWidth = Math.max(Number.EPSILON, sequenceGradientWidth);
+  const gradientEnd = progress * (visibleLength + safeSequenceGradientWidth);
+
+  return clampUnitInterval((gradientEnd - visibleIndex) / safeGradientWidth);
+};
+
 export const getProgressiveTextUnitOpacity = ({
   gradientWidth,
   inactiveOpacity,
@@ -66,11 +88,42 @@ export const getProgressiveTextUnitOpacity = ({
   visibleIndex: number | null;
   visibleLength: number;
 }) => {
-  if (visibleIndex === null) return 1;
-
-  const safeGradientWidth = Math.max(Number.EPSILON, gradientWidth);
-  const gradientEnd = progress * (visibleLength + safeGradientWidth);
-  const unitProgress = clampUnitInterval((gradientEnd - visibleIndex) / safeGradientWidth);
+  const unitProgress = getProgressiveTextUnitProgress({
+    gradientWidth,
+    progress,
+    visibleIndex,
+    visibleLength,
+  });
 
   return inactiveOpacity + (1 - inactiveOpacity) * unitProgress;
+};
+
+export const getProgressiveTextUnitColor = ({
+  activeColor,
+  gradientWidth,
+  inactiveColor,
+  progress,
+  sequenceGradientWidth,
+  visibleIndex,
+  visibleLength,
+}: {
+  activeColor: string;
+  gradientWidth: number;
+  inactiveColor: string;
+  progress: number;
+  sequenceGradientWidth: number;
+  visibleIndex: number | null;
+  visibleLength: number;
+}) => {
+  const unitProgress = getProgressiveTextUnitProgress({
+    gradientWidth,
+    progress,
+    sequenceGradientWidth,
+    visibleIndex,
+    visibleLength,
+  });
+  const activeWeight = unitProgress * 100;
+  const inactiveWeight = 100 - activeWeight;
+
+  return `color-mix(in oklch, ${inactiveColor} ${inactiveWeight}%, ${activeColor} ${activeWeight}%)`;
 };
