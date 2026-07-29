@@ -6,11 +6,20 @@ import { BUBBLE_COUNT } from './constants.js';
 import { buildBubbleItems, buildBubbleLabels } from './demo-items.js';
 import { layoutSettle, type SettlePhase, type SettleRecorder } from './physics/layout-settle.js';
 import { drawSettleReplayFrame } from './render/debug-overlay.js';
+import { BUBBLE_PALETTES } from './render/palette.js';
+import { useColorScheme } from './use-color-scheme.js';
 
+// The bubbles are glass — they need colour under them to refract, not a
+// flat panel. Light is a broad pastel sweep; dark is midnight, so the
+// stops sit close together and stay near-black, letting a faint blue →
+// violet shift read without a visible band.
 const Stage: FC<{ children: ReactNode }> = ({ children }) => (
   <div
-    className="flex min-h-screen w-full items-center justify-center p-2"
-    style={{ background: 'linear-gradient(180deg, #d4e3ff 0%, #e7d6ff 55%, #f3deca 100%)' }}
+    className={`
+      flex min-h-screen w-full items-center justify-center
+      bg-[linear-gradient(180deg,#d4e3ff_0%,#e7d6ff_55%,#f3deca_100%)] p-2
+      dark:bg-[linear-gradient(180deg,#06091a_0%,#12102b_55%,#090a1c_100%)]
+    `}
   >
     <div className="relative h-150 w-5xl">{children}</div>
   </div>
@@ -358,6 +367,7 @@ const SettleReplayCanvas: FC<{ viewportHeight: number; canvasWidth: number }> = 
   const [frame, setFrame] = useState(() => data.positions.length - 1);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dprRef = useRef(window.devicePixelRatio || 1);
+  const palette = BUBBLE_PALETTES[useColorScheme()];
 
   // Clamp during render rather than via a `useEffect(() => setFrame(...))`
   // pass. If `viewportHeight` changes and the new recording has fewer
@@ -399,16 +409,23 @@ const SettleReplayCanvas: FC<{ viewportHeight: number; canvasWidth: number }> = 
       radii: data.radii,
       labels: data.labels,
       phase,
+      palette,
       transform: { scale, offsetX, offsetY },
     });
-  }, [data, safeFrame, canvasWidth, viewportHeight]);
+  }, [data, safeFrame, canvasWidth, viewportHeight, palette]);
 
   const label = phaseLabel(data.phases, safeFrame);
 
   return (
     <div className="flex size-full flex-col gap-3">
       <div className="flex-1">
-        <canvas ref={canvasRef} className="rounded-md border border-zinc-300/40 bg-white/30" />
+        <canvas
+          ref={canvasRef}
+          className={`
+            rounded-md border border-zinc-300/40 bg-white/30
+            dark:border-zinc-600/40 dark:bg-white/5
+          `}
+        />
       </div>
       <div className="flex flex-col gap-1.5 px-2">
         <input
@@ -419,7 +436,12 @@ const SettleReplayCanvas: FC<{ viewportHeight: number; canvasWidth: number }> = 
           onChange={(e) => setFrame(Number(e.target.value))}
           className="w-full"
         />
-        <div className="flex items-center justify-between font-mono text-xs text-zinc-700 tabular-nums">
+        <div
+          className={`
+            flex items-center justify-between font-mono text-xs text-zinc-700 tabular-nums
+            dark:text-zinc-300
+          `}
+        >
           <span>
             frame {safeFrame + 1} / {totalFrames}
           </span>

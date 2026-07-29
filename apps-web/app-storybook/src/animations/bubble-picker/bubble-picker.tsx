@@ -11,7 +11,9 @@ import { stepRuntime, stepScaleOnly } from './physics/step-runtime.js';
 import { drawAnchors, drawCollisionRims, drawSettleSnapshot } from './render/debug-overlay.js';
 import { drawClusterContents } from './render/draw-bubble.js';
 import { IDLE_LABEL_FONT, IDLE_LINE_HEIGHT, SELECTED_LABEL_FONT, SELECTED_LINE_HEIGHT } from './render/label-fonts.js';
+import { BUBBLE_PALETTES, type BubblePalette, type ColorScheme } from './render/palette.js';
 import { wrapLabel } from './render/wrap-label.js';
+import { useColorScheme } from './use-color-scheme.js';
 
 export interface BubblePickerItem {
   id: string;
@@ -55,6 +57,12 @@ export interface BubblePickerProps {
    */
   idleSrc?: string;
   selectedSrc?: string;
+  /**
+   * Pin the canvas palette to one scheme. Left undefined, the picker
+   * follows the document's resolved `color-scheme` — which covers both an
+   * explicit `[data-theme]` and the `prefers-color-scheme` fallback.
+   */
+  theme?: ColorScheme;
   className?: string;
   /**
    * Disable all procedural motion (breathing, drift, specular sweep).
@@ -122,6 +130,7 @@ export const BubblePicker: FC<BubblePickerProps> = ({
   maxSelected = DEFAULT_MAX_SELECT,
   idleSrc = bubbleIdleUrl,
   selectedSrc = bubbleSelectedUrl,
+  theme,
   className,
   paused = false,
   debug,
@@ -129,10 +138,13 @@ export const BubblePicker: FC<BubblePickerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<InternalState | null>(null);
+  // Resolved every render; the rAF loop reads the palette off propsRef so
+  // a theme flip repaints on the very next frame with no re-mount.
+  const palette: BubblePalette = BUBBLE_PALETTES[useColorScheme(theme)];
   // Latest props snapshot for the rAF loop and pointer handlers — avoids
   // stale closures without restarting the loop on every render.
-  const propsRef = useRef({ items, onToggle, maxSelected, idleSrc, selectedSrc, paused, debug });
-  propsRef.current = { items, onToggle, maxSelected, idleSrc, selectedSrc, paused, debug };
+  const propsRef = useRef({ items, onToggle, maxSelected, idleSrc, selectedSrc, palette, paused, debug });
+  propsRef.current = { items, onToggle, maxSelected, idleSrc, selectedSrc, palette, paused, debug };
 
   // Sync the selection Set during render. Not an effect — this is a pure
   // ref mutation that mirrors the prop. The rAF loop reads `.has(id)`
@@ -316,17 +328,18 @@ export const BubblePicker: FC<BubblePickerProps> = ({
         }
         s.ctx.clearRect(0, 0, s.width, s.height);
 
+        const activePalette = propsRef.current.palette;
         if (debugOpts?.settleSnapshot) {
-          drawSettleSnapshot(s.ctx, s.bubbles, s.selectedIdsRef.current);
+          drawSettleSnapshot(s.ctx, s.bubbles, s.selectedIdsRef.current, activePalette);
         } else {
-          drawClusterContents(s.ctx, s.bubbles, { procClockMs: s.procClockMs });
+          drawClusterContents(s.ctx, s.bubbles, { procClockMs: s.procClockMs, palette: activePalette });
         }
 
         if (debugOpts?.collisionRims) {
           drawCollisionRims(s.ctx, s.bubbles, s.selectedIdsRef.current);
         }
         if (debugOpts?.anchors) {
-          drawAnchors(s.ctx, s.bubbles);
+          drawAnchors(s.ctx, s.bubbles, activePalette);
         }
       }
 

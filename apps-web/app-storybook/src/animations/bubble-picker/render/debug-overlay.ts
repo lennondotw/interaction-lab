@@ -1,6 +1,7 @@
 import { MIN_GAP } from '../constants.js';
 import type { BubbleState } from '../physics/bubble-state.js';
 import type { SettlePhase } from '../physics/layout-settle.js';
+import type { BubblePalette } from './palette.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -8,7 +9,6 @@ const SETTLE_FILL_IDLE = 'rgba(148, 163, 184, 0.18)';
 const SETTLE_FILL_SELECTED = 'rgba(99, 102, 241, 0.35)';
 const SETTLE_STROKE_IDLE = 'rgba(148, 163, 184, 0.7)';
 const SETTLE_STROKE_SELECTED = 'rgba(99, 102, 241, 0.9)';
-const SETTLE_LABEL_IDLE = 'rgba(15, 23, 42, 0.7)';
 const SETTLE_LABEL_SELECTED = '#ffffff';
 const SETTLE_LABEL_FONT = '500 5px system-ui, sans-serif';
 
@@ -17,7 +17,6 @@ const RIM_PHYS_SELECTED = 'rgba(168, 85, 247, 0.95)';
 const RIM_CLAIM_IDLE = 'rgba(217, 70, 239, 0.45)';
 const RIM_CLAIM_SELECTED = 'rgba(217, 70, 239, 0.85)';
 
-const ANCHOR_CROSS_STROKE = 'rgba(15, 23, 42, 0.6)';
 const ANCHOR_DISPLACEMENT_STROKE = 'rgba(234, 179, 8, 0.9)';
 const ANCHOR_ENVELOPE_STROKE = 'rgba(15, 118, 110, 0.5)';
 
@@ -31,7 +30,8 @@ const ANCHOR_DISPLACEMENT_MIN_SQ = 0.5;
 export function drawSettleSnapshot(
   ctx: CanvasRenderingContext2D,
   bubbles: readonly BubbleState[],
-  selectedIds: ReadonlySet<string>
+  selectedIds: ReadonlySet<string>,
+  palette: BubblePalette
 ): void {
   ctx.save();
   ctx.font = SETTLE_LABEL_FONT;
@@ -50,7 +50,7 @@ export function drawSettleSnapshot(
     ctx.strokeStyle = selected ? SETTLE_STROKE_SELECTED : SETTLE_STROKE_IDLE;
     ctx.stroke();
 
-    ctx.fillStyle = selected ? SETTLE_LABEL_SELECTED : SETTLE_LABEL_IDLE;
+    ctx.fillStyle = selected ? SETTLE_LABEL_SELECTED : `rgba(${palette.debugInkRgb}, 0.7)`;
     ctx.fillText(b.label, b.pos.x, b.pos.y);
   }
 
@@ -101,13 +101,17 @@ export function drawCollisionRims(
 // Because drift adds at draw time and physics never sees it, the envelope
 // must orbit `pos`, not `restPos` — that's the actual visible range of
 // the bubble's centre.
-export function drawAnchors(ctx: CanvasRenderingContext2D, bubbles: readonly BubbleState[]): void {
+export function drawAnchors(
+  ctx: CanvasRenderingContext2D,
+  bubbles: readonly BubbleState[],
+  palette: BubblePalette
+): void {
   ctx.save();
 
   for (const b of bubbles) {
     ctx.setLineDash([]);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = ANCHOR_CROSS_STROKE;
+    ctx.strokeStyle = `rgba(${palette.debugInkRgb}, 0.6)`;
     ctx.beginPath();
     ctx.moveTo(b.restPos.x - ANCHOR_CROSS_HALF, b.restPos.y);
     ctx.lineTo(b.restPos.x + ANCHOR_CROSS_HALF, b.restPos.y);
@@ -152,6 +156,7 @@ export interface SettleReplayFrameInput {
   radii: readonly number[];
   labels: readonly string[];
   phase: SettlePhase;
+  palette: BubblePalette;
   /** Affine transform from settle-coordinate space to canvas-coordinate space. */
   transform: { scale: number; offsetX: number; offsetY: number };
 }
@@ -161,7 +166,7 @@ export interface SettleReplayFrameInput {
 // trajectory inside its viewport even though early iterations span 2000+
 // px while the final cluster sits in ~1000 px.
 export function drawSettleReplayFrame(ctx: CanvasRenderingContext2D, input: SettleReplayFrameInput): void {
-  const { positions, radii, labels, phase, transform } = input;
+  const { positions, radii, labels, phase, palette, transform } = input;
   const { scale, offsetX, offsetY } = transform;
   const colors = REPLAY_PHASE_COLORS[phase.kind];
 
@@ -184,7 +189,7 @@ export function drawSettleReplayFrame(ctx: CanvasRenderingContext2D, input: Sett
     ctx.stroke();
 
     if (r > 9) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillStyle = `rgba(${palette.debugInkRgb}, 0.78)`;
       ctx.fillText(labels[i] ?? '', cx, cy);
     }
   }

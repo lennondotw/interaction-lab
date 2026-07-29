@@ -2,18 +2,18 @@ import { SELECTED_SCALE } from '../constants.js';
 import type { BubbleState } from '../physics/bubble-state.js';
 import { traceDeformedPath } from './deformed-path.js';
 import { IDLE_LABEL_FONT, SELECTED_LABEL_FONT } from './label-fonts.js';
+import type { BubblePalette } from './palette.js';
 
 interface DrawContext {
   ctx: CanvasRenderingContext2D;
   procClockMs: number;
+  palette: BubblePalette;
 }
 
 interface DrawClusterContentsOptions {
   procClockMs: number;
+  palette: BubblePalette;
 }
-
-const IDLE_LABEL_FILL = 'rgba(1, 55, 136, 0.7)';
-const SELECTED_LABEL_FILL = '#ffffff';
 
 // Per-bubble draw. Layers stack bottom-up:
 //
@@ -33,7 +33,7 @@ const SELECTED_LABEL_FILL = '#ffffff';
 // Selection is read entirely off `b.scale`: the physics step eases it
 // toward SELECTED_SCALE, so the draw path never needs the selection set.
 export function drawBubble(b: BubbleState, dc: DrawContext): void {
-  const { ctx, procClockMs } = dc;
+  const { ctx, procClockMs, palette } = dc;
 
   const timeSec = procClockMs / 1000;
 
@@ -60,9 +60,9 @@ export function drawBubble(b: BubbleState, dc: DrawContext): void {
     ctx.save();
     traceDeformedPath(ctx, b, cx, cy, r, timeSec);
     ctx.clip();
-    // Unselected bubbles render their texture at 50% alpha so the
+    // Unselected bubbles render their texture at a reduced alpha so the
     // selected ones read as more vivid by contrast.
-    ctx.globalAlpha = 0.5 + selectionT * 0.5;
+    ctx.globalAlpha = palette.idleTextureAlpha + selectionT * (1 - palette.idleTextureAlpha);
 
     const drawSize = r * 2.4;
     ctx.translate(cx, cy);
@@ -123,10 +123,17 @@ export function drawBubble(b: BubbleState, dc: DrawContext): void {
   ctx.restore();
 
   // ── Layer 3: label ──
-  drawLabel(ctx, b, cx, cy, selectionT);
+  drawLabel(ctx, b, cx, cy, selectionT, palette);
 }
 
-function drawLabel(ctx: CanvasRenderingContext2D, b: BubbleState, cx: number, cy: number, selectionT: number): void {
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  b: BubbleState,
+  cx: number,
+  cy: number,
+  selectionT: number,
+  palette: BubblePalette
+): void {
   const showSelected = selectionT >= 0.5;
   const lines = showSelected ? b.selectedLines : b.idleLines;
   const lineHeight = showSelected ? b.selectedLineHeight : b.idleLineHeight;
@@ -137,8 +144,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, b: BubbleState, cx: number, cy
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Cross-fade idle (#013788 @ 70%) -> selected (#fff) by selectionT.
-  ctx.fillStyle = lerpColor(IDLE_LABEL_FILL, SELECTED_LABEL_FILL, selectionT);
+  // Cross-fade the resting label colour -> selected (#fff) by selectionT.
+  ctx.fillStyle = lerpColor(palette.idleLabelFill, palette.selectedLabelFill, selectionT);
 
   const shadowAlpha = 0.02 + selectionT * 0.02;
   ctx.shadowColor = `rgba(0, 0, 0, ${shadowAlpha})`;
@@ -195,6 +202,6 @@ export function drawClusterContents(
   options: DrawClusterContentsOptions
 ): void {
   for (const b of bubbles) {
-    drawBubble(b, { ctx, procClockMs: options.procClockMs });
+    drawBubble(b, { ctx, procClockMs: options.procClockMs, palette: options.palette });
   }
 }
