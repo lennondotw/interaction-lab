@@ -1,0 +1,30 @@
+export { DebugElasticScale, type DebugElasticScaleProps } from './debug-elastic-scale.js';
+export {
+  DEFAULT_MAX_SCALE,
+  DEFAULT_SIGMA,
+  INTEGRATION_STEPS,
+  calculateElasticScale,
+  calculateItemsElasticScale,
+  calculateScale,
+  generateItemPositions,
+  getItemCenter,
+  integrateScale,
+  isWithinInteractiveRange,
+  type ElasticScaleParams,
+  type ElasticScaleResult,
+  type ItemElasticResult,
+  type ItemPosition,
+} from './elastic-scale.js';
+export {
+  NO_HOVERED_ITEM,
+  useElasticScaleContainer,
+  useItemTransform,
+  type ElasticScaleContext,
+  type ElasticScaleLayout,
+  type IntensitySpringOptions,
+  type ItemTransform,
+  type TransitionConfig,
+  type UseElasticScaleContainerOptions,
+  type UseElasticScaleContainerResult,
+  type UseItemTransformOptions,
+} from './use-elastic-scale.js';
