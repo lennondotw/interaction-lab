@@ -36,12 +36,14 @@
  *   coarse integer pixels; the rect can still differ. The callback
  *   re-compares rects and re-arms on mismatch.
  * - A first callback with `ratio === 0` means the element isn't
- *   visible yet (e.g. just mounted off-screen or mid-animation). Defer
- *   for a second and retry.
- * - `root: ownerDocument` is a trick that makes the observer use
- *   document coordinates rather than the default (the nearest
- *   scrolling ancestor). Some older browsers reject this — fall back
- *   to the default root.
+ *   visible (just mounted off-screen, mid-animation, scrolled past, or
+ *   clipped by a collapsed ancestor). Defer for a second, then retry
+ *   *and report* — the throttle is the loop guard, so staying silent
+ *   would only strand the beacon at its last visible position.
+ * - `root: ownerDocument` — the **Document**, not `documentElement` —
+ *   is what makes the root rect the viewport, which is the frame the
+ *   insets below are measured in. Some older browsers reject a
+ *   Document root; fall back to the implicit one.
  */
 
 export interface LayoutShiftControl {
@@ -112,7 +114,16 @@ export function observeLayoutShift(el: Element, onMove: () => void): LayoutShift
           // mid-fade-in). Defer and retry with ratio=1, or if we got a
           // partial ratio, re-arm with that exact threshold.
           if (ratio === 0) {
-            retryTimer = setTimeout(() => refresh({ skipNotify: true, threshold: 1e-7 }), 1000);
+            // The 1000ms throttle is what prevents a re-arm loop on a
+            // permanently invisible element — *not* skipping the notify.
+            // With `skipNotify: true` here the retry re-arms around the
+            // element's new rect and never reports it, so a beacon whose
+            // anchor got clipped out (scrolled past, collapsed panel)
+            // stays frozen at its last visible position forever instead
+            // of catching up a second later. Matches Floating UI's
+            // `refresh(false, 1e-7)`. Measured in
+            // `archive/2026-07-beacon-layout-observation`.
+            retryTimer = setTimeout(() => refresh({ threshold: 1e-7 }), 1000);
           } else {
             refresh({ threshold: ratio });
           }
@@ -133,7 +144,15 @@ export function observeLayoutShift(el: Element, onMove: () => void): LayoutShift
     const options: IntersectionObserverInit = { rootMargin, threshold: clampedThreshold };
 
     try {
-      io = new IntersectionObserver(handler, { ...options, root: rootEl });
+      // The root must be the **Document**, not `documentElement`. The insets
+      // above are measured against `documentElement.clientWidth/clientHeight`
+      // — the viewport. A Document root has exactly that rect. An *element*
+      // root instead contributes its own content box, which for `<html>` is
+      // the height of the page content: on a 900px viewport with 698px of
+      // content, the bottom inset over-shrinks the frame to zero height, the
+      // ratio reads 0 at rest, and the whole layout-shift channel goes
+      // silent. Measured in `archive/2026-07-beacon-layout-observation`.
+      io = new IntersectionObserver(handler, { ...options, root: el.ownerDocument });
     } catch {
       io = new IntersectionObserver(handler, options);
     }

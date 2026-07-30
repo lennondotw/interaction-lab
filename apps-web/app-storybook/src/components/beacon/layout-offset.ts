@@ -4,10 +4,11 @@
  *
  * Walks the `offsetParent` chain from `el` up to `container`,
  * accumulating `offsetLeft` / `offsetTop` and subtracting the
- * `scrollLeft` / `scrollTop` of every intermediate ancestor between
- * each hop and its `offsetParent`. The result is the element's
- * position as laid out by the browser, *not* where it currently paints
- * after transforms are applied.
+ * `scrollLeft` / `scrollTop` of every ancestor along the way, up to and
+ * including each hop's `offsetParent` (the container excepted — see the
+ * loop). The result is the element's position as laid out by the
+ * browser, *not* where it currently paints after transforms are
+ * applied.
  *
  * Why not `getBoundingClientRect()`?
  *
@@ -70,16 +71,26 @@ export function layoutOffsetRelativeTo(el: HTMLElement, container: HTMLElement |
 
     const offsetParent = node.offsetParent as HTMLElement | null;
 
-    // Accumulate scroll offsets of intermediate ancestors between
-    // `node` and its `offsetParent`. These are nodes whose `overflow`
-    // creates a scroll context without breaking the offset chain (i.e.
-    // not `position: relative` themselves, otherwise they'd be the
-    // offsetParent). Skip the container itself so callers aren't
-    // forced to make it non-scrolling.
+    // Subtract the scroll offset of every ancestor from `node` up to and
+    // **including** its `offsetParent`. `offsetLeft` / `offsetTop` are
+    // measured in the offsetParent's unscrolled content space, so a
+    // scrolled offsetParent — any `position: relative` element that also
+    // scrolls, i.e. an ordinary scroll panel — needs its own scroll
+    // taken off at the hop. Stopping one node short left that offset in
+    // permanently: a 160px scroll inside a positioned scroller parked
+    // the beacon 160px off, forever
+    // (`archive/2026-07-beacon-layout-observation`).
+    //
+    // The container is the one exception, and it stops the walk: the
+    // follower is positioned inside it, so it already scrolls with the
+    // container's content. Subtracting that scroll would double-count
+    // it, and callers would be forced to make the container
+    // non-scrolling.
     let walker: HTMLElement | null = node.parentElement;
-    while (walker && walker !== offsetParent && walker !== container) {
+    while (walker && walker !== container) {
       x -= walker.scrollLeft;
       y -= walker.scrollTop;
+      if (walker === offsetParent) break;
       walker = walker.parentElement;
     }
 
