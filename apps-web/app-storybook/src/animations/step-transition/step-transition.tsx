@@ -47,33 +47,59 @@ const BLUR = 8;
 // CSS Filter Effects 2 makes it a "backdrop root" and traps descendant
 // `backdrop-filter` against the step's offscreen buffer. The `noFilter`
 // pair below drops the `filter` property entirely for that case.
-const slideVariants: Variants = {
-  enter: (dir: number) => ({ x: dir > 0 ? SLIDE : -SLIDE, opacity: 0, filter: `blur(${BLUR}px)` }),
-  center: { x: 0, opacity: 1, filter: 'blur(0px)' },
-  exit: (dir: number) => ({ x: dir > 0 ? -SLIDE : SLIDE, opacity: 0, filter: `blur(${BLUR}px)` }),
-};
+/** Navigation direction recorded per step, keyed by the step it belongs to. */
+export type StepDirections = Record<number, number>;
 
-const fadeVariants: Variants = {
+const dirOf = (dirs: StepDirections, step: number): number => dirs[step] ?? 1;
+
+// Each child's variants close over *its own* step and look the direction up in
+// the live map handed down through `custom`, rather than reading one shared
+// scalar.
+//
+// Why the indirection. An exiting child's props are frozen at the moment it was
+// removed, which is why `AnimatePresence custom` exists at all — it is the one
+// live channel into a child whose props can no longer be updated. But
+// AnimatePresence removes exiting children as a *batch*, so during fast
+// navigation several earlier cards are still mounted and still exiting. A single
+// shared scalar is re-resolved for every one of them, so one Prev press rewrites
+// the direction of four stale cards at once and they all reverse back across the
+// frame. A map keyed by step keeps the channel live for the card this navigation
+// removed, while leaving every earlier card reading the stamp it departed with.
+const slideVariants = (step: number): Variants => ({
+  enter: (dirs: StepDirections) => ({
+    x: dirOf(dirs, step) > 0 ? SLIDE : -SLIDE,
+    opacity: 0,
+    filter: `blur(${BLUR}px)`,
+  }),
+  center: { x: 0, opacity: 1, filter: 'blur(0px)' },
+  exit: (dirs: StepDirections) => ({
+    x: dirOf(dirs, step) > 0 ? -SLIDE : SLIDE,
+    opacity: 0,
+    filter: `blur(${BLUR}px)`,
+  }),
+});
+
+const slideVariantsNoFilter = (step: number): Variants => ({
+  enter: (dirs: StepDirections) => ({ x: dirOf(dirs, step) > 0 ? SLIDE : -SLIDE, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dirs: StepDirections) => ({ x: dirOf(dirs, step) > 0 ? -SLIDE : SLIDE, opacity: 0 }),
+});
+
+const fadeVariants = (): Variants => ({
   enter: { opacity: 0, filter: `blur(${BLUR}px)` },
   center: { opacity: 1, filter: 'blur(0px)' },
   exit: { opacity: 0, filter: `blur(${BLUR}px)` },
-};
+});
 
-const slideVariantsNoFilter: Variants = {
-  enter: (dir: number) => ({ x: dir > 0 ? SLIDE : -SLIDE, opacity: 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (dir: number) => ({ x: dir > 0 ? -SLIDE : SLIDE, opacity: 0 }),
-};
-
-const fadeVariantsNoFilter: Variants = {
+const fadeVariantsNoFilter = (): Variants => ({
   enter: { opacity: 0 },
   center: { opacity: 1 },
   exit: { opacity: 0 },
-};
+});
 
 // Keyed lookups rather than nested ternaries — the mode / noFilter
 // matrix is small but reads far better as a table.
-const VARIANTS: Record<StepTransitionMode, Record<'filtered' | 'plain', Variants>> = {
+const VARIANTS: Record<StepTransitionMode, Record<'filtered' | 'plain', (step: number) => Variants>> = {
   slide: { filtered: slideVariants, plain: slideVariantsNoFilter },
   fade: { filtered: fadeVariants, plain: fadeVariantsNoFilter },
 };
@@ -113,15 +139,19 @@ export const StepTransition: FC<StepTransitionProps> = ({
   // is the React-sanctioned way to derive state from a changed prop.
   // https://react.dev/reference/react/useState#storing-information-from-previous-renders
   const [lastStep, setLastStep] = useState(step);
-  const [direction, setDirection] = useState(0);
+  const [directions, setDirections] = useState<StepDirections>({});
 
   if (step !== lastStep) {
+    const dir = step > lastStep ? 1 : -1;
     setLastStep(step);
-    setDirection(step > lastStep ? 1 : -1);
+    // Stamp both ends of *this* navigation and nothing else: `lastStep` is
+    // leaving now, so it exits in this direction, and `step` is arriving, so it
+    // enters from this side. Steps stamped by earlier navigations keep their
+    // own value even while they are still on screen exiting.
+    setDirections((current) => ({ ...current, [lastStep]: dir, [step]: dir }));
   }
 
-  const resolvedDir = direction || 1;
-  const variants = VARIANTS[mode][noFilter ? 'plain' : 'filtered'];
+  const variants = VARIANTS[mode][noFilter ? 'plain' : 'filtered'](step);
   const duration = DURATIONS[mode];
 
   return (
@@ -142,10 +172,10 @@ export const StepTransition: FC<StepTransitionProps> = ({
           {children}
         </div>
       ) : (
-        <AnimatePresence mode="popLayout" custom={resolvedDir} initial={false}>
+        <AnimatePresence mode="popLayout" custom={directions} initial={false}>
           <motion.div
             key={step}
-            custom={resolvedDir}
+            custom={directions}
             variants={variants}
             initial="enter"
             animate="center"
