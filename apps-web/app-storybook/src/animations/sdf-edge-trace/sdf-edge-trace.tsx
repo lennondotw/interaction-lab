@@ -7,13 +7,28 @@ import { Field, Segmented, Stat, Toggle } from './controls.js';
 import { Ball, ContourTracer, FieldKind, Traversal, effectiveTraversal } from './field.js';
 import { renderScene } from './renderer.js';
 
-/** Power of two so the quadtree subdivides cleanly down to `MIN_CELL`. */
-const DOMAIN = 512;
+/** The visible, interactive box. Power of two so the quadtree tiles it cleanly. */
+const VIEW = 512;
 const MIN_CELL = 1;
 const CELL_SIZES = [8, 4, 2, 1] as const;
 const RADIUS = 60;
 const SIGMA = 12;
 const BLEND = 40;
+/**
+ * Sampled beyond every side of the view. Ball centres are clamped to the view,
+ * but the shape around a centre is not — it reaches `RADIUS + max(BLEND, 3 *
+ * SIGMA)` = 100px further out — so a ball parked on the frame would have its
+ * contour cut off there and come back as an open chain. 128 is that 100px bound
+ * rounded up to a power of two, which keeps the 768px sampled domain tiling into
+ * 256px quadtree roots.
+ *
+ * archive/2026-07-contour-domain-overscan measures both halves of that: 90.3px
+ * is the worst reach any arrangement of 12 balls achieves against the 100px
+ * bound, and the margin costs `sparse` 0.1% and `bounded` nothing. Only `dense`
+ * pays for it, 2.25x, which is the O(area) tax showing up again.
+ */
+const OVERSCAN = 128;
+const TRACED = VIEW + 2 * OVERSCAN;
 const MAX_BALLS = 12;
 const STAT_WINDOW = 90;
 
@@ -26,8 +41,8 @@ const createBalls = (count: number): Ball[] =>
   Array.from({ length: count }, (_, index) => {
     const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
     return {
-      x: DOMAIN / 2 + Math.cos(angle) * 110,
-      y: DOMAIN / 2 + Math.sin(angle) * 110,
+      x: VIEW / 2 + Math.cos(angle) * 110,
+      y: VIEW / 2 + Math.sin(angle) * 110,
     };
   });
 
@@ -61,7 +76,7 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [measures, containerRef] = useMeasure<HTMLDivElement>(true);
 
-  const tracer = useMemo(() => new ContourTracer(DOMAIN, MIN_CELL), []);
+  const tracer = useMemo(() => new ContourTracer(VIEW, OVERSCAN, MIN_CELL), []);
   const ballsRef = useRef<Ball[]>(createBalls(4));
   const activeBallRef = useRef<number | null>(null);
   const dashRef = useRef(0);
@@ -86,7 +101,7 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
     ballsRef.current = createBalls(ballCount);
   }, [ballCount]);
 
-  const displaySize = Math.max(measures?.width ?? DOMAIN, 1);
+  const displaySize = Math.max(measures?.width ?? VIEW, 1);
 
   useAnimationFrame((time, delta) => {
     const canvas = canvasRef.current;
@@ -107,8 +122,8 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
         const ball = balls[index];
         if (!ball) continue;
         const phase = time / 1000 + (index * Math.PI * 2) / balls.length;
-        ball.x = DOMAIN / 2 + Math.cos(phase * 0.7) * (95 + 45 * Math.sin(phase * 0.9));
-        ball.y = DOMAIN / 2 + Math.sin(phase * 0.8) * (95 + 45 * Math.cos(phase * 1.1));
+        ball.x = VIEW / 2 + Math.cos(phase * 0.7) * (95 + 45 * Math.sin(phase * 0.9));
+        ball.y = VIEW / 2 + Math.sin(phase * 0.8) * (95 + 45 * Math.cos(phase * 1.1));
       }
     }
 
@@ -142,7 +157,7 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
       tracer,
       balls: ballsRef.current,
       radius: RADIUS,
-      scale: displaySize / DOMAIN,
+      scale: displaySize / VIEW,
       dpr,
       showOverlay,
       showPoints,
@@ -160,8 +175,8 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
   const toDomain = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): { x: number; y: number } => {
     const rect = event.currentTarget.getBoundingClientRect();
     return {
-      x: ((event.clientX - rect.left) / rect.width) * DOMAIN,
-      y: ((event.clientY - rect.top) / rect.height) * DOMAIN,
+      x: ((event.clientX - rect.left) / rect.width) * VIEW,
+      y: ((event.clientY - rect.top) / rect.height) * VIEW,
     };
   }, []);
 
@@ -194,8 +209,8 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
       const ball = ballsRef.current[index];
       if (!ball) return;
       const point = toDomain(event);
-      ball.x = Math.min(Math.max(point.x, 0), DOMAIN);
-      ball.y = Math.min(Math.max(point.y, 0), DOMAIN);
+      ball.x = Math.min(Math.max(point.x, 0), VIEW);
+      ball.y = Math.min(Math.max(point.y, 0), VIEW);
     },
     [toDomain]
   );
@@ -229,7 +244,8 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
           The two fields describe slightly different shapes — they blend on different terms. Within one field, all three
           traversals return the <em>identical</em> contour; only the cost of finding it differs. Turn on{' '}
           <span className="font-mono text-xs">quadtree</span> to see which regions a distance field lets you skip
-          outright.
+          outright. The grid is sampled {OVERSCAN}px past every side of the frame: a centre is trapped in the box, the
+          shape around it is not, and a contour that runs off the sampled area comes back open.
         </p>
       </header>
 
@@ -301,7 +317,11 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
                 value={traversal}
                 onChange={setTraversal}
                 options={[
-                  { value: 'dense', label: 'dense', title: 'Sample every cell in the domain' },
+                  {
+                    value: 'dense',
+                    label: 'dense',
+                    title: `Sample every cell of the ${TRACED}px domain, overscan margin included`,
+                  },
                   { value: 'bounded', label: 'bounded', title: 'Sample every cell inside the bounding box' },
                   {
                     value: 'sparse',
@@ -312,7 +332,7 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
               />
             </Field>
 
-            <Field label="Cell" hint={`${DOMAIN}px domain`}>
+            <Field label="Cell" hint={`${TRACED}px domain`}>
               <Segmented
                 value={cell}
                 onChange={setCell}

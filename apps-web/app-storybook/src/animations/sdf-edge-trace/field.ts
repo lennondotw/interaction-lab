@@ -11,6 +11,16 @@
  *
  * The point of having both behind one interface is that the extracted contour
  * is identical; only the cost of getting there differs.
+ *
+ * The sampled domain is deliberately larger than the box the caller works in.
+ * Ball centres are confined to the view, but the shape around a centre is not —
+ * it reaches `radius + max(blend, 3 * sigma)` further out — so a centre parked
+ * on the frame would put half its contour outside a view-sized grid, marching
+ * squares would hand back an open chain, and the renderer would close it with a
+ * straight chord along the frame. Sampling an `overscan` margin on every side
+ * is what keeps every loop closed. See
+ * archive/2026-07-contour-domain-overscan for how that margin was sized and
+ * what it costs per traversal.
  */
 
 export interface Ball {
@@ -42,7 +52,7 @@ export function effectiveTraversal(field: FieldKind, traversal: Traversal): Trav
 export interface TraceConfig {
   field: FieldKind;
   traversal: Traversal;
-  /** Domain units per marching-squares cell. Must divide `domain` into a power of two. */
+  /** Domain units per marching-squares cell. Must divide the sampled domain. */
   cell: number;
   radius: number;
   /** Gaussian blur sigma, `density` only. */
@@ -84,7 +94,14 @@ const MAX_OVERLAY_CELLS = 16384;
 const CULL_SAFETY = 1.1;
 
 export class ContourTracer {
-  readonly domain: number;
+  /** Size of the visible, interactive box. Caller coordinates run `0..view`. */
+  readonly view: number;
+  /** Margin sampled beyond every side of the view. */
+  readonly overscan: number;
+  /** Total sampled extent, `view + 2 * overscan`. */
+  readonly traced: number;
+  /** Domain coordinate of the sampling grid's first corner, `-overscan`. */
+  readonly origin: number;
 
   // --- geometry output ---
   /** Interleaved xy of every contour vertex, indexed by the values in `ordered`. */
@@ -94,7 +111,10 @@ export class ContourTracer {
   loops: LoopRange[] = [];
 
   // --- overlay output ---
-  /** Interleaved x, y, size, kind per recorded quadtree node. */
+  /**
+   * Interleaved x, y, width, height, kind per recorded region. Quadtree nodes
+   * are square; the `bounded` traversal's single box is not.
+   */
   readonly cellRects: Float32Array;
   cellRectCount = 0;
 
@@ -131,12 +151,19 @@ export class ContourTracer {
   private leafCells = 0;
 
   /**
-   * @param domain Size of the (square) sampling domain in domain units.
+   * @param view Size of the (square) visible box in domain units.
+   * @param overscan Margin sampled beyond each side of the view. Must exceed how
+   *   far the iso surface can reach past a ball centre, or contours that run off
+   *   the frame come back open.
    * @param minCell Smallest cell size that will ever be requested; sizes the buffers.
    */
-  constructor(domain: number, minCell: number) {
-    this.domain = domain;
-    const maxNx = Math.round(domain / minCell);
+  constructor(view: number, overscan: number, minCell: number) {
+    this.view = view;
+    this.overscan = overscan;
+    this.traced = view + 2 * overscan;
+    this.origin = -overscan;
+
+    const maxNx = Math.round(this.traced / minCell);
     const corners = (maxNx + 1) * (maxNx + 1);
     const maxPoints = Math.min(corners, 1 << 18);
 
@@ -152,10 +179,13 @@ export class ContourTracer {
     this.seen = new Uint8Array(maxPoints);
     this.segFrom = new Int32Array(maxPoints * 2);
     this.segTo = new Int32Array(maxPoints * 2);
-    this.cellRects = new Float32Array(MAX_OVERLAY_CELLS * 4);
-    // Depth-first quadtree stack: (i, j, size) triples. Depth is log2(maxNx),
-    // and each level pushes at most 4, so this is a generous bound.
-    this.stack = new Int32Array(3 * 4 * (Math.log2(maxNx) + 2));
+    this.cellRects = new Float32Array(MAX_OVERLAY_CELLS * 5);
+    // Depth-first quadtree stack: (i, j, size) triples. It starts loaded with
+    // every root of the forest (see `traverseSparse`), and each level descended
+    // replaces one triple with four, so a root-to-leaf path adds 3 per level.
+    const tile = maxNx & -maxNx;
+    const roots = (maxNx / tile) ** 2;
+    this.stack = new Int32Array(3 * (roots + 3 * (Math.log2(tile) + 2)));
   }
 
   // ---------------------------------------------------------------- fields
@@ -205,7 +235,17 @@ export class ContourTracer {
     return this.kind === 'sdf' ? 0 : DENSITY_ISO;
   }
 
-  /** Radius beyond which a ball cannot influence the contour. */
+  /**
+   * Radius beyond which a ball cannot influence the contour, and so also the
+   * furthest the surface can sit from the nearest centre — which is what the
+   * caller's `overscan` has to cover.
+   *
+   * For `density` it is exact: past `radius + 3 * sigma` every disc contributes
+   * exactly 0, so the sum cannot reach the iso. For `sdf` it is a bound rather
+   * than the reachable maximum — each smin fold subtracts at most `blend / 4`
+   * and the accumulation converges on `blend` from below, so 12 coincident
+   * balls reach `radius + 0.76 * blend`.
+   */
   private get influence(): number {
     return this.kind === 'sdf' ? this.radius + this.blend : this.radius + this.band;
   }
@@ -221,7 +261,7 @@ export class ContourTracer {
     this.influence2 = this.influence * this.influence;
     this.collectCells = config.collectCells;
 
-    this.nx = Math.round(this.domain / config.cell);
+    this.nx = Math.round(this.traced / config.cell);
     this.generation++;
     this.evals = 0;
     this.pointCount = 0;
@@ -257,6 +297,7 @@ export class ContourTracer {
 
   private traverseDense(cell: number, bounded: boolean): void {
     const nx = this.nx;
+    const origin = this.origin;
     let i0 = 0;
     let i1 = nx;
     let j0 = 0;
@@ -274,12 +315,12 @@ export class ContourTracer {
         if (b.x + inf > maxX) maxX = b.x + inf;
         if (b.y + inf > maxY) maxY = b.y + inf;
       }
-      i0 = Math.max(0, Math.floor(minX / cell));
-      j0 = Math.max(0, Math.floor(minY / cell));
-      i1 = Math.min(nx, Math.ceil(maxX / cell));
-      j1 = Math.min(nx, Math.ceil(maxY / cell));
+      i0 = Math.max(0, Math.floor((minX - origin) / cell));
+      j0 = Math.max(0, Math.floor((minY - origin) / cell));
+      i1 = Math.min(nx, Math.ceil((maxX - origin) / cell));
+      j1 = Math.min(nx, Math.ceil((maxY - origin) / cell));
       if (this.collectCells) {
-        this.pushCellRect(i0 * cell, j0 * cell, (i1 - i0) * cell, CELL_LEAF);
+        this.pushCellRect(origin + i0 * cell, origin + j0 * cell, (i1 - i0) * cell, (j1 - j0) * cell, CELL_LEAF);
       }
     }
 
@@ -289,14 +330,14 @@ export class ContourTracer {
     let top = this.rowA;
     let bot = this.rowB;
     for (let i = 0; i < width; i++) {
-      top[i] = this.sample((i0 + i) * cell, j0 * cell);
+      top[i] = this.sample(origin + (i0 + i) * cell, origin + j0 * cell);
     }
 
     const iso = this.iso;
     for (let j = j0; j < j1; j++) {
-      const y1 = (j + 1) * cell;
+      const y1 = origin + (j + 1) * cell;
       for (let i = 0; i < width; i++) {
-        bot[i] = this.sample((i0 + i) * cell, y1);
+        bot[i] = this.sample(origin + (i0 + i) * cell, y1);
       }
       for (let i = 0; i < width - 1; i++) {
         this.cellSegments(i0 + i, j, cell, top[i] ?? 0, top[i + 1] ?? 0, bot[i + 1] ?? 0, bot[i] ?? 0, iso);
@@ -311,12 +352,26 @@ export class ContourTracer {
 
   private traverseSparse(cell: number): void {
     const nx = this.nx;
+    const origin = this.origin;
     const iso = this.iso;
     const stack = this.stack;
+
+    // A quadtree needs power-of-two roots, and the overscan margin makes the
+    // sampled domain no longer a power of two itself (512 + 2 * 128 = 768). So
+    // the walk starts from a forest of the largest power-of-two tile that
+    // divides the grid — 3x3 tiles of 256 — instead of one root covering
+    // everything. Costs one extra eval per tile, all of which the cull test
+    // rejects immediately for tiles the shape is nowhere near.
+    const tile = nx & -nx;
+    const tiles = nx / tile;
     let sp = 0;
-    stack[sp++] = 0;
-    stack[sp++] = 0;
-    stack[sp++] = nx;
+    for (let tj = 0; tj < tiles; tj++) {
+      for (let ti = 0; ti < tiles; ti++) {
+        stack[sp++] = ti * tile;
+        stack[sp++] = tj * tile;
+        stack[sp++] = tile;
+      }
+    }
 
     while (sp > 0) {
       const size = stack[--sp] ?? 0;
@@ -324,20 +379,22 @@ export class ContourTracer {
       const i = stack[--sp] ?? 0;
 
       const sizePx = size * cell;
-      const d = this.sdf((i + size * 0.5) * cell, (j + size * 0.5) * cell);
+      const x = origin + i * cell;
+      const y = origin + j * cell;
+      const d = this.sdf(x + sizePx * 0.5, y + sizePx * 0.5);
       this.cellsTested++;
 
       // Centre is farther from the surface than the node's half-diagonal, so
       // the whole node is strictly inside or strictly outside.
       if (Math.abs(d) > sizePx * Math.SQRT1_2 * CULL_SAFETY) {
         this.cellsCulled++;
-        if (this.collectCells) this.pushCellRect(i * cell, j * cell, sizePx, CELL_CULLED);
+        if (this.collectCells) this.pushCellRect(x, y, sizePx, sizePx, CELL_CULLED);
         continue;
       }
 
       if (size === 1) {
         this.leafCells++;
-        if (this.collectCells) this.pushCellRect(i * cell, j * cell, sizePx, CELL_LEAF);
+        if (this.collectCells) this.pushCellRect(x, y, sizePx, sizePx, CELL_LEAF);
         this.cellSegments(
           i,
           j,
@@ -371,19 +428,20 @@ export class ContourTracer {
   private corner(i: number, j: number, cell: number): number {
     const idx = j * (this.nx + 1) + i;
     if (this.cornerGen[idx] === this.generation) return this.cornerVal[idx] ?? 0;
-    const v = this.sample(i * cell, j * cell);
+    const v = this.sample(this.origin + i * cell, this.origin + j * cell);
     this.cornerVal[idx] = v;
     this.cornerGen[idx] = this.generation;
     return v;
   }
 
-  private pushCellRect(x: number, y: number, size: number, kind: number): void {
+  private pushCellRect(x: number, y: number, width: number, height: number, kind: number): void {
     if (this.cellRectCount >= MAX_OVERLAY_CELLS) return;
-    const o = this.cellRectCount * 4;
+    const o = this.cellRectCount * 5;
     this.cellRects[o] = x;
     this.cellRects[o + 1] = y;
-    this.cellRects[o + 2] = size;
-    this.cellRects[o + 3] = kind;
+    this.cellRects[o + 2] = width;
+    this.cellRects[o + 3] = height;
+    this.cellRects[o + 4] = kind;
     this.cellRectCount++;
   }
 
@@ -411,8 +469,8 @@ export class ContourTracer {
     if (code === 0 || code === 15) return;
 
     const stride = this.nx + 1;
-    const x0 = i * cell;
-    const y0 = j * cell;
+    const x0 = this.origin + i * cell;
+    const y0 = this.origin + j * cell;
     const x1 = x0 + cell;
     const y1 = y0 + cell;
 

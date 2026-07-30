@@ -73,10 +73,13 @@ function buildPath(tracer: ContourTracer, smooth: boolean): Path2D {
 
 export function renderScene(ctx: CanvasRenderingContext2D, options: RenderOptions): void {
   const { tracer, balls, radius, scale, dpr, activeBall } = options;
-  const domain = tracer.domain;
+  // The canvas shows the view, not the whole sampled domain: everything the
+  // overscan margin contributes is geometry that closes off-frame, and the
+  // canvas clips it for free.
+  const view = tracer.view;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, domain * scale * dpr, domain * scale * dpr);
+  ctx.clearRect(0, 0, view * scale * dpr, view * scale * dpr);
   ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
   // Keep strokes at a constant on-screen width regardless of zoom.
   const px = 1 / scale;
@@ -85,17 +88,18 @@ export function renderScene(ctx: CanvasRenderingContext2D, options: RenderOption
     const rects = tracer.cellRects;
     ctx.lineWidth = px;
     for (let n = 0; n < tracer.cellRectCount; n++) {
-      const o = n * 4;
-      const size = rects[o + 2] ?? 0;
-      const kind = rects[o + 3] ?? 0;
+      const o = n * 5;
+      const width = rects[o + 2] ?? 0;
+      const height = rects[o + 3] ?? 0;
+      const kind = rects[o + 4] ?? 0;
       // Sub-pixel leaf cells collapse into a solid smear; a filled dot reads better.
-      if (kind === CELL_LEAF && size * scale < 3) {
+      if (kind === CELL_LEAF && width * scale < 3) {
         ctx.fillStyle = COLORS.leaf;
-        ctx.fillRect(rects[o] ?? 0, rects[o + 1] ?? 0, size, size);
+        ctx.fillRect(rects[o] ?? 0, rects[o + 1] ?? 0, width, height);
         continue;
       }
       ctx.strokeStyle = kind === CELL_LEAF ? COLORS.leaf : COLORS.culled;
-      ctx.strokeRect(rects[o] ?? 0, rects[o + 1] ?? 0, size, size);
+      ctx.strokeRect(rects[o] ?? 0, rects[o + 1] ?? 0, width, height);
     }
   }
 
