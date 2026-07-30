@@ -79,6 +79,8 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
   const tracer = useMemo(() => new ContourTracer(VIEW, OVERSCAN, MIN_CELL), []);
   const ballsRef = useRef<Ball[]>(createBalls(4));
   const activeBallRef = useRef<number | null>(null);
+  const dragPointerIdRef = useRef<number | null>(null);
+  const dragStartRef = useRef<Ball | null>(null);
   const dashRef = useRef(0);
   const samplesRef = useRef<number[]>([]);
   const lastStatsRef = useRef<LiveStats>(EMPTY_STATS);
@@ -182,6 +184,12 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      // Capture routes one pointer's moves here, but it does not stop a second
+      // finger from opening its own `pointerdown` on the same canvas. Admitting
+      // one would hand the drag to a different pointer and then release capture
+      // for the wrong id, so the first pointer owns the drag until it ends.
+      if (dragPointerIdRef.current !== null) return;
+
       const point = toDomain(event);
       const balls = ballsRef.current;
       let best: number | null = null;
@@ -196,31 +204,97 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
         }
       }
       if (best === null) return;
+      const grabbed = balls[best];
+      if (!grabbed) return;
+
       activeBallRef.current = best;
+      dragPointerIdRef.current = event.pointerId;
+      dragStartRef.current = { x: grabbed.x, y: grabbed.y };
       event.currentTarget.setPointerCapture(event.pointerId);
+      // Keeps the native text-selection and drag-and-drop gestures from starting
+      // alongside this one — a real drag-and-drop session would take the pointer
+      // stream away and the release would never arrive.
+      event.preventDefault();
     },
     [toDomain]
   );
 
+  const endDrag = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    activeBallRef.current = null;
+    dragPointerIdRef.current = null;
+    dragStartRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const handlePointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      if (event.pointerId !== dragPointerIdRef.current) return;
+      endDrag(event);
+    },
+    [endDrag]
+  );
+
+  /**
+   * `pointercancel` is an invalidation rather than an exit — a rejected palm, a
+   * pointer physically removed, the browser claiming the gesture for itself. The
+   * position the ball drifted to was never something the user asked for, so it
+   * goes back to where the drag started instead of being left wherever the
+   * cancelled gesture happened to stop.
+   */
+  const handlePointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      if (event.pointerId !== dragPointerIdRef.current) return;
+      const index = activeBallRef.current;
+      const start = dragStartRef.current;
+      endDrag(event);
+      if (index === null || start === null) return;
+      const ball = ballsRef.current[index];
+      if (!ball) return;
+      ball.x = start.x;
+      ball.y = start.y;
+    },
+    [endDrag]
+  );
+
   const handlePointerMove = useCallback(
     (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      if (event.pointerId !== dragPointerIdRef.current) return;
       const index = activeBallRef.current;
       if (index === null) return;
+      // Pointer capture routes moves here from outside the canvas, but it cannot
+      // promise the release ever arrives: let go over another window, or lose the
+      // pointer to an OS gesture, and this document never sees `pointerup`. The
+      // first move after the cursor comes back is the only evidence, and it
+      // carries it in `buttons` — no button down means the drag is already over,
+      // so end it here rather than dragging the ball around by a released mouse.
+      if (event.buttons === 0) {
+        handlePointerUp(event);
+        return;
+      }
       const ball = ballsRef.current[index];
       if (!ball) return;
       const point = toDomain(event);
       ball.x = Math.min(Math.max(point.x, 0), VIEW);
       ball.y = Math.min(Math.max(point.y, 0), VIEW);
     },
-    [toDomain]
+    [handlePointerUp, toDomain]
   );
 
-  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
-    activeBallRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }, []);
+  /**
+   * Capture can also end without a release event of any kind — the canvas being
+   * detached is the usual way. `lostpointercapture` fires for every exit,
+   * including the ones `pointerup` and `pointercancel` miss, so it is the
+   * backstop that guarantees no drag outlives its capture.
+   */
+  const handleLostPointerCapture = useCallback(
+    (event: ReactPointerEvent<HTMLCanvasElement>) => {
+      if (event.pointerId !== dragPointerIdRef.current) return;
+      endDrag(event);
+    },
+    [endDrag]
+  );
 
   const getBalls = useCallback(() => ballsRef.current.map((ball) => ({ ...ball })), []);
 
@@ -262,7 +336,8 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onLostPointerCapture={handleLostPointerCapture}
             className={`
               touch-none rounded-2xl bg-neutral-900/5
               dark:bg-neutral-800/50
@@ -277,12 +352,12 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
             {showOverlay && (
               <>
                 <span className="flex flex-row items-center gap-1.5">
-                  <span className="size-2.5 border border-[rgb(244_63_94_/_0.7)]" />
+                  <span className="size-2.5 border border-[rgb(244_63_94/0.7)]" />
                   {actual === 'sparse' ? 'subdivided' : 'scanned'}
                 </span>
                 {actual === 'sparse' && (
                   <span className="flex flex-row items-center gap-1.5">
-                    <span className="size-2.5 border border-[rgb(148_163_184_/_0.5)]" />
+                    <span className="size-2.5 border border-[rgb(148_163_184/0.5)]" />
                     culled
                   </span>
                 )}
