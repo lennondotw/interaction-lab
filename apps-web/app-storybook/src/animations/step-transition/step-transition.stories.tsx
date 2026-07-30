@@ -62,16 +62,20 @@ const Demo: FC<{ mode?: StepTransitionMode; prefetch?: boolean }> = ({ mode = 's
 
   return (
     <div className="flex size-full flex-col items-center justify-center gap-6">
-      <StepTransition
-        step={current}
-        mode={mode}
-        prev={prefetch ? steps[current - 1] : undefined}
-        next={prefetch ? steps[current + 1] : undefined}
-        className="overflow-hidden rounded-2xl bg-neutral-500/5"
-        style={{ width: 600, height: 400 }}
-      >
-        {steps[current]}
-      </StepTransition>
+      {/* Wrapper exists only to give the archive probe a stable handle on the
+          stage — see archive/2026-07-step-transition-direction. */}
+      <div data-testid="step-stage">
+        <StepTransition
+          step={current}
+          mode={mode}
+          prev={prefetch ? steps[current - 1] : undefined}
+          next={prefetch ? steps[current + 1] : undefined}
+          className="overflow-hidden rounded-2xl bg-neutral-500/5"
+          style={{ width: 600, height: 400 }}
+        >
+          {steps[current]}
+        </StepTransition>
+      </div>
 
       <div className="flex items-center gap-4">
         <button type="button" onClick={goPrev} disabled={current === 0} className={BUTTON_CLASS}>
