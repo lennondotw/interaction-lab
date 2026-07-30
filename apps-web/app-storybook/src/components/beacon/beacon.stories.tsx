@@ -31,6 +31,14 @@ const BUTTON_CLASS = `
   dark:border-white/30 dark:text-white/80 dark:hover:bg-white/5 dark:active:bg-white/10
 `;
 
+// Fixed box: the copy changes length between states, and the stories
+// live in a vertically-centred column — letting the note reflow would
+// re-centre the column and move the very target the beacon is tracking.
+const NOTE_CLASS = `
+  h-24 w-[420px] text-center font-mono text-[11px] leading-[1.7] text-black/45
+  dark:text-white/45
+`;
+
 // ---------------------------------------------------------------------------
 // Reusable target — emits a beacon that wraps its own DOM bounds.
 // ---------------------------------------------------------------------------
@@ -146,6 +154,11 @@ export const Priority: Story = {
 // follower only mounts after the first anchor measurement lands. On
 // initial load you should NOT see the outline appear at (0, 0) and fly
 // to the target — it should just fade in over the target.
+//
+// Resizing while popped is the interesting case: an inactive anchor
+// stops measuring, so nothing tracks the target's new box. Under 'hide'
+// that costs nothing — the follower is unmounted, and the next push
+// measures fresh and fades in on the target wherever it now sits.
 export const LoseLastBeaconHide: Story = {
   name: 'Lose Last · hide',
   render: function Render() {
@@ -155,7 +168,17 @@ export const LoseLastBeaconHide: Story = {
         <button className={BUTTON_CLASS} onClick={() => setEnabled((v) => !v)} type="button">
           {enabled ? 'pop · only beacon' : 'push · only beacon'}
         </button>
-        <Target label="only beacon" width={280} height={120} enabled={enabled} />
+        <Target
+          label={enabled ? 'only beacon · active' : 'only beacon · inactive'}
+          width={280}
+          height={120}
+          enabled={enabled}
+        />
+        <p className={NOTE_CLASS}>
+          {enabled
+            ? 'active — the outline tracks the target. Resize the window: the target re-centres and the outline follows it.'
+            : 'inactive — the stack is empty, so the follower unmounted and no measurement is running. Resize the window, then push again: the outline fades in on the target’s new box, never flying in from the old one.'}
+        </p>
       </Frame>
     );
   },
@@ -167,6 +190,12 @@ export const LoseLastBeaconHide: Story = {
 // (no fly-in, no remount flash). Useful when the anchored element is
 // about to unmount but you want the visual anchor to linger — e.g.
 // tutorial steps that remove the highlighted control.
+//
+// The trade-off shows up on resize: freezing keeps a *stale* box, and an
+// inactive anchor no longer measures, so a window resize re-centres the
+// target while the frozen outline stays where it was. That's inherent to
+// freezing geometry the layout is still free to move — the next push
+// remeasures and springs the outline back onto the target.
 export const LoseLastBeaconFreeze: Story = {
   name: 'Lose Last · freeze',
   render: function Render() {
@@ -176,7 +205,17 @@ export const LoseLastBeaconFreeze: Story = {
         <button className={BUTTON_CLASS} onClick={() => setEnabled((v) => !v)} type="button">
           {enabled ? 'pop · only beacon' : 'push · only beacon'}
         </button>
-        <Target label="only beacon" width={280} height={120} enabled={enabled} />
+        <Target
+          label={enabled ? 'only beacon · active' : 'only beacon · inactive'}
+          width={280}
+          height={120}
+          enabled={enabled}
+        />
+        <p className={NOTE_CLASS}>
+          {enabled
+            ? 'active — the outline tracks the target. Resize the window: the target re-centres and the outline follows it.'
+            : 'inactive — the outline is frozen on the last measured box, and no measurement is running. Resize the window: the target re-centres but the frozen outline stays behind. Push again and it springs back onto the target.'}
+        </p>
       </Frame>
     );
   },
