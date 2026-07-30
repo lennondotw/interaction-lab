@@ -21,6 +21,7 @@ export {
   type NavigationScrollAreaProps,
 } from './navigation-scroll-area.js';
 export { NavigationStack, type NavigationStackProps } from './navigation-stack.js';
+export { useNavigationFocus, type NavigationFocusResult } from './use-navigation-focus.js';
 export {
   navigationStackReducer,
   useNavigationStack,

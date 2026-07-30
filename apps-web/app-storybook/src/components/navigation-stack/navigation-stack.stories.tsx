@@ -153,8 +153,10 @@ export const Default: Story = {
   parameters: {
     docs: {
       description: {
-        story:
+        story: [
           'Drill in by tapping a row; go back with the header button or the Escape key. Views stay mounted underneath, so returning to one preserves its scroll position rather than rebuilding it.',
+          'Focus follows the same rule as the transition. Tab to a row and press Enter: focus lands in the view that just opened, and the one it covered stops taking part — it is inert from the first frame of the slide, not from the end of it, so Tab can never reach a view that is on its way out. Press Escape and focus goes back to the exact row you left, which is the focus half of keeping the view mounted. The back button is chrome rather than content, so it keeps focus when you use it — nothing is stolen from you while it is still yours.',
+        ].join('\n\n'),
       },
     },
   },
