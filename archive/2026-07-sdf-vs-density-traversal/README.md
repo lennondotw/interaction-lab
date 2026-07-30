@@ -119,6 +119,11 @@ The dense walk at cell=1 was 39ms — genuinely over budget, the point where
 offloading starts to look necessary. The same output at 0.711ms is 4% of a frame.
 The algorithm was the lever; the language and the thread were not.
 
+Retires them on asymptotic grounds, which stop applying once this algorithm is
+the one shipped.
+[2026-07-wasm-kernel-headroom](../2026-07-wasm-kernel-headroom/README.md) asks the
+Rust question again from that position and answers it on the kernel's own terms.
+
 ## Reproducing
 
 ```bash

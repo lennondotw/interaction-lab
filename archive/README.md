@@ -38,3 +38,4 @@ them.
 | [2026-07-step-transition-direction](./2026-07-step-transition-direction/README.md)           | Can a later navigation rewrite the exit direction of a card already leaving? | Yes — so stamp the direction per step, not once.    |
 | [2026-07-beacon-layout-observation](./2026-07-beacon-layout-observation/README.md)           | Which of the beacon's five observation sources catches which layout change?  | Four are near-disjoint — and one was dead.          |
 | [2026-07-contour-domain-overscan](./2026-07-contour-domain-overscan/README.md)               | How far past the frame must the contour be traced, and what does it cost?    | 128px — free for the quadtree, 2.25× for dense.     |
+| [2026-07-wasm-kernel-headroom](./2026-07-wasm-kernel-headroom/README.md)                     | With the quadtree shipped, is the remaining kernel worth a Rust/WASM port?   | No — the 2.5× is in the loop, not the language.     |

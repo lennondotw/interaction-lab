@@ -103,6 +103,14 @@ A 3× language win applied to the wrong algorithm loses to the right algorithm
 in JavaScript, and costs a toolchain, a build step, and a WASM payload. Revisit
 only if the right algorithm in JS stops being enough.
 
+That "maybe 2–3× off native" is an assumption, and this entry never measured it.
+Once the right algorithm shipped, the question came back without the asymptotic
+argument to lean on, so the kernel was measured directly against its own hardware
+floor in
+[2026-07-wasm-kernel-headroom](../2026-07-wasm-kernel-headroom/README.md). The
+answer is still no, for a sharper reason: the 2.5× is in the shape of the loop,
+not in the language.
+
 ## Reproducing
 
 ```bash
