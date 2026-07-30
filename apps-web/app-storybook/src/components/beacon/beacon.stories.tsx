@@ -108,9 +108,9 @@ export const PushPop: Story = {
         <button className={BUTTON_CLASS} onClick={() => setSecond((v) => !v)} type="button">
           {second ? 'pop · #2' : 'push · #2'}
         </button>
-        <div className="flex items-center gap-6" style={{ width: 416 }}>
+        <div className="flex items-center gap-6" style={{ width: 448 }}>
           <Target label="#1 · fixed" width={300} height={140} />
-          {second && <Target label="#2 · pushed" width={92} height={44} />}
+          {second && <Target label="#2 · pushed" width={124} height={44} />}
         </div>
       </Frame>
     );
