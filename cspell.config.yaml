@@ -11,6 +11,8 @@ words:
   - deadband
   - dedupe
   - dicebear
+  - eikonal
+  - erfc
   - esbuild
   - eslintcache
   - geolocation
@@ -18,13 +20,16 @@ words:
   - grayscale
   - greyscale
   - hookz
+  - hrtime
   - janky
   - Jsons
   - logomark
+  - Lipschitz
   - lucide
   - Memoji
   - MERCHANTABLITY
   - metaball
+  - metaballs
   - mjsx
   - mtsx
   - nextjs
@@ -37,9 +42,12 @@ words:
   - opennextjs
   - Picsum
   - pkgs
+  - quadtree
   - reekystive
   - rollup
   - sinθ
+  - smin
+  - smootherstep
   - sonner
   - squircle
   - stspr

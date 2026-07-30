@@ -39,7 +39,19 @@ const tailwindCssStylesheetPath = new URL('./packages/tailwindcss/tailwindcss.cs
  */
 const eslintConfig = [
   // config for all
-  { ignores: ['**/node_modules/', '**/dist/', '**/dist-*/', '**/storybook-static/', '**/.next/', '**/__fixtures__/'] },
+  // `archive/` holds frozen investigation probes: standalone scripts, outside
+  // every tsconfig, kept runnable rather than kept current. See archive/README.md.
+  {
+    ignores: [
+      '**/node_modules/',
+      '**/dist/',
+      '**/dist-*/',
+      '**/storybook-static/',
+      '**/.next/',
+      '**/__fixtures__/',
+      'archive/',
+    ],
+  },
   { linterOptions: { reportUnusedDisableDirectives: true } },
 
   // parser for javascript/typescript code
