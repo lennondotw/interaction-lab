@@ -13,6 +13,8 @@
  * matters most about this design — that the gaps are where the work is not being done.
  */
 
+import type { LiveScopeSample } from '#src/components/live-scope/live-scope.js';
+
 /** No trace for this long and the surface is considered settled. */
 export const IDLE_AFTER_MS = 400;
 /**
@@ -60,6 +62,19 @@ export class TraceLog {
     this.buffer.push({ at: performance.now(), ms, fieldEvals });
     if (this.buffer.length > CAPACITY) this.buffer.shift();
     this.count++;
+  }
+
+  /**
+   * Samples at or after `fromAt`, for a scope that reads every frame.
+   *
+   * Separate from `read()` because the two have opposite requirements: `read` builds a
+   * snapshot with medians and rates for text that updates five times a second, while this is
+   * called at refresh rate and must not compute anything it is not asked for.
+   */
+  since(fromAt: number): LiveScopeSample[] {
+    let start = 0;
+    while (start < this.buffer.length && (this.buffer[start]?.at ?? 0) < fromAt) start++;
+    return this.buffer.slice(start).map((sample) => ({ at: sample.at, value: sample.ms }));
   }
 
   clear(): void {

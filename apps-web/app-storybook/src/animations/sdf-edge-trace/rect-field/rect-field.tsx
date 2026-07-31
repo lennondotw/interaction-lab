@@ -448,7 +448,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
             </Button>
           </div>
 
-          <TraceChart history={history} />
+          <TraceChart log={traceLog} history={history} />
 
           <div
             className={`

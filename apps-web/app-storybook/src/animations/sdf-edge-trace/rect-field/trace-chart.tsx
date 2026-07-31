@@ -1,40 +1,34 @@
 /**
- * Traces over the last few seconds, plotted against wall-clock time.
+ * The story's own chrome around a `LiveScope`.
  *
- * Time rather than trace index, because the gaps are the point. Under a still layout there
- * are no bars at all, and that emptiness is the honest picture of an event-driven tracer —
- * indexing by trace would space a burst and a lone retrace identically and hide exactly
- * the property worth showing.
+ * The scope itself is styleless and knows nothing about tracing — it plots a numeric series
+ * against time. Everything specific to *this* readout lives here: the border and radius, the
+ * idle-versus-tracing badge, the totals, and the frame-budget comparison.
  *
- * A red guide sits at the frame budget. Bars are absolutely positioned by timestamp rather
- * than laid out in a row for the same reason: their horizontal position carries meaning.
+ * The split is by how fast things change, not by what they are about. Motion is on the
+ * canvas at refresh rate, reading the log directly; the text is React on a 200ms poll,
+ * because `idle` is the *absence* of a trace and nothing fires to announce it — only a clock
+ * notices. Rendering the bars from that same poll is what made an earlier version step:
+ * samples arrived sixteen at a time and the whole strip jumped 200ms of distance at once.
  */
 
+import { LiveScope } from '#src/components/live-scope/live-scope.js';
 import { cn } from '@monorepo/utils';
-import type { FC } from 'react';
-import { IDLE_AFTER_MS, statusOf, type TraceHistory } from './trace-log.js';
+import { useCallback, type FC } from 'react';
+import { IDLE_AFTER_MS, statusOf, type TraceHistory, type TraceLog } from './trace-log.js';
 
 /** Window plotted, in ms. */
 const SPAN_MS = 4000;
-/** The 60Hz frame budget. Stated as a number, and drawn only when it is in range. */
+/** The 60Hz frame budget. Bars reaching it are painted as over-budget. */
 const BUDGET_MS = 16.7;
-/**
- * Smallest full-scale value, in ms.
- *
- * Scaling to the frame budget was the obvious choice and the wrong one: a median trace of
- * 0.4ms against 16.7ms drew bars 2.4% tall, so the chart was a flat line under a red rule.
- * That is *true* — the work is a rounding error against a frame — but it says it by
- * destroying the only thing a chart is for, which is the shape of the variation. So the
- * scale follows the data and the budget relationship is a number in the footer instead.
- */
-const MIN_SCALE_MS = 0.5;
-/** Draw the budget rule only once traces are within this fraction of it. */
-const BUDGET_VISIBLE_AT = 0.25;
 
-export const TraceChart: FC<{ history: TraceHistory; className?: string }> = ({ history, className }) => {
+export const TraceChart: FC<{ log: TraceLog; history: TraceHistory; className?: string }> = ({
+  log,
+  history,
+  className,
+}) => {
+  const read = useCallback((fromAt: number) => log.since(fromAt), [log]);
   const status = statusOf(history);
-  const ceiling = Math.max(history.peakMs * 1.3, MIN_SCALE_MS);
-  const budgetInRange = ceiling > BUDGET_MS * BUDGET_VISIBLE_AT;
   const budgetShare = (history.peakMs / BUDGET_MS) * 100;
 
   return (
@@ -62,60 +56,28 @@ export const TraceChart: FC<{ history: TraceHistory; className?: string }> = ({ 
             <span className="text-neutral-500">· settled {(history.sinceLast / 1000).toFixed(1)}s ago</span>
           )}
           {status === 'tracing' && history.rate > 0 && (
-            <span className="text-neutral-500">· {history.rate.toFixed(0)}/s</span>
+            <span className="text-neutral-500">· {history.rate.toFixed(0)} traces/s</span>
           )}
         </span>
-        <span>
-          {ceiling.toFixed(2)}ms full scale · {SPAN_MS / 1000}s window
-        </span>
+        <span data-testid="trace-axis">ms · {SPAN_MS / 1000}s window · axis follows the visible peak</span>
       </div>
 
-      <div
-        className={`
-          relative h-20 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50
-          dark:border-neutral-800 dark:bg-neutral-900/50
-        `}
-        data-testid="trace-chart"
-      >
-        {/* Only drawn when it would land inside the plot; otherwise it is a rule at the
-            top of a chart of nothing, and the footer carries the comparison instead. */}
-        {budgetInRange && (
-          <>
-            <div
-              className="absolute inset-x-0 border-t border-dashed border-rose-500/40"
-              style={{ bottom: `${Math.min((BUDGET_MS / ceiling) * 100, 99)}%` }}
-            />
-            <span
-              className="absolute right-1 font-mono text-[9px] text-rose-500/70"
-              style={{ bottom: `${Math.min((BUDGET_MS / ceiling) * 100, 99)}%` }}
-            >
-              16.7ms
-            </span>
-          </>
-        )}
-
-        {history.samples.map((sample, index) => {
-          const age = history.readAt - sample.at;
-          if (age > SPAN_MS) return null;
-          return (
-            <div
-              key={index}
-              className={cn(
-                'absolute bottom-0 w-[3px] rounded-t-sm',
-                sample.ms > BUDGET_MS ? 'bg-rose-500' : 'bg-indigo-500/70'
-              )}
-              style={{
-                right: `${(age / SPAN_MS) * 100}%`,
-                height: `${Math.max((sample.ms / ceiling) * 100, 1.5)}%`,
-              }}
-            />
-          );
-        })}
-
+      <div className="relative" data-testid="trace-chart">
+        <LiveScope
+          read={read}
+          spanMs={SPAN_MS}
+          minScale={0.2}
+          threshold={BUDGET_MS}
+          className={`
+            h-24 w-full rounded-lg border border-neutral-200 bg-neutral-50
+            dark:border-neutral-800 dark:bg-neutral-900/50
+          `}
+        />
         {status !== 'tracing' && (
           <div
             className={`
-              absolute inset-0 flex items-center justify-center font-mono text-[10px] text-neutral-400
+              pointer-events-none absolute inset-0 flex items-center justify-center pl-10 font-mono text-[10px]
+              text-neutral-400
               dark:text-neutral-600
             `}
           >
