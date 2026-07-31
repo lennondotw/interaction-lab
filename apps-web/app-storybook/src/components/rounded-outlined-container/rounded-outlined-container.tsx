@@ -5,12 +5,19 @@ import type { CSSProperties, FC, HTMLAttributes } from 'react';
 /** The squircle the corners are cut with when `cornerSmoothing` is on. */
 const CORNER_SHAPE = 'superellipse(1.6)';
 /**
- * A superellipse reads visibly tighter than the circular arc of the same
- * nominal radius, because it spends less of the corner at full curvature. The
- * radius is scaled up to compensate, so `radius={16}` looks like the same size
- * of corner whether it is smoothed or not.
+ * How much the radius is inflated to compensate for the superellipse, which reads
+ * visibly tighter than the circular arc of the same nominal radius because it
+ * spends less of the corner at full curvature. `radius={16}` should look like the
+ * same size of corner whether it is smoothed or not.
+ *
+ * The factor lives in CSS rather than here, in an `@supports` variant on the
+ * class list, and the radius is emitted as `calc()` against it. That is what ties
+ * the compensation to the thing it compensates for: a browser without
+ * `corner-shape` drops the superellipse but would otherwise keep the inflated
+ * radius, leaving a plain circular corner 50% larger than the one asked for. The
+ * `var()` fallback of `1` means the two can only fail together.
  */
-const CORNER_RADIUS_SCALE = 1.5;
+const RADIUS_SCALE_VAR = '--rounded-outlined-container-radius-scale';
 
 export interface RoundedOutlinedContainerProps extends HTMLAttributes<HTMLElement> {
   /**
@@ -81,6 +88,7 @@ export const RoundedOutlinedContainer: FC<RoundedOutlinedContainerProps> = ({
         `
           relative isolate bg-white outline-1 -outline-offset-1 outline-black/10
           [corner-shape:var(--rounded-outlined-container-corner-shape)]
+          supports-[corner-shape:superellipse(1.6)]:[--rounded-outlined-container-radius-scale:1.5]
           dark:bg-white/10 dark:outline-white/20
         `,
         className
@@ -133,6 +141,9 @@ const normalizeRadius = (radius: CSSProperties['borderRadius']): CSSProperties['
 /** Absolute lengths scale; anything else is returned untouched. */
 const SCALABLE_LENGTH = /^(-?\d*\.?\d+)(px|rem|em)$/;
 
+/** Multiplies one length by the scale factor, deferring the factor to CSS. */
+const scaled = (length: string): string => `calc(${length} * var(${RADIUS_SCALE_VAR}, 1))`;
+
 /**
  * Scales every length in a `border-radius`, including the multi-corner
  * shorthands — `8px 24px`, `48px 8px 32px 4px`, `10px 20px / 30px 40px`. The
@@ -141,16 +152,12 @@ const SCALABLE_LENGTH = /^(-?\d*\.?\d+)(px|rem|em)$/;
  * box", and scaling it past 50% would stop resolving to one.
  */
 const scaleCornerRadius = (radius: CSSProperties['borderRadius']): CSSProperties['borderRadius'] => {
-  if (typeof radius === 'number') return radius * CORNER_RADIUS_SCALE;
+  if (typeof radius === 'number') return scaled(`${radius}px`);
   if (typeof radius !== 'string') return radius;
 
   return radius
     .trim()
     .split(/\s+/)
-    .map((token) => {
-      const match = SCALABLE_LENGTH.exec(token);
-      if (!match?.[1]) return token;
-      return `${Number(match[1]) * CORNER_RADIUS_SCALE}${match[2]}`;
-    })
+    .map((token) => (SCALABLE_LENGTH.test(token) ? scaled(token) : token))
     .join(' ');
 };
