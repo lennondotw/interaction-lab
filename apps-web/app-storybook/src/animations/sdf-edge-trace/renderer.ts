@@ -1,3 +1,4 @@
+import { buildPath2D } from './contour-path.js';
 import { Ball, CELL_LEAF, ContourTracer } from './field.js';
 
 /**
@@ -28,47 +29,6 @@ export interface RenderOptions {
   /** Non-null enables the marching-ants stroke, in domain units. */
   dashOffset: number | null;
   activeBall: number | null;
-}
-
-/**
- * Builds one Path2D covering every loop. With `smooth`, corners are rounded by
- * running a quadratic through edge midpoints — cheap, and closer to how the
- * blurred original looks. Without it you see the raw marching-squares polyline,
- * which is the honest picture of what a given cell size buys you.
- */
-function buildPath(tracer: ContourTracer, smooth: boolean): Path2D {
-  const path = new Path2D();
-  const { ordered, pointXY } = tracer;
-
-  for (const loop of tracer.loops) {
-    if (loop.count < 3) continue;
-
-    const px = (k: number): number => {
-      const idx = ordered[loop.start + (k % loop.count)] ?? 0;
-      return pointXY[idx * 2] ?? 0;
-    };
-    const py = (k: number): number => {
-      const idx = ordered[loop.start + (k % loop.count)] ?? 0;
-      return pointXY[idx * 2 + 1] ?? 0;
-    };
-
-    if (!smooth) {
-      path.moveTo(px(0), py(0));
-      for (let k = 1; k < loop.count; k++) path.lineTo(px(k), py(k));
-      path.closePath();
-      continue;
-    }
-
-    path.moveTo((px(0) + px(1)) * 0.5, (py(0) + py(1)) * 0.5);
-    for (let k = 1; k <= loop.count; k++) {
-      const mx = (px(k) + px(k + 1)) * 0.5;
-      const my = (py(k) + py(k + 1)) * 0.5;
-      path.quadraticCurveTo(px(k), py(k), mx, my);
-    }
-    path.closePath();
-  }
-
-  return path;
 }
 
 export function renderScene(ctx: CanvasRenderingContext2D, options: RenderOptions): void {
@@ -103,7 +63,7 @@ export function renderScene(ctx: CanvasRenderingContext2D, options: RenderOption
     }
   }
 
-  const path = buildPath(tracer, options.smooth);
+  const path = buildPath2D(tracer, { smooth: options.smooth });
 
   if (options.showFill) {
     ctx.fillStyle = COLORS.fill;
