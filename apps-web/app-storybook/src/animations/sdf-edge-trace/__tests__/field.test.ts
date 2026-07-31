@@ -220,6 +220,178 @@ describe('quadtree forest', () => {
   });
 });
 
+/**
+ * The inset level is the one thing here a density field cannot do, and the claim
+ * that makes it worth having is that it is nearly free: the curve `inset` px
+ * inside the surface is the iso level `-inset`, and every sample already taken
+ * answers for it. These pin both halves — that it costs nothing, and that it is
+ * actually in the right place.
+ */
+describe('an inset contour', () => {
+  const makeInsetTracer = (): ContourTracer => new ContourTracer(VIEW, OVERSCAN, MIN_CELL, 2);
+
+  /**
+   * Quadratic smin over circle SDFs, written out again rather than reaching into
+   * the tracer's private copy. An independent implementation is the point: it
+   * fails if the two ever disagree, which reusing the subject could not.
+   */
+  const sdfAt = (balls: readonly Point[], x: number, y: number): number => {
+    let d = 1e9;
+    for (const ball of balls) {
+      const di = Math.hypot(x - ball.x, y - ball.y) - RADIUS;
+      const h = Math.max(BLEND - Math.abs(d - di), 0) / BLEND;
+      d = Math.min(d, di) - h * h * BLEND * 0.25;
+    }
+    return d;
+  };
+
+  const levelPoints = (tracer: ContourTracer, level: number): Point[] =>
+    tracer.loops.flatMap((loop, index) => (loop.level === level ? loopPoints(tracer, index) : []));
+
+  const RING = [
+    { x: 190, y: 230 },
+    { x: 320, y: 250 },
+    { x: 250, y: 350 },
+  ];
+
+  const withAndWithout = (
+    tracer: ContourTracer,
+    traversal: Traversal,
+    cell: number
+  ): { plain: number; inset: number; ratio: number } => {
+    const plain = tracer.trace(RING, config({ traversal, cell })).fieldEvals;
+    const stats = tracer.trace(RING, config({ traversal, cell, inset: 14 }));
+    expect(stats.levelsTraced).toBe(2);
+    // Whatever it costs, it did produce a second contour for the money.
+    expect(tracer.loops.some((loop) => loop.level === 1)).toBe(true);
+    return { plain, inset: stats.fieldEvals, ratio: stats.fieldEvals / plain };
+  };
+
+  it('is exactly free on a grid walk, which re-reads samples it already has', () => {
+    const tracer = makeInsetTracer();
+    for (const traversal of ['dense', 'bounded'] as const) {
+      for (const cell of CELLS) {
+        const { plain, inset } = withAndWithout(tracer, traversal, cell);
+        // Equal, not merely close. A fixed grid visits the same cells either way,
+        // and the second level reads corner values the row buffers already hold.
+        expect(inset).toBe(plain);
+      }
+    }
+  });
+
+  it('costs a quadtree roughly a second perimeter, because that is what it walks', () => {
+    // The sample sharing is real but it is not the whole cost: `sparse` has to
+    // *find* its contours, and its cost is proportional to the length of what it
+    // finds. Two contours is two perimeters. Under 2x because both levels share
+    // ancestor nodes until the tree is fine enough to separate them; climbing
+    // toward 2x as the cell shrinks because that shared prefix is a fixed number
+    // of levels while the leaf count keeps doubling.
+    const tracer = makeInsetTracer();
+    const coarse = withAndWithout(tracer, 'sparse', 4);
+    const fine = withAndWithout(tracer, 'sparse', 1);
+
+    expect(coarse.ratio).toBeGreaterThan(1.4);
+    expect(fine.ratio).toBeLessThan(2);
+    expect(fine.ratio).toBeGreaterThan(coarse.ratio);
+
+    // The headline the quadtree exists for survives the second level intact:
+    // still an order of magnitude under the dense walk it replaces.
+    const dense = tracer.trace(RING, config({ traversal: 'dense', cell: 1, inset: 14 })).fieldEvals;
+    expect(fine.inset).toBeLessThan(dense / 20);
+  });
+
+  it('lands the promised distance inside the surface', () => {
+    const tracer = makeInsetTracer();
+    const inset = 16;
+    tracer.trace(RING, config({ cell: 1, inset }));
+
+    const surface = levelPoints(tracer, 0);
+    const inner = levelPoints(tracer, 1);
+    expect(surface.length).toBeGreaterThan(0);
+    expect(inner.length).toBeGreaterThan(0);
+
+    // Marching squares interpolates linearly across a cell, so a vertex sits on
+    // the true iso to within the curvature error over one cell — not exactly on it.
+    for (const point of surface) expect(Math.abs(sdfAt(RING, point.x, point.y))).toBeLessThan(0.6);
+    for (const point of inner) expect(Math.abs(sdfAt(RING, point.x, point.y) + inset)).toBeLessThan(0.6);
+  });
+
+  it('closes every loop at both levels', () => {
+    const tracer = makeInsetTracer();
+    for (const cell of CELLS) {
+      tracer.trace(RING, config({ cell, inset: 14 }));
+      expect(tracer.loops.some((loop) => loop.level === 1)).toBe(true);
+      for (let index = 0; index < tracer.loops.length; index++) {
+        expect(longestStep(loopPoints(tracer, index))).toBeLessThanOrEqual(cell * Math.SQRT2 + 1e-6);
+      }
+    }
+  });
+
+  it('agrees between dense and sparse at both levels', () => {
+    // The cull predicate had to grow: a node is only discardable when it clears
+    // *every* iso, not just iso 0. Get that wrong and the inner contour comes
+    // back with holes precisely where the outer surface is far away — which the
+    // level-1 signature below is what catches.
+    const signature = (tracer: ContourTracer, traversal: Traversal, cell: number): string => {
+      tracer.trace(RING, config({ traversal, cell, inset: 18 }));
+      return tracer.loops
+        .map((loop) => `${loop.level}:${loop.count}`)
+        .sort()
+        .join(',');
+    };
+
+    const tracer = makeInsetTracer();
+    for (const cell of CELLS) {
+      const dense = signature(tracer, 'dense', cell);
+      expect(dense).toContain('1:');
+      expect(signature(tracer, 'sparse', cell)).toBe(dense);
+      expect(signature(tracer, 'bounded', cell)).toBe(dense);
+    }
+  });
+
+  it('pinches a narrow neck in two, which a clipped stroke cannot', () => {
+    // The reason an iso offset is not interchangeable with a stroke of width
+    // `2 * inset` clipped to the shape. Two balls bridged by a thin blend neck:
+    // the surface is one loop, and far enough in there is nothing left of the
+    // bridge, so the inner contour is two.
+    const tracer = makeInsetTracer();
+    const bridged = [
+      { x: 200, y: 256 },
+      { x: 330, y: 256 },
+    ];
+
+    const shallow = tracer.trace(bridged, config({ cell: 1, inset: 4 }));
+    expect(shallow.loopCount).toBe(2);
+
+    const deep = tracer.trace(bridged, config({ cell: 1, inset: 26 }));
+    const levels = tracer.loops.filter((loop) => loop.level === 1).length;
+    expect(tracer.loops.filter((loop) => loop.level === 0)).toHaveLength(1);
+    expect(levels).toBe(2);
+    expect(deep.levelsTraced).toBe(2);
+  });
+
+  it('is refused by a density field, which has no distance to offset along', () => {
+    const tracer = makeInsetTracer();
+    tracer.trace(RING, config({ field: 'density', cell: 2, inset: 14 }));
+    expect(tracer.insetSupported).toBe(false);
+
+    const stats = tracer.trace(RING, config({ field: 'density', cell: 2, inset: 14 }));
+    expect(stats.levelsTraced).toBe(1);
+    expect(tracer.loops.every((loop) => loop.level === 0)).toBe(true);
+  });
+
+  it('is refused by a tracer that was not built for two levels', () => {
+    // The edge cache holds one vertex per (edge, iso), so a second level is a
+    // second allocation. Asking a one-level tracer for it is ignored rather than
+    // silently writing over level 0's vertices.
+    const tracer = makeTracer();
+    expect(tracer.levels).toBe(1);
+    const stats = tracer.trace(RING, config({ cell: 2, inset: 14 }));
+    expect(stats.levelsTraced).toBe(1);
+    expect(tracer.insetSupported).toBe(false);
+  });
+});
+
 describe('overlay rects', () => {
   it('records the bounded box at its real aspect, not as a square', () => {
     const tracer = makeTracer();

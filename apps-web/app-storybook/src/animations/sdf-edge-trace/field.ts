@@ -21,6 +21,12 @@
  * is what keeps every loop closed. See
  * archive/2026-07-contour-domain-overscan for how that margin was sized and
  * what it costs per traversal.
+ *
+ * A distance field also gets an inset contour cheaply, which is the one
+ * capability here that is genuinely `sdf`-only: the curve `inset` px inside the
+ * surface is just the iso level `-inset`, and every sample taken for iso 0
+ * already answers for it. See `TraceConfig.inset` for what that does and does
+ * not make free.
  */
 
 export interface Ball {
@@ -61,11 +67,47 @@ export interface TraceConfig {
   blend: number;
   /** Record visited/culled node rects for the debug overlay. Off during benchmarks. */
   collectCells: boolean;
+  /**
+   * Distance to inset a second contour, in domain units. `sdf` only, and only up
+   * to the `levels` the tracer was constructed with. A distance field's inset is
+   * just a different iso value, `-inset`, so the second contour reuses the first
+   * one's samples rather than taking its own.
+   *
+   * Left at 0 (or unset) for a single contour.
+   *
+   * What that shares is the *samples*, not the *traversal*, and the two
+   * traversal families land on opposite sides of the distinction:
+   *
+   * - `dense` and `bounded` walk a fixed grid, so the second level is exactly
+   *   free — measured at ×1.000 field evals, because it reads corner values the
+   *   row buffers already hold and only redoes the per-edge interpolation.
+   * - `sparse` has to go *find* its contours, and a quadtree's cost is
+   *   proportional to the length of what it finds. Two contours is two
+   *   perimeters: ×1.66 at cell=4 rising to ×1.83 at cell=1. It stays under ×2
+   *   because both levels share their ancestor nodes until the tree gets fine
+   *   enough to tell them apart, and it climbs toward ×2 as the cell shrinks
+   *   because that shared prefix is a fixed number of levels while the leaves
+   *   keep doubling.
+   *
+   * So the inset is free where the walk was already paying for area, and costs
+   * about what it adds where the walk was paying for perimeter. Even at ×1.83
+   * sparse is far below either dense walk.
+   *
+   * This is emphatically *not* the same curve a stroke of width `2 * inset`
+   * clipped to the shape would draw. A clipped stroke is the surface pushed
+   * inward with its topology preserved by construction; a true iso offset can
+   * pinch a narrow neck in two and drop a small blob entirely, because at
+   * `inset` past the surface there is genuinely nothing left there. Where the
+   * two disagree is the interesting part, not an artefact.
+   */
+  inset?: number;
 }
 
 export interface LoopRange {
   start: number;
   count: number;
+  /** 0 for the surface itself, 1 for the contour inset by `TraceConfig.inset`. */
+  level: number;
 }
 
 export interface TraceStats {
@@ -75,6 +117,8 @@ export interface TraceStats {
   cellsTested: number;
   cellsCulled: number;
   leafCells: number;
+  /** 1, or 2 when an `inset` was asked for and the field could honour it. */
+  levelsTraced: number;
 }
 
 /** Cell rect kinds recorded for the overlay. */
@@ -102,6 +146,9 @@ export class ContourTracer {
   readonly traced: number;
   /** Domain coordinate of the sampling grid's first corner, `-overscan`. */
   readonly origin: number;
+
+  /** How many iso levels this instance can trace at once. 1 unless asked for more. */
+  readonly levels: number;
 
   // --- geometry output ---
   /** Interleaved xy of every contour vertex, indexed by the values in `ordered`. */
@@ -137,11 +184,18 @@ export class ContourTracer {
   private readonly edgeGen: Int32Array;
   private readonly nextPoint: Int32Array;
   private readonly seen: Uint8Array;
+  /** Which iso level emitted each vertex, so `linkLoops` can tag the loops it finds. */
+  private readonly pointLevel: Uint8Array;
   private readonly segFrom: Int32Array;
   private readonly segTo: Int32Array;
   private readonly stack: Int32Array;
 
   private generation = 0;
+  /** Edge-cache stride between levels. An edge holds one vertex *per iso*. */
+  private readonly edgeStride: number;
+  /** Iso value per level for the current trace; length is `activeLevels`. */
+  private readonly isoLevels: Float64Array;
+  private activeLevels = 1;
   private nx = 0;
   private evals = 0;
   private pointCount = 0;
@@ -156,12 +210,17 @@ export class ContourTracer {
    *   far the iso surface can reach past a ball centre, or contours that run off
    *   the frame come back open.
    * @param minCell Smallest cell size that will ever be requested; sizes the buffers.
+   * @param levels How many iso levels a single trace may extract. Each one needs
+   *   its own vertex per grid edge — the corner *samples* are shared, but the
+   *   interpolation along an edge lands somewhere different for every iso — so
+   *   this multiplies the edge cache and is opt-in rather than always 2.
    */
-  constructor(view: number, overscan: number, minCell: number) {
+  constructor(view: number, overscan: number, minCell: number, levels = 1) {
     this.view = view;
     this.overscan = overscan;
     this.traced = view + 2 * overscan;
     this.origin = -overscan;
+    this.levels = levels;
 
     const maxNx = Math.round(this.traced / minCell);
     const corners = (maxNx + 1) * (maxNx + 1);
@@ -171,12 +230,15 @@ export class ContourTracer {
     this.rowB = new Float32Array(maxNx + 1);
     this.cornerVal = new Float32Array(corners);
     this.cornerGen = new Int32Array(corners);
-    this.edgePoint = new Int32Array(corners * 2);
-    this.edgeGen = new Int32Array(corners * 2);
+    this.edgeStride = corners * 2;
+    this.edgePoint = new Int32Array(this.edgeStride * levels);
+    this.edgeGen = new Int32Array(this.edgeStride * levels);
+    this.isoLevels = new Float64Array(levels);
     this.pointXY = new Float32Array(maxPoints * 2);
     this.ordered = new Int32Array(maxPoints);
     this.nextPoint = new Int32Array(maxPoints);
     this.seen = new Uint8Array(maxPoints);
+    this.pointLevel = new Uint8Array(maxPoints);
     this.segFrom = new Int32Array(maxPoints * 2);
     this.segTo = new Int32Array(maxPoints * 2);
     this.cellRects = new Float32Array(MAX_OVERLAY_CELLS * 5);
@@ -236,6 +298,30 @@ export class ContourTracer {
   }
 
   /**
+   * How many levels an `inset` request can actually be honoured at, and what iso
+   * each one sits on. Loads `isoLevels` as a side effect.
+   *
+   * An inset is only meaningful on a distance field: level 1 sits at `-inset`,
+   * which *is* the set of points exactly `inset` inside the surface, because the
+   * field's value is that distance. On a density field the same arithmetic gives
+   * a band whose width follows the local gradient instead — wide where the blur
+   * is flat, hairline where it is steep — so the request is refused rather than
+   * answered with a plausible wrong shape. `insetSupported` reports which
+   * happened so the UI can say so.
+   */
+  private loadIsoLevels(inset: number | undefined): number {
+    this.isoLevels[0] = this.iso;
+    if (inset === undefined || inset <= 0 || this.levels < 2 || this.kind !== 'sdf') return 1;
+    this.isoLevels[1] = this.iso - inset;
+    return 2;
+  }
+
+  /** Whether an `inset` would be honoured for the field last traced. */
+  get insetSupported(): boolean {
+    return this.kind === 'sdf' && this.levels >= 2;
+  }
+
+  /**
    * Radius beyond which a ball cannot influence the contour, and so also the
    * furthest the surface can sit from the nearest centre — which is what the
    * caller's `overscan` has to cover.
@@ -260,6 +346,7 @@ export class ContourTracer {
     this.band = config.sigma * BAND_SIGMAS;
     this.influence2 = this.influence * this.influence;
     this.collectCells = config.collectCells;
+    this.activeLevels = this.loadIsoLevels(config.inset);
 
     this.nx = Math.round(this.traced / config.cell);
     this.generation++;
@@ -288,6 +375,7 @@ export class ContourTracer {
       cellsTested: this.cellsTested,
       cellsCulled: this.cellsCulled,
       leafCells: this.leafCells,
+      levelsTraced: this.activeLevels,
     };
   }
 
@@ -333,14 +421,23 @@ export class ContourTracer {
       top[i] = this.sample(origin + (i0 + i) * cell, origin + j0 * cell);
     }
 
-    const iso = this.iso;
+    const levels = this.activeLevels;
     for (let j = j0; j < j1; j++) {
       const y1 = origin + (j + 1) * cell;
       for (let i = 0; i < width; i++) {
         bot[i] = this.sample(origin + (i0 + i) * cell, y1);
       }
       for (let i = 0; i < width - 1; i++) {
-        this.cellSegments(i0 + i, j, cell, top[i] ?? 0, top[i + 1] ?? 0, bot[i + 1] ?? 0, bot[i] ?? 0, iso);
+        const v00 = top[i] ?? 0;
+        const v10 = top[i + 1] ?? 0;
+        const v11 = bot[i + 1] ?? 0;
+        const v01 = bot[i] ?? 0;
+        // Every level reads the same four corner values. The row buffers above
+        // are the only place samples are taken, so a second iso adds marching
+        // squares and nothing else — the `field evals` stat does not move.
+        for (let level = 0; level < levels; level++) {
+          this.cellSegments(i0 + i, j, cell, v00, v10, v11, v01, this.isoLevels[level] ?? 0, level);
+        }
         this.cellsTested++;
       }
       const swap = top;
@@ -353,7 +450,7 @@ export class ContourTracer {
   private traverseSparse(cell: number): void {
     const nx = this.nx;
     const origin = this.origin;
-    const iso = this.iso;
+    const levels = this.activeLevels;
     const stack = this.stack;
 
     // A quadtree needs power-of-two roots, and the overscan margin makes the
@@ -384,9 +481,18 @@ export class ContourTracer {
       const d = this.sdf(x + sizePx * 0.5, y + sizePx * 0.5);
       this.cellsTested++;
 
-      // Centre is farther from the surface than the node's half-diagonal, so
-      // the whole node is strictly inside or strictly outside.
-      if (Math.abs(d) > sizePx * Math.SQRT1_2 * CULL_SAFETY) {
+      // Centre is farther from every iso surface than the node's half-diagonal,
+      // so the whole node is on one side of all of them. With an inset level the
+      // node has to clear *both* to be discarded — the reach that matters is the
+      // nearest iso, not iso 0 — otherwise the cull punches holes in the inner
+      // contour exactly where the outer one is far away.
+      const reach = sizePx * Math.SQRT1_2 * CULL_SAFETY;
+      let nearest = Infinity;
+      for (let level = 0; level < levels; level++) {
+        const distance = Math.abs(d - (this.isoLevels[level] ?? 0));
+        if (distance < nearest) nearest = distance;
+      }
+      if (nearest > reach) {
         this.cellsCulled++;
         if (this.collectCells) this.pushCellRect(x, y, sizePx, sizePx, CELL_CULLED);
         continue;
@@ -395,16 +501,13 @@ export class ContourTracer {
       if (size === 1) {
         this.leafCells++;
         if (this.collectCells) this.pushCellRect(x, y, sizePx, sizePx, CELL_LEAF);
-        this.cellSegments(
-          i,
-          j,
-          cell,
-          this.corner(i, j, cell),
-          this.corner(i + 1, j, cell),
-          this.corner(i + 1, j + 1, cell),
-          this.corner(i, j + 1, cell),
-          iso
-        );
+        const v00 = this.corner(i, j, cell);
+        const v10 = this.corner(i + 1, j, cell);
+        const v11 = this.corner(i + 1, j + 1, cell);
+        const v01 = this.corner(i, j + 1, cell);
+        for (let level = 0; level < levels; level++) {
+          this.cellSegments(i, j, cell, v00, v10, v11, v01, this.isoLevels[level] ?? 0, level);
+        }
         continue;
       }
 
@@ -459,7 +562,8 @@ export class ContourTracer {
     v10: number,
     v11: number,
     v01: number,
-    iso: number
+    iso: number,
+    level: number
   ): void {
     let code = 0;
     if (v00 > iso) code |= 1;
@@ -473,11 +577,15 @@ export class ContourTracer {
     const y0 = this.origin + j * cell;
     const x1 = x0 + cell;
     const y1 = y0 + cell;
+    // One vertex per (edge, iso). Two isos cross the same grid edge at different
+    // points, so the level has to be part of the cache key — sharing it would
+    // graft the inner contour onto the outer one's vertices.
+    const base = level * this.edgeStride;
 
-    const top = () => this.edgeVertex(2 * (j * stride + i), x0, y0, x1, y0, v00, v10, iso);
-    const bottom = () => this.edgeVertex(2 * ((j + 1) * stride + i), x0, y1, x1, y1, v01, v11, iso);
-    const left = () => this.edgeVertex(2 * (j * stride + i) + 1, x0, y0, x0, y1, v00, v01, iso);
-    const right = () => this.edgeVertex(2 * (j * stride + i + 1) + 1, x1, y0, x1, y1, v10, v11, iso);
+    const top = () => this.edgeVertex(base + 2 * (j * stride + i), x0, y0, x1, y0, v00, v10, iso, level);
+    const bottom = () => this.edgeVertex(base + 2 * ((j + 1) * stride + i), x0, y1, x1, y1, v01, v11, iso, level);
+    const left = () => this.edgeVertex(base + 2 * (j * stride + i) + 1, x0, y0, x0, y1, v00, v01, iso, level);
+    const right = () => this.edgeVertex(base + 2 * (j * stride + i + 1) + 1, x1, y0, x1, y1, v10, v11, iso, level);
 
     switch (code) {
       case 1:
@@ -531,7 +639,7 @@ export class ContourTracer {
     }
   }
 
-  /** One vertex per grid edge, shared between the two cells that touch it. */
+  /** One vertex per grid edge per iso, shared between the two cells that touch it. */
   private edgeVertex(
     id: number,
     ax: number,
@@ -540,13 +648,15 @@ export class ContourTracer {
     by: number,
     va: number,
     vb: number,
-    iso: number
+    iso: number,
+    level: number
   ): number {
     if (this.edgeGen[id] === this.generation) return this.edgePoint[id] ?? 0;
     const t = (iso - va) / (vb - va);
     const p = this.pointCount++;
     this.pointXY[p * 2] = ax + (bx - ax) * t;
     this.pointXY[p * 2 + 1] = ay + (by - ay) * t;
+    this.pointLevel[p] = level;
     this.edgePoint[id] = p;
     this.edgeGen[id] = this.generation;
     return p;
@@ -586,7 +696,9 @@ export class ContourTracer {
       const count = write - start;
       // Two-vertex "loops" are marching-squares noise, not geometry.
       if (count > 2) {
-        this.loops.push({ start, count });
+        // Segments never join vertices from different isos, so a chain is wholly
+        // one level and its first vertex names it.
+        this.loops.push({ start, count, level: this.pointLevel[p] ?? 0 });
       } else {
         write = start;
       }
