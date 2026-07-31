@@ -31,11 +31,11 @@
  */
 
 import { useMotionValue } from 'motion/react';
-import { useContext, useEffect, useId, useMemo, useRef, type RefObject } from 'react';
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, type RefObject } from 'react';
 import { BeaconContainerContext, BeaconStoreContext } from './context.js';
 import { layoutOffsetRelativeTo } from './layout-offset.js';
-import { observeLayoutShift } from './layout-shift.js';
 import type { BeaconDescriptor, BeaconEntry, BeaconHandle, BeaconPriority } from './types.js';
+import { useLayoutObservation } from './use-layout-observation.js';
 
 // A no-op handle used when no provider is mounted. Allows components
 // to sprinkle beacons without forcing every consumer to adopt the
@@ -248,95 +248,45 @@ export function useBeaconAnchor(ref: RefObject<HTMLElement | null>, options: Bea
 
   // Measurement loop. Seeds MVs imperatively via handle.update — no
   // React re-render on every pixel change.
-  useEffect(() => {
-    if (!enabled) return;
+  //
+  // `measure` is memoised because it is the cascade's effect dependency: an inline
+  // closure would tear every observer down and rebuild it on each render.
+  const measure = useCallback((): void => {
     const el = ref.current;
     if (!el) return;
-
-    const measure = (): void => {
-      const container = containerRef?.current ?? null;
-
-      // Size comes from `offsetWidth` / `offsetHeight` so a parent's
-      // `transform: scale(…)` doesn't shrink the reported beacon.
-      const width = el.offsetWidth;
-      const height = el.offsetHeight;
-
-      // Position: prefer the `offsetParent` chain walk — transform-
-      // immune, lets presentation animations slide independently. Fall
-      // back to `getBoundingClientRect` differencing when the chain
-      // can't reach the registered container (e.g. a `position: fixed`
-      // ancestor cuts it, the element is transiently detached, or no
-      // container is registered at all).
-      const layout = layoutOffsetRelativeTo(el, container);
-      let x: number;
-      let y: number;
-      if (layout) {
-        x = layout.x;
-        y = layout.y;
-      } else {
-        const rect = el.getBoundingClientRect();
-        const origin = container?.getBoundingClientRect() ?? null;
-        x = rect.left - (origin?.left ?? 0);
-        y = rect.top - (origin?.top ?? 0);
-      }
-
-      handle.update({
-        position: { x: x - inset, y: y - inset },
-        size: { width: width + inset * 2, height: height + inset * 2 },
-      });
-    };
-
-    measure();
-
-    // Observation cascade.
-    //
-    // There is no single browser API for "this element's position
-    // relative to X changed" — every reasonable layout-change vector
-    // has to be hooked up explicitly. Covered here:
-    //
-    // - self resize → `ResizeObserver` on `el`.
-    // - sibling / flex redistribution / padding / font-size / class
-    //   swap above us → propagates to some ancestor's size, so we
-    //   observe every ancestor from `el.parentElement` up to (and
-    //   including) the container. A handful of extra `observe()` calls
-    //   per beacon, each ~nanoseconds and batched to the layout pass.
-    // - scroll of any intermediate scroll container → `scroll` on
-    //   window with capture catches all descendants (scroll events
-    //   don't bubble, but dispatch during capture still reaches window
-    //   listeners).
-    // - window resize → direct listener.
-    // - pure position shifts where no ancestor resizes — e.g. a
-    //   conditional sibling mounting into a `justify-center`
-    //   fixed-size parent, shifting us up. The RO cascade never fires
-    //   here because no observed element's size changes. We use an
-    //   `IntersectionObserver` layout-shift trick for this (see
-    //   `observeLayoutShift`), the same approach Floating UI takes.
-    //   Zero idle cost, fires only when the element actually moves.
     const container = containerRef?.current ?? null;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    {
-      // Walk to (and including) the container; if the chain never hits
-      // it (cut by a `position: fixed` ancestor, detached element,
-      // etc.) we stop at `<body>` — body resize covers the
-      // viewport-level flow case.
-      let node: HTMLElement | null = el.parentElement;
-      while (node) {
-        ro.observe(node);
-        if (node === container || node === document.body) break;
-        node = node.parentElement;
-      }
+
+    // Size comes from `offsetWidth` / `offsetHeight` so a parent's
+    // `transform: scale(…)` doesn't shrink the reported beacon.
+    const width = el.offsetWidth;
+    const height = el.offsetHeight;
+
+    // Position: prefer the `offsetParent` chain walk — transform-
+    // immune, lets presentation animations slide independently. Fall
+    // back to `getBoundingClientRect` differencing when the chain
+    // can't reach the registered container (e.g. a `position: fixed`
+    // ancestor cuts it, the element is transiently detached, or no
+    // container is registered at all).
+    const layout = layoutOffsetRelativeTo(el, container);
+    let x: number;
+    let y: number;
+    if (layout) {
+      x = layout.x;
+      y = layout.y;
+    } else {
+      const rect = el.getBoundingClientRect();
+      const origin = container?.getBoundingClientRect() ?? null;
+      x = rect.left - (origin?.left ?? 0);
+      y = rect.top - (origin?.top ?? 0);
     }
-    const shiftObserver = observeLayoutShift(el, measure);
-    window.addEventListener('scroll', measure, { passive: true, capture: true });
-    window.addEventListener('resize', measure, { passive: true });
-    return () => {
-      ro.disconnect();
-      shiftObserver.disconnect();
-      window.removeEventListener('scroll', measure, true);
-      window.removeEventListener('resize', measure);
-    };
-  }, [ref, handle, enabled, inset, containerRef]);
+
+    handle.update({
+      position: { x: x - inset, y: y - inset },
+      size: { width: width + inset * 2, height: height + inset * 2 },
+    });
+  }, [ref, containerRef, handle, inset]);
+
+  useLayoutObservation(ref, containerRef, measure, { enabled });
 
   return handle;
 }
