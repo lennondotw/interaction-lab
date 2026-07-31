@@ -35,7 +35,7 @@ import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
 const SVG_STORY = 'sdf-edge-trace-svg-path--default';
-const DOM_STORY = 'sdf-edge-trace-dom-surface--default';
+const DOM_STORY = 'sdf-edge-trace-clip-and-outline--default';
 
 const VIEWPORT = { width: 1600, height: 1100 };
 /**
@@ -45,6 +45,31 @@ const VIEWPORT = { width: 1600, height: 1100 };
 const FRAME_SAMPLES = 180;
 /** Clipped-box widths swept for the reraster question, in CSS px. */
 const CLIP_SIZES = [520, 1040, 1400];
+
+/**
+ * Confirm the Storybook at `STORYBOOK` is actually *this* project's before driving it.
+ *
+ * Worth the twenty lines: the default port is shared with whatever else a machine happens
+ * to be running, and a probe pointed at a different Storybook does not fail cleanly — it
+ * reports missing selectors and timeouts that read like the story is broken. This happened
+ * for real, with another project's dev server holding 6009 while ours fell back to 6019.
+ */
+const requireStories = async (ids) => {
+  let index;
+  try {
+    index = await fetch(`${STORYBOOK}/index.json`).then((r) => r.json());
+  } catch {
+    console.error(`Cannot reach a Storybook at ${STORYBOOK}.`);
+    console.error('Start one with `pnpm --filter @monorepo/app-storybook dev`, or set STORYBOOK_URL.');
+    process.exit(1);
+  }
+  const missing = ids.filter((id) => !(id in index.entries));
+  if (missing.length > 0) {
+    console.error(`The Storybook at ${STORYBOOK} does not have: ${missing.join(', ')}`);
+    console.error('It is most likely a different project holding that port. Set STORYBOOK_URL.');
+    process.exit(1);
+  }
+};
 
 const open = async (context, story) => {
   const page = await context.newPage();
@@ -153,6 +178,8 @@ const table = (header, rows) => {
   for (const row of rows) console.log(line(row));
   console.log('');
 };
+
+await requireStories([SVG_STORY, DOM_STORY]);
 
 const main = async () => {
   const browser = await chromium.launch();

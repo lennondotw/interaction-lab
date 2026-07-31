@@ -10,7 +10,7 @@
  * `dataMs` is not the full price of the SVG route. Handing the string to the
  * browser costs a reparse that lands in the frame's paint work, which no
  * in-page timer can see — so read these rows as the floor, and the
- * `DomSurface` story's `fps` for whether the rest of it fits.
+ * `RectField` story's live scope for whether the rest of it fits.
  */
 
 import { SweepProgress, timeBatched, yieldToBrowser } from '../bench-timing.js';

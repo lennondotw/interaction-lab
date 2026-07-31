@@ -88,7 +88,7 @@ interface LiveStats {
   levels: number;
 }
 
-export const SdfDomSurface: FC<{ className?: string }> = ({ className }) => {
+export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => {
   const uid = useId().replace(/:/g, '');
   const cssClipId = `sdf-clip-css-${uid}`;
   const svgClipId = `sdf-clip-svg-${uid}`;
@@ -235,7 +235,7 @@ export const SdfDomSurface: FC<{ className?: string }> = ({ className }) => {
             dark:text-neutral-100
           `}
         >
-          DOM surface
+          Clip and outline
         </h1>
         <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
           One <span className="font-mono text-xs">d</span> string, three consumers — a fill, an inner border, and a{' '}

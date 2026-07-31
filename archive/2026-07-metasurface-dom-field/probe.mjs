@@ -95,14 +95,27 @@ console.log(
 
 // ---------------------------------------------------------------- 2. keeping up
 
-const reachable = await fetch(STORYBOOK)
-  .then((response) => response.ok)
-  .catch(() => false);
+/**
+ * Confirm the Storybook is actually *this* project's before driving it.
+ *
+ * The default port is shared with whatever else a machine happens to be running, and a
+ * probe pointed at a different Storybook does not fail cleanly — it reports missing
+ * selectors and timeouts that read like the story is broken. This happened for real, with
+ * another project's dev server holding 6009 while ours fell back to 6019.
+ */
+const index = await fetch(`${STORYBOOK}/index.json`)
+  .then((response) => response.json())
+  .catch(() => null);
 
-if (!reachable) {
+if (index === null) {
   console.log(`## 2. Skipped — no Storybook at ${STORYBOOK}\n`);
   console.log('Start it with `pnpm --filter @monorepo/app-storybook dev`, or set STORYBOOK_URL.\n');
   process.exit(0);
+}
+if (!(`${STORY}` in index.entries)) {
+  console.error(`The Storybook at ${STORYBOOK} has no story "${STORY}".`);
+  console.error('It is most likely a different project holding that port. Set STORYBOOK_URL.');
+  process.exit(1);
 }
 
 console.log('## 2. Does the contour keep up with the layout it is derived from?\n');

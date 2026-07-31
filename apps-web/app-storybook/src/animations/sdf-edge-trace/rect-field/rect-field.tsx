@@ -2,8 +2,8 @@
  * The last panel of the arc: the field's primitives *are* laid-out DOM rects, with the
  * tracer's own instrumentation left on.
  *
- * `OnCanvas`, `SvgPath` and `DomSurface` all vary where the contour *goes* and hold the
- * sources fixed as draggable balls, because a controlled input is what makes those
+ * `OnCanvas`, `SvgPath` and `ClipAndOutline` all vary what happens to the contour and hold
+ * the sources fixed as draggable balls, because a controlled input is what makes those
  * comparisons mean anything. This varies the other end. The divs below are ordinary flex
  * children — they lay themselves out, and the surface only reads the boxes that produced.
  *
