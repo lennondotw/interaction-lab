@@ -5,17 +5,21 @@
  *   discs, thresholded at 0.4 (matching `feColorMatrix values="... 20 -8"`).
  *   Saturates at 0 and 1, so it carries no distance information away from the
  *   edge — you can only ever scan it densely.
- * - `sdf`: a real signed distance field, `smin` over per-circle distances.
- *   The value is a distance in pixels everywhere, which lets a quadtree cull
- *   whole regions that provably cannot contain the surface.
+ * - `sdf`: a real signed distance field, `smin` over per-shape distances. The
+ *   value is a distance in pixels everywhere, which lets a quadtree cull whole
+ *   regions that provably cannot contain the surface.
+ *
+ * A primitive is a rounded box (`FieldShape`), of which a disc is the case where
+ * the half-extents equal the corner radius — one code path, no branch. That is
+ * what lets a laid-out DOM rect seed the field directly.
  *
  * The point of having both behind one interface is that the extracted contour
  * is identical; only the cost of getting there differs.
  *
- * The sampled domain is deliberately larger than the box the caller works in.
- * Ball centres are confined to the view, but the shape around a centre is not —
- * it reaches `radius + max(blend, 3 * sigma)` further out — so a centre parked
- * on the frame would put half its contour outside a view-sized grid, marching
+ * The sampled domain is deliberately larger than the box the caller works in. A
+ * shape is confined to the view, but the surface around it is not — it reaches
+ * `max(blend, 3 * sigma)` past the shape's own outline — so a shape parked on the
+ * frame would put half its contour outside a view-sized grid, marching
  * squares would hand back an open chain, and the renderer would close it with a
  * straight chord along the frame. Sampling an `overscan` margin on every side
  * is what keeps every loop closed. See
@@ -29,10 +33,37 @@
  * not make free.
  */
 
-export interface Ball {
+/**
+ * One primitive in the field: a rounded box, centred at `x, y`.
+ *
+ * A disc is not a special case of this — it *is* this, with the half-extents equal
+ * to the corner radius. Substituting `hw = hh = r = R` into the rounded-box
+ * distance collapses it to `length(p - c) - R` exactly, so the two live on one code
+ * path and the ball-based stories keep the geometry they always had. That is why
+ * the fields below are optional: `{ x, y }` on its own means "a disc of
+ * `config.radius`", which is what every existing caller passes.
+ *
+ * `hw` / `hh` are half-extents of the **whole** box, corners included — so a DOM
+ * rect maps straight onto them as `width / 2`, `height / 2`, with no adjustment for
+ * the radius.
+ */
+export interface FieldShape {
   x: number;
   y: number;
+  /** Half-width of the whole box. Falls back to `config.radius`. */
+  hw?: number;
+  /** Half-height of the whole box. Falls back to `config.radius`. */
+  hh?: number;
+  /** Corner radius, clamped to `min(hw, hh)`. Falls back to `config.radius`. */
+  r?: number;
 }
+
+/**
+ * The disc-shaped reading of `FieldShape`, which is all three of the metaball
+ * stories ever need. Kept as a name rather than replaced because "ball" is what
+ * those stories are about, and `trace(shapes)` would read worse in them.
+ */
+export type Ball = FieldShape;
 
 export type FieldKind = 'sdf' | 'density';
 
@@ -135,6 +166,52 @@ const DENSITY_ISO = 0.4;
 /** A blurred disc's alpha falls from ~1 to ~0 across +-3 sigma of its edge. */
 const BAND_SIGMAS = 3;
 const MAX_OVERLAY_CELLS = 16384;
+/**
+ * Upper bound on primitives per trace. The field is a linear scan over all of them
+ * per sample, so this is a cost ceiling as much as an allocation one — the shape
+ * count multiplies every single field evaluation.
+ */
+const MAX_SHAPES = 64;
+
+/**
+ * Granularity the sampled domain must be a multiple of, and the largest quadtree
+ * root the forest will use.
+ *
+ * `traverseSparse` derives its root size as `nx & -nx` — the largest power of two
+ * dividing the grid width — because a quadtree has to subdivide evenly. That works
+ * silently until the domain stops being chosen and starts being *derived* from
+ * something arbitrary, like an element's measured width, at which point it fails
+ * just as silently:
+ *
+ * | region | domain | nx  | tile | roots   |
+ * | -----: | -----: | --: | ---: | ------: |
+ * |    640 |    896 | 448 |   64 |      49 |
+ * |    734 |    990 | 495 |  **1** | **245,025** |
+ * |    990 |   1246 | 623 |  **1** | **388,129** |
+ *
+ * An odd `nx` gives `tile = 1`, which makes every root a leaf: the walk degenerates
+ * into a flat scan of the entire domain *plus* a wasted centre probe per cell —
+ * strictly worse than `dense`, and it turns the quadtree's headline win into a loss
+ * without erroring. See archive/2026-07-metasurface-dom-field.
+ *
+ * 256 is divisible by every supported cell size, so padding to it keeps `nx` a
+ * multiple of 32 at the coarsest cell and 256 at the finest.
+ */
+export const QUADTREE_TILE = 256;
+
+/**
+ * Smallest view size that keeps the quadtree healthy for a region of `required`
+ * domain units, assuming an overscan that is itself a multiple of `QUADTREE_TILE / 2`.
+ *
+ * Pad the domain; do not fit it. The padding is close to free precisely because the
+ * traversal that needs it is the one whose cost follows the contour rather than the
+ * area — an empty quadrant is one centre probe and a cull. It also means a
+ * non-square region can use a square domain sized to its longer side without
+ * paying for the difference, which is what lets one tracer serve any aspect ratio.
+ */
+export function quadtreeSafeView(required: number): number {
+  return Math.max(QUADTREE_TILE, Math.ceil(required / QUADTREE_TILE) * QUADTREE_TILE);
+}
 
 /**
  * Quadratic smin is a Lipschitz *bound*, not exactly 1-Lipschitz, so the
@@ -156,6 +233,19 @@ export class ContourTracer {
   /** How many iso levels this instance can trace at once. 1 unless asked for more. */
   readonly levels: number;
 
+  /**
+   * Size of the quadtree roots this domain yields at `cell`, in cells.
+   *
+   * Exposed because the degeneration it guards against is silent — a value of 1
+   * means every root is a leaf and `sparse` has become a flat scan with an extra
+   * probe per cell. Tests assert on it; `quadtreeSafeView` is how a caller avoids
+   * needing to.
+   */
+  quadtreeTileFor(cell: number): number {
+    const nx = Math.round(this.traced / cell);
+    return nx & -nx;
+  }
+
   // --- geometry output ---
   /** Interleaved xy of every contour vertex, indexed by the values in `ordered`. */
   readonly pointXY: Float32Array;
@@ -172,14 +262,31 @@ export class ContourTracer {
   cellRectCount = 0;
 
   // --- config, held as fields so the hot loops read them without argument passing ---
-  private balls: readonly Ball[] = [];
   private kind: FieldKind = 'sdf';
   private radius = 60;
   private blend = 40;
   /** `sigma * BAND_SIGMAS`; the only form of sigma the hot loop needs. */
   private band = 36;
-  private influence2 = 0;
   private collectCells = false;
+
+  /**
+   * Shapes flattened into parallel typed arrays once per `trace`, rather than read
+   * off objects inside the sample loop.
+   *
+   * The loop runs hundreds of thousands of times per frame, and every optional
+   * field on `FieldShape` would otherwise be a property lookup plus a nullish
+   * check on each iteration. Resolving the defaults once moves that off the hot
+   * path entirely — and the arrays are what let the disc fast path below branch on
+   * a value that is uniform across the whole set, so it predicts perfectly.
+   */
+  private shapeCount = 0;
+  private readonly shapeX: Float64Array;
+  private readonly shapeY: Float64Array;
+  private readonly shapeHW: Float64Array;
+  private readonly shapeHH: Float64Array;
+  private readonly shapeR: Float64Array;
+  /** `hw === hh === r`, i.e. the shape is a plain disc and can skip the box maths. */
+  private readonly shapeIsDisc: Uint8Array;
 
   // --- scratch, allocated once ---
   private readonly rowA: Float32Array;
@@ -248,6 +355,12 @@ export class ContourTracer {
     this.segFrom = new Int32Array(maxPoints * 2);
     this.segTo = new Int32Array(maxPoints * 2);
     this.cellRects = new Float32Array(MAX_OVERLAY_CELLS * 5);
+    this.shapeX = new Float64Array(MAX_SHAPES);
+    this.shapeY = new Float64Array(MAX_SHAPES);
+    this.shapeHW = new Float64Array(MAX_SHAPES);
+    this.shapeHH = new Float64Array(MAX_SHAPES);
+    this.shapeR = new Float64Array(MAX_SHAPES);
+    this.shapeIsDisc = new Uint8Array(MAX_SHAPES);
     // Depth-first quadtree stack: (i, j, size) triples. It starts loaded with
     // every root of the forest (see `traverseSparse`), and each level descended
     // replaces one triple with four, so a root-to-leaf path adds 3 per level.
@@ -258,16 +371,55 @@ export class ContourTracer {
 
   // ---------------------------------------------------------------- fields
 
-  /** Sum of blurred discs. Saturates at 1, so it is flat almost everywhere. */
+  /**
+   * Exact signed distance to shape `i`'s rounded box.
+   *
+   * ```
+   * q = |p - c| - halfExtent + r
+   * d = min(max(q.x, q.y), 0) + length(max(q, 0)) - r
+   * ```
+   *
+   * Exact rather than a bound, and `|∇d| = 1` almost everywhere — better behaved
+   * than the smooth-min that combines these, which is only Lipschitz-bounded and is
+   * what `CULL_SAFETY` exists for.
+   *
+   * With `hw = hh = r` the half-extent cancels: `q = |p - c|`, whose components are
+   * non-negative, so `min(max(q.x, q.y), 0)` is 0 and the whole thing reduces to
+   * `length(p - c) - r`. That identity is why discs need no branch here for
+   * correctness — the fast path in `density` is purely about skipping a sqrt.
+   */
+  private shapeDistance(i: number, x: number, y: number): number {
+    const r = this.shapeR[i] ?? 0;
+    const qx = Math.abs(x - (this.shapeX[i] ?? 0)) - (this.shapeHW[i] ?? 0) + r;
+    const qy = Math.abs(y - (this.shapeY[i] ?? 0)) - (this.shapeHH[i] ?? 0) + r;
+    const outsideX = Math.max(qx, 0);
+    const outsideY = Math.max(qy, 0);
+    return Math.min(Math.max(qx, qy), 0) + Math.sqrt(outsideX * outsideX + outsideY * outsideY) - r;
+  }
+
+  /** Sum of blurred shapes. Saturates at 1, so it is flat almost everywhere. */
   private density(x: number, y: number): number {
     this.evals++;
+    const band = this.band;
     let s = 0;
-    for (const b of this.balls) {
-      const dx = x - b.x;
-      const dy = y - b.y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 >= this.influence2) continue;
-      const t = (Math.sqrt(d2) - this.radius) / this.band;
+    for (let i = 0; i < this.shapeCount; i++) {
+      let sd: number;
+      if (this.shapeIsDisc[i] === 1) {
+        // A disc can reject on squared distance and skip the sqrt entirely, which
+        // is the early-out the archived density timings were measured with. Kept
+        // rather than folded into the general path for exactly that reason.
+        const r = this.shapeR[i] ?? 0;
+        const dx = x - (this.shapeX[i] ?? 0);
+        const dy = y - (this.shapeY[i] ?? 0);
+        const d2 = dx * dx + dy * dy;
+        const reach = r + band;
+        if (d2 >= reach * reach) continue;
+        sd = Math.sqrt(d2) - r;
+      } else {
+        sd = this.shapeDistance(i, x, y);
+        if (sd >= band) continue;
+      }
+      const t = sd / band;
       if (t <= -1) {
         s += 1;
       } else {
@@ -280,15 +432,13 @@ export class ContourTracer {
     return s;
   }
 
-  /** Quadratic smooth-min over circle SDFs. Returns a distance in domain units. */
+  /** Quadratic smooth-min over the shapes' SDFs. Returns a distance in domain units. */
   private sdf(x: number, y: number): number {
     this.evals++;
     const k = this.blend;
     let d = 1e9;
-    for (const b of this.balls) {
-      const dx = x - b.x;
-      const dy = y - b.y;
-      const di = Math.sqrt(dx * dx + dy * dy) - this.radius;
+    for (let i = 0; i < this.shapeCount; i++) {
+      const di = this.shapeDistance(i, x, y);
       const h = Math.max(k - Math.abs(d - di), 0) / k;
       d = Math.min(d, di) - h * h * k * 0.25;
     }
@@ -328,30 +478,83 @@ export class ContourTracer {
   }
 
   /**
-   * Radius beyond which a ball cannot influence the contour, and so also the
-   * furthest the surface can sit from the nearest centre — which is what the
-   * caller's `overscan` has to cover.
+   * How far past a shape's own outline the surface can still sit — the margin the
+   * caller's `overscan` has to cover beyond the shapes' bounding box.
    *
-   * For `density` it is exact: past `radius + 3 * sigma` every disc contributes
-   * exactly 0, so the sum cannot reach the iso. For `sdf` it is a bound rather
-   * than the reachable maximum — each smin fold subtracts at most `blend / 4`
-   * and the accumulation converges on `blend` from below, so 12 coincident
-   * balls reach `radius + 0.76 * blend`.
+   * For `density` it is exact: past `3 * sigma` outside a shape every contribution
+   * is 0, so the sum cannot reach the iso. For `sdf` it is a bound rather than the
+   * reachable maximum — each smin fold subtracts at most `blend / 4` and the
+   * accumulation converges on `blend` from below, so 12 coincident shapes reach
+   * `0.76 * blend`.
+   *
+   * Stated as a margin rather than as `radius + margin` because a shape now carries
+   * its own extent. For a disc, `hw` *is* the radius, so the bounding box already
+   * includes it and the two readings agree exactly — which is what keeps the
+   * archived overscan figures valid.
    */
   private get influence(): number {
-    return this.kind === 'sdf' ? this.radius + this.blend : this.radius + this.band;
+    return this.kind === 'sdf' ? this.blend : this.band;
+  }
+
+  /**
+   * Resolves `FieldShape` defaults into the flat arrays the sample loops read.
+   *
+   * `r` is clamped to `min(hw, hh)`: a larger corner radius than the box has room
+   * for makes the distance formula report a shape that bulges outside its own
+   * extent, which would then escape the bounding box `bounded` and `sparse` derive
+   * from and get silently clipped.
+   */
+  private loadShapes(shapes: readonly FieldShape[]): void {
+    const fallback = this.radius;
+    const count = Math.min(shapes.length, MAX_SHAPES);
+    for (let i = 0; i < count; i++) {
+      const shape = shapes[i];
+      if (shape === undefined) continue;
+      const hw = shape.hw ?? fallback;
+      const hh = shape.hh ?? fallback;
+      const r = Math.min(shape.r ?? fallback, hw, hh);
+      this.shapeX[i] = shape.x;
+      this.shapeY[i] = shape.y;
+      this.shapeHW[i] = hw;
+      this.shapeHH[i] = hh;
+      this.shapeR[i] = r;
+      this.shapeIsDisc[i] = hw === r && hh === r ? 1 : 0;
+    }
+    this.shapeCount = count;
+  }
+
+  /** Axis-aligned bounds of every shape, grown by `influence`. Empty when there are none. */
+  private shapeBounds(): { minX: number; minY: number; maxX: number; maxY: number } | null {
+    if (this.shapeCount === 0) return null;
+    const margin = this.influence;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < this.shapeCount; i++) {
+      const x = this.shapeX[i] ?? 0;
+      const y = this.shapeY[i] ?? 0;
+      const hw = (this.shapeHW[i] ?? 0) + margin;
+      const hh = (this.shapeHH[i] ?? 0) + margin;
+      if (x - hw < minX) minX = x - hw;
+      if (y - hh < minY) minY = y - hh;
+      if (x + hw > maxX) maxX = x + hw;
+      if (y + hh > maxY) maxY = y + hh;
+    }
+    return { minX, minY, maxX, maxY };
   }
 
   // ---------------------------------------------------------------- entry
 
-  trace(balls: readonly Ball[], config: TraceConfig): TraceStats {
-    this.balls = balls;
+  trace(shapes: readonly FieldShape[], config: TraceConfig): TraceStats {
     this.kind = config.field;
     this.radius = config.radius;
     this.blend = config.blend;
     this.band = config.sigma * BAND_SIGMAS;
-    this.influence2 = this.influence * this.influence;
     this.collectCells = config.collectCells;
+    // Before anything reads a shape: `loadShapes` resolves the optional fields
+    // against `config.radius`, so it has to run after the config is in place.
+    this.loadShapes(shapes);
     this.activeLevels = this.loadIsoLevels(config.inset);
 
     this.nx = Math.round(this.traced / config.cell);
@@ -397,22 +600,12 @@ export class ContourTracer {
     let j0 = 0;
     let j1 = nx;
 
-    if (bounded && this.balls.length > 0) {
-      const inf = this.influence;
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      for (const b of this.balls) {
-        if (b.x - inf < minX) minX = b.x - inf;
-        if (b.y - inf < minY) minY = b.y - inf;
-        if (b.x + inf > maxX) maxX = b.x + inf;
-        if (b.y + inf > maxY) maxY = b.y + inf;
-      }
-      i0 = Math.max(0, Math.floor((minX - origin) / cell));
-      j0 = Math.max(0, Math.floor((minY - origin) / cell));
-      i1 = Math.min(nx, Math.ceil((maxX - origin) / cell));
-      j1 = Math.min(nx, Math.ceil((maxY - origin) / cell));
+    const bounds = bounded ? this.shapeBounds() : null;
+    if (bounds !== null) {
+      i0 = Math.max(0, Math.floor((bounds.minX - origin) / cell));
+      j0 = Math.max(0, Math.floor((bounds.minY - origin) / cell));
+      i1 = Math.min(nx, Math.ceil((bounds.maxX - origin) / cell));
+      j1 = Math.min(nx, Math.ceil((bounds.maxY - origin) / cell));
       if (this.collectCells) {
         this.pushCellRect(origin + i0 * cell, origin + j0 * cell, (i1 - i0) * cell, (j1 - j0) * cell, CELL_LEAF);
       }

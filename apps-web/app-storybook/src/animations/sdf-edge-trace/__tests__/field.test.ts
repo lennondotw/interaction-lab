@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { CELL_LEAF, ContourTracer, TraceConfig, Traversal } from '../field.js';
+import { CELL_LEAF, ContourTracer, QUADTREE_TILE, TraceConfig, Traversal, quadtreeSafeView } from '../field.js';
 
 const VIEW = 512;
 const OVERSCAN = 128;
@@ -389,6 +389,154 @@ describe('an inset contour', () => {
     const stats = tracer.trace(RING, config({ cell: 2, inset: 14 }));
     expect(stats.levelsTraced).toBe(1);
     expect(tracer.insetSupported).toBe(false);
+  });
+});
+
+/**
+ * The rounded box is what lets a laid-out DOM rect seed the field. Two things have
+ * to hold for that to be worth anything: the primitive has to be the exact distance
+ * it claims to be, and a disc has to keep behaving exactly as it did before the
+ * generalisation — the whole argument for one code path is that `hw = hh = r`
+ * collapses to a circle, and if it collapses only approximately then every archived
+ * number moved.
+ */
+describe('the rounded-box primitive', () => {
+  /** Exact rounded-box distance, written out independently of the tracer's copy. */
+  const sdBox = (px: number, py: number, cx: number, cy: number, hw: number, hh: number, r: number): number => {
+    const qx = Math.abs(px - cx) - hw + r;
+    const qy = Math.abs(py - cy) - hh + r;
+    return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - r;
+  };
+
+  it('collapses to a circle when the half-extents equal the radius', () => {
+    // The identity the single code path rests on. Checked as arithmetic before any
+    // contour is traced, because a contour test would only catch a gross violation.
+    for (const r of [1, 12, 60, 200]) {
+      for (const px of [-13, 0, 7, 61, 340]) {
+        for (const py of [-90, 0, 41, 205]) {
+          expect(sdBox(px, py, 0, 0, r, r, r)).toBeCloseTo(Math.hypot(px, py) - r, 10);
+        }
+      }
+    }
+  });
+
+  it('traces a disc identically whether it is described as a ball or as a box', () => {
+    const tracer = makeTracer();
+    const asBall = tracer.trace([{ x: 200, y: 260 }], config({ cell: 1 }));
+    const ballShape = `${asBall.loopCount}/${asBall.pointCount}`;
+
+    const asBox = tracer.trace([{ x: 200, y: 260, hw: RADIUS, hh: RADIUS, r: RADIUS }], config({ cell: 1 }));
+    expect(`${asBox.loopCount}/${asBox.pointCount}`).toBe(ballShape);
+    expect(asBox.fieldEvals).toBe(asBall.fieldEvals);
+  });
+
+  it('puts every traced vertex on the iso of an independent box field', () => {
+    const tracer = makeTracer();
+    const boxes = [
+      { x: 180, y: 200, hw: 90, hh: 40, r: 16 },
+      { x: 330, y: 300, hw: 30, hh: 70, r: 30 },
+    ];
+    tracer.trace(boxes, config({ cell: 1 }));
+
+    // smin of the two, reimplemented here — the tracer must agree with an outside
+    // reading of the same field, not merely with itself.
+    const field = (x: number, y: number): number => {
+      let d = 1e9;
+      for (const b of boxes) {
+        const di = sdBox(x, y, b.x, b.y, b.hw, b.hh, b.r);
+        const h = Math.max(BLEND - Math.abs(d - di), 0) / BLEND;
+        d = Math.min(d, di) - (h * h * BLEND) / 4;
+      }
+      return d;
+    };
+
+    const points = allPoints(tracer);
+    expect(points.length).toBeGreaterThan(100);
+    for (const point of points) expect(Math.abs(field(point.x, point.y))).toBeLessThan(0.6);
+  });
+
+  it('clamps a corner radius larger than the box can hold', () => {
+    // An unclamped r makes the distance formula describe a shape bulging outside its
+    // own extent, which then escapes the bounds `bounded` and `sparse` derive and
+    // gets silently clipped. The clamp is what keeps every traversal agreeing.
+    const tracer = makeTracer();
+    const absurd = [{ x: 256, y: 256, hw: 40, hh: 20, r: 500 }];
+    const dense = tracer.trace(absurd, config({ traversal: 'dense', cell: 1 }));
+    const sparse = tracer.trace(absurd, config({ traversal: 'sparse', cell: 1 }));
+    expect(sparse.loopCount).toBe(dense.loopCount);
+    expect(sparse.pointCount).toBe(dense.pointCount);
+    expect(dense.loopCount).toBe(1);
+  });
+
+  it('agrees across traversals for boxes, as it does for balls', () => {
+    const tracer = makeTracer();
+    const boxes = [
+      { x: 140, y: 180, hw: 70, hh: 26, r: 12 },
+      { x: 300, y: 240, hw: 24, hh: 80, r: 24 },
+      { x: 380, y: 380, hw: 50, hh: 50, r: 4 },
+    ];
+    for (const cell of CELLS) {
+      const dense = tracer.trace(boxes, config({ traversal: 'dense', cell }));
+      const reference = `${dense.loopCount}/${dense.pointCount}`;
+      for (const traversal of ['bounded', 'sparse'] as const) {
+        const stats = tracer.trace(boxes, config({ traversal, cell }));
+        expect(`${stats.loopCount}/${stats.pointCount}`).toBe(reference);
+      }
+    }
+  });
+
+  it('closes every loop for boxes sitting on the frame', () => {
+    const tracer = makeTracer();
+    const onFrame = [
+      { x: 0, y: VIEW / 2, hw: 60, hh: 30, r: 10 },
+      { x: VIEW, y: VIEW, hw: 40, hh: 40, r: 40 },
+    ];
+    for (const cell of CELLS) {
+      tracer.trace(onFrame, config({ cell }));
+      expect(tracer.loops.length).toBeGreaterThan(0);
+      for (let index = 0; index < tracer.loops.length; index++) {
+        expect(longestStep(loopPoints(tracer, index))).toBeLessThanOrEqual(cell * Math.SQRT2 + 1e-6);
+      }
+    }
+  });
+});
+
+/**
+ * The trap that makes a domain derived from a measured element size quietly stop
+ * being a quadtree. `traverseSparse` roots at `nx & -nx`, so an odd `nx` roots at 1,
+ * every root is a leaf, and the walk becomes a flat scan plus a wasted probe per
+ * cell — worse than `dense`, with nothing raised.
+ */
+describe('quadtreeSafeView', () => {
+  it('pads a region size to a domain that still subdivides', () => {
+    for (const region of [1, 200, 500, 640, 734, 863, 990, 1024, 1500]) {
+      const view = quadtreeSafeView(region);
+      expect(view).toBeGreaterThanOrEqual(region);
+      expect(view % QUADTREE_TILE).toBe(0);
+
+      const tracer = new ContourTracer(view, QUADTREE_TILE / 2, MIN_CELL);
+      for (const cell of [8, 4, 2, 1]) {
+        // 256 divides by every supported cell, so the coarsest still roots at 32.
+        expect(tracer.quadtreeTileFor(cell)).toBeGreaterThanOrEqual(32);
+      }
+    }
+  });
+
+  it('demonstrates the degeneration it exists to prevent', () => {
+    // Proof the check above can see the bug: fit the domain to the region instead of
+    // padding it, and the roots collapse to single cells.
+    const fitted = new ContourTracer(734, 128, MIN_CELL);
+    expect(fitted.traced).toBe(990);
+    expect(fitted.quadtreeTileFor(2)).toBe(1);
+
+    const padded = new ContourTracer(quadtreeSafeView(734), 128, MIN_CELL);
+    expect(padded.quadtreeTileFor(2)).toBe(512);
+  });
+
+  it('leaves the shipped domain alone', () => {
+    // 512 + 2*128 = 768 was already healthy; the helper must not move it.
+    expect(quadtreeSafeView(VIEW)).toBe(VIEW);
+    expect(makeTracer().quadtreeTileFor(2)).toBe(128);
   });
 });
 
