@@ -41,3 +41,4 @@ them.
 | [2026-07-wasm-kernel-headroom](./2026-07-wasm-kernel-headroom/README.md)                     | With the quadtree shipped, is the remaining kernel worth a Rust/WASM port?   | No — the 2.5× is in the loop, not the language.     |
 | [2026-07-contour-to-dom](./2026-07-contour-to-dom/README.md)                                 | What does moving the contour from canvas into SVG and `clip-path` cost?      | The `d` string, ~6.4× a `Path2D`. Not the clip.     |
 | [2026-07-corner-shape-superellipse](./2026-07-corner-shape-superellipse/README.md)           | Why does corner smoothing shrink the corner, and never make a circle?        | It is corner-box-confined — 1.4334, and never.      |
+| [2026-07-metasurface-dom-field](./2026-07-metasurface-dom-field/README.md)                   | What does it take to seed the distance field from laid-out DOM rects?        | The shape work is free; never derive the domain.    |
