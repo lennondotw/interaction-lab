@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { MetaSurface } from './meta-surface.js';
+import { MetaSurfaceProbe } from './surface-probe.js';
 import type { SurfaceTraceResult } from './use-surface-trace.js';
 
 /**
@@ -93,4 +94,14 @@ export const Default: StoryObj = {
       </div>
     );
   },
+};
+
+/**
+ * The instrument. Each case mutates the layout and reports whether the contour kept up,
+ * measured rather than eyeballed — a surface that misses a participant reports the
+ * wrong topology, and a plausible blob does not look wrong.
+ */
+export const LayoutTracking: StoryObj = {
+  parameters: { layout: 'fullscreen', controls: { disable: true } },
+  render: () => <MetaSurfaceProbe />,
 };
