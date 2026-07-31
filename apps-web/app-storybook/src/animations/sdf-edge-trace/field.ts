@@ -185,6 +185,28 @@ const MAX_SHAPES = 64;
 const MIN_BLEND = 1e-6;
 
 /**
+ * Shape count at and above which `sdf` pays for its per-shape early-out.
+ *
+ * The payoff depends on how densely packed the shapes are relative to `blend`, not on how
+ * many there are, because near the contour the running `d` is close to 0 and the test
+ * reduces to "is this shape more than `blend` away". Measured end to end:
+ *
+ * | shapes | spread over a page | packed into a row |
+ * | -----: | -----------------: | ----------------: |
+ * |      4 |             ×1.09  |            ×0.83  |
+ * |      9 |             ×1.26  |     ×0.95 (n=8)   |
+ * |     36 |             ×1.53  |    ×1.17 (n=32)   |
+ * |     64 |             ×1.60  |            ×1.17  |
+ *
+ * Cards spread over a page are the case it helps; a packed row is the case where the
+ * neighbours genuinely are within `blend` and genuinely do contribute, so nothing can be
+ * skipped and the bound is pure overhead. 8 is where the worst packed regression has
+ * shrunk to ~5% while the spread win is already 26% — and it keeps the 4-ball ring the
+ * archived timings were taken on off this path entirely.
+ */
+const SKIP_MIN_SHAPES = 8;
+
+/**
  * Granularity the sampled domain must be a multiple of, and the largest quadtree
  * root the forest will use.
  *
@@ -443,12 +465,45 @@ export class ContourTracer {
     return s;
   }
 
-  /** Quadratic smooth-min over the shapes' SDFs. Returns a distance in domain units. */
+  /**
+   * Quadratic smooth-min over the shapes' SDFs. Returns a distance in domain units.
+   *
+   * The fold visits every shape, which makes a sample O(shapes) and the whole trace
+   * O(perimeter × shapes) — and perimeter grows with shape count too, so the naive cost
+   * is quadratic. Measured on a packed row: 32.9 ns/eval at 2 shapes rising to 583.6 at
+   * 64, which is 0.073ms against 41.3ms.
+   *
+   * `SKIP_MIN_SHAPES` and up, each shape gets an exact early-out first. A shape whose
+   * distance exceeds the running minimum by more than `k` contributes *nothing*: `h`
+   * clamps to 0, so the fold degenerates to `d = min(d, di) = d`. Testing that needs a
+   * lower bound on the box distance cheaper than the distance itself, and
+   * `max(|dx| - hw, |dy| - hh)` is one — the Chebyshev reading, no sqrt.
+   *
+   * Two properties this deliberately keeps:
+   *
+   * - **Exact.** Skipped folds were no-ops, so the result is bit-identical. Verified
+   *   against the unskipped loop at Δ = 0.
+   * - **Order-preserving.** Shapes are still visited in index order, which matters more
+   *   than it looks: the iterated quadratic smin is *not* commutative. Four overlapping
+   *   shapes give results spread over 1.14px depending on fold order. Reordering to reach
+   *   a tight `d` sooner is worth up to 6× at 128 shapes and cannot be done — a corner's
+   *   value would depend on when it was computed, breaking both the corner cache and the
+   *   dense-vs-sparse agreement. See archive/2026-07-sdf-field-throughput.
+   */
   private sdf(x: number, y: number): number {
     this.evals++;
     const k = this.blend;
+    const n = this.shapeCount;
+    // Loop-invariant, so the branch inside costs nothing: below the threshold the bound's
+    // own arithmetic is more than folding the handful of shapes it would save.
+    const skip = n >= SKIP_MIN_SHAPES;
     let d = 1e9;
-    for (let i = 0; i < this.shapeCount; i++) {
+    for (let i = 0; i < n; i++) {
+      if (skip) {
+        const dx = Math.abs(x - (this.shapeX[i] ?? 0)) - (this.shapeHW[i] ?? 0);
+        const dy = Math.abs(y - (this.shapeY[i] ?? 0)) - (this.shapeHH[i] ?? 0);
+        if (Math.max(dx, dy) > d + k) continue;
+      }
       const di = this.shapeDistance(i, x, y);
       const h = Math.max(k - Math.abs(d - di), 0) / k;
       d = Math.min(d, di) - h * h * k * 0.25;
