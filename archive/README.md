@@ -40,3 +40,4 @@ them.
 | [2026-07-contour-domain-overscan](./2026-07-contour-domain-overscan/README.md)               | How far past the frame must the contour be traced, and what does it cost?    | 128px — free for the quadtree, 2.25× for dense.     |
 | [2026-07-wasm-kernel-headroom](./2026-07-wasm-kernel-headroom/README.md)                     | With the quadtree shipped, is the remaining kernel worth a Rust/WASM port?   | No — the 2.5× is in the loop, not the language.     |
 | [2026-07-contour-to-dom](./2026-07-contour-to-dom/README.md)                                 | What does moving the contour from canvas into SVG and `clip-path` cost?      | The `d` string, ~6.4× a `Path2D`. Not the clip.     |
+| [2026-07-corner-shape-superellipse](./2026-07-corner-shape-superellipse/README.md)           | Why does corner smoothing shrink the corner, and never make a circle?        | It is corner-box-confined — 1.4334, and never.      |

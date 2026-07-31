@@ -2,21 +2,60 @@ import { cn } from '@monorepo/utils';
 import { Slot } from 'radix-ui';
 import type { CSSProperties, FC, HTMLAttributes } from 'react';
 
-/** The squircle the corners are cut with when `cornerSmoothing` is on. */
-const CORNER_SHAPE = 'superellipse(1.6)';
 /**
- * How much the radius is inflated to compensate for the superellipse, which reads
- * visibly tighter than the circular arc of the same nominal radius because it
- * spends less of the corner at full curvature. `radius={16}` should look like the
- * same size of corner whether it is smoothed or not.
- *
- * The factor lives in CSS rather than here, in an `@supports` variant on the
- * class list, and the radius is emitted as `calc()` against it. That is what ties
- * the compensation to the thing it compensates for: a browser without
- * `corner-shape` drops the superellipse but would otherwise keep the inflated
- * radius, leaving a plain circular corner 50% larger than the one asked for. The
- * `var()` fallback of `1` means the two can only fail together.
+ * `corner-shape`'s parameter is the *log* of the curve's exponent: the corner is
+ * `|x/r|ⁿ + |y/r|ⁿ = 1` with `n = 2ᵏ`. So `k = 1` is `n = 2`, an ordinary circular
+ * arc — which is why Chrome reports plain `round` as `superellipse(1)` — `k = 0` is
+ * `n = 1`, a straight bevel, and `k` below zero scoops the corner inward. `1.6`
+ * puts `n` at ≈3.03, the usual approximation of the Apple squircle.
  */
+const CORNER_SHAPE_K = 1.6;
+const CORNER_SHAPE = `superellipse(${CORNER_SHAPE_K})`;
+
+/**
+ * How deep a corner of exponent `n` bites toward the sharp corner, in units of the
+ * radius. Setting `x = y` in `|x/r|ⁿ + |y/r|ⁿ = 1` puts the apex of the curve at
+ * `r·(1 − 2^(−1/n))` on each axis; the extra `√2` of the diagonal is common to
+ * every `n` and cancels out of the ratio below.
+ */
+const cornerDepth = (n: number): number => 1 - 2 ** (-1 / n);
+
+/**
+ * How much the radius is inflated so a smoothed corner reads at the size that was
+ * asked for.
+ *
+ * The superellipse is confined to the same `r × r` corner box as the arc it
+ * replaces, and buys its curvature continuity by hugging the sharp corner instead
+ * of spreading along the edges the way Apple's and Figma's smoothing do. At
+ * `n ≈ 3.03` it bites only `0.204r` deep against the arc's `0.293r`, so the same
+ * `radius` reads as a visibly *smaller* corner and has to be paid back — which is
+ * the whole reason this constant exists.
+ *
+ * Derived rather than written down. It comes to ≈1.4334, where the 1.5 this was
+ * ported with overshot by ~4.6%; deriving it also means moving `CORNER_SHAPE_K`
+ * cannot leave behind a compensation belonging to a curve that is no longer drawn.
+ * Confirmed against the rendered geometry — hit-testing the diagonal in Chrome at
+ * `r = 100` finds the boundary at 40.72px for the arc and 28.21px for the
+ * superellipse, a ratio of 1.443 against the predicted 1.4334.
+ *
+ * See `archive/2026-07-corner-shape-superellipse`.
+ */
+const CORNER_RADIUS_COMPENSATION = cornerDepth(2) / cornerDepth(2 ** CORNER_SHAPE_K);
+
+/**
+ * The compensation is carried as a custom property and applied by CSS, not by the
+ * arithmetic above. JS owns the number; an `@supports` variant on the class list
+ * owns whether it is used at all, and the radius is emitted as `calc()` against
+ * the result.
+ *
+ * That split is what ties the compensation to the thing it compensates for. A
+ * browser without `corner-shape` drops the superellipse but would happily keep an
+ * inflated radius, leaving a plain circular corner 43% larger than the one asked
+ * for — so the factor has to be gated by the same condition that decides whether
+ * the superellipse is drawn, and that condition only exists in CSS. The `var()`
+ * fallback of `1` is the unsupported path: no shape, no compensation.
+ */
+const COMPENSATION_VAR = '--rounded-outlined-container-radius-compensation';
 const RADIUS_SCALE_VAR = '--rounded-outlined-container-radius-scale';
 
 export interface RoundedOutlinedContainerProps extends HTMLAttributes<HTMLElement> {
@@ -30,6 +69,11 @@ export interface RoundedOutlinedContainerProps extends HTMLAttributes<HTMLElemen
   /**
    * Cut the corners as a superellipse rather than a circular arc, and scale
    * `radius` so the corner still reads at the size that was asked for.
+   *
+   * Not compatible with a circle or a pill, and not by omission: a superellipse of
+   * exponent `n ≠ 2` is not a circle, so once `radius` is large enough to consume
+   * the straight edges the whole outline becomes the curve and the shape is a
+   * squircle. Leave this off for `50%` and `9999px`.
    */
   cornerSmoothing?: boolean;
   /**
@@ -88,7 +132,7 @@ export const RoundedOutlinedContainer: FC<RoundedOutlinedContainerProps> = ({
         `
           relative isolate bg-white outline-1 -outline-offset-1 outline-black/10
           [corner-shape:var(--rounded-outlined-container-corner-shape)]
-          supports-[corner-shape:superellipse(1.6)]:[--rounded-outlined-container-radius-scale:1.5]
+          supports-[corner-shape:superellipse(1.6)]:[--rounded-outlined-container-radius-scale:var(--rounded-outlined-container-radius-compensation)]
           dark:bg-white/10 dark:outline-white/20
         `,
         className
@@ -104,6 +148,7 @@ export const RoundedOutlinedContainer: FC<RoundedOutlinedContainerProps> = ({
 
 type CornerStyle = CSSProperties & {
   '--rounded-outlined-container-corner-shape'?: string;
+  '--rounded-outlined-container-radius-compensation'?: number;
 };
 
 const getCornerStyle = ({
@@ -113,9 +158,17 @@ const getCornerStyle = ({
   cornerSmoothing: boolean;
   radius?: CSSProperties['borderRadius'];
 }): CornerStyle | undefined => {
-  // Left unset when smoothing is off: `corner-shape: var(--…)` with no value
-  // behind it is invalid at computed-value time, which falls back to `round`.
-  const shape = cornerSmoothing ? { '--rounded-outlined-container-corner-shape': CORNER_SHAPE } : undefined;
+  // Both left unset when smoothing is off. `corner-shape: var(--…)` with nothing
+  // behind it is invalid at computed-value time, which falls back to `round`; and
+  // an unset compensation makes the scale variable resolve to its `1` fallback,
+  // so an unsmoothed radius cannot pick up a factor meant for a curve it is not
+  // being drawn with.
+  const shape = cornerSmoothing
+    ? {
+        [COMPENSATION_VAR]: CORNER_RADIUS_COMPENSATION,
+        '--rounded-outlined-container-corner-shape': CORNER_SHAPE,
+      }
+    : undefined;
 
   if (radius === undefined) return shape;
 

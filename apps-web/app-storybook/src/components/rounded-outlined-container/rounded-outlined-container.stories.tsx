@@ -37,12 +37,36 @@ export default meta;
 /** One container, centered, every prop live in Controls. */
 export const Default: Story = {};
 
+/**
+ * A true circle — but only with `cornerSmoothing` off. Turn it on and this is the
+ * clearest place to watch the superellipse degenerate, which is why the knob is
+ * left on the story rather than removed from it.
+ *
+ * At `50%` there is no straight edge left anywhere on the box, so the whole outline
+ * *is* the corner curve — and `|x|ⁿ + |y|ⁿ = 1` at `n ≈ 3.03` is a squircle by
+ * definition, not a circle with nicer corners. Measured radially from the centre,
+ * the arc holds its nominal radius to within 0.01px all the way round; the
+ * superellipse holds it at 0° and 90° and bulges 12.5% at 45°. No value of `radius`
+ * makes smoothing produce a circle. Only `k = 1` does, and `k = 1` is the arc.
+ *
+ * The compensation correctly does nothing here: percentages are never scaled, since
+ * `50%` already means "half of this box".
+ */
 export const Circle: Story = {
-  // 50% is deliberately left unscaled by `cornerSmoothing` — it already means
-  // "half of this box", so the unsmoothed variant stays a true circle.
   args: { radius: '50%', className: 'size-40' },
 };
 
+/**
+ * The same degeneration along one axis. `9999px` clamps to half the height, so the
+ * end caps are corner curves spanning the full height: semicircular with smoothing
+ * off — measured constant to 0.3% — and superelliptical with it on, 12.8% fatter on
+ * the diagonal. That flattened cap is why the smoothed variant reads as a rounded
+ * rectangle instead of a pill.
+ *
+ * Compensation is a no-op here too, for a different reason than the circle's:
+ * `9999px` inflated by anything still clamps to the same half-height. On a pill,
+ * smoothing changes the shape of the cap and can never change its size.
+ */
 export const Pill: Story = {
   args: { radius: '9999px', className: 'h-16 w-72' },
 };
@@ -88,6 +112,11 @@ const SHAPES = [
  * Every shape against both corner shapes. Smoothing is the half of the radius
  * handling that cannot be judged from a single instance — a superellipse only
  * reads as wrong next to the circular arc it replaced.
+ *
+ * Read left to right and the degeneration is the story: `50%` and `9999px` cannot
+ * survive smoothing, because they leave no straight edge for the curve to be a
+ * corner *of*, while `24` and the four-corner shorthand are the cases the
+ * compensation is for. See `archive/2026-07-corner-shape-superellipse`.
  */
 export const ShapeMatrix: Story = {
   parameters: {
