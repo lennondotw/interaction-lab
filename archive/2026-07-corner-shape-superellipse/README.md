@@ -34,12 +34,24 @@ confirms it (`r = 300px`):
 | `superellipse(2)`   | **`squircle`**      |  66.09px |       4.093 |     4 |
 | `superellipse(3)`   | `superellipse(3)`   |  33.81px |       8.347 |     8 |
 
-The canonicalised keywords in bold are the giveaway: Chrome round-trips
-`superellipse(1)` as `round`, which is why our container's computed
-`corner-shape` reads `superellipse(1)` when nothing has been set. A circular arc
-is not the absence of a superellipse — it is the `n = 2` member of the family,
-and the family interpolates from bevel (`n = 1`) through circle (`n = 2`) toward
-a square corner (`n → ∞`). Negative `k` scoops the corner inward instead.
+The canonicalised keywords in bold are the giveaway. A circular arc is not the
+absence of a superellipse — it is the `n = 2` member of the family, and every
+named corner keyword is an alias for a point on the `k` axis:
+
+| keyword    |  `k` |   `n` |
+| ---------- | ---: | ----: |
+| `notch`    | `-∞` | `→ 0` |
+| `scoop`    | `-1` | `0.5` |
+| `bevel`    |  `0` |   `1` |
+| `round`    |  `1` |   `2` |
+| `squircle` |  `2` |   `4` |
+| `square`   | `+∞` | `→ ∞` |
+
+Which side of that equivalence gets serialised is version-dependent, so do not
+read meaning into the literal computed value: the Chromium Playwright pins here
+canonicalises `superellipse(0)` to `bevel`, while Chrome 152 goes the other way
+and reports `superellipse(0)` for a specified `bevel`. Convert to `k` before
+comparing.
 
 ## Why the corner shrinks
 
