@@ -41,3 +41,4 @@ workspace-tmp/
 # Wrangler files
 .wrangler/
 .dev.vars*
+.playwright-mcp/

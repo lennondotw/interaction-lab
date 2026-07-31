@@ -43,6 +43,28 @@ export const createBalls = (count: number): Ball[] =>
     };
   });
 
+export type Arrangement = 'ring' | 'neck';
+
+/**
+ * Two balls close enough for the blend to bridge them, leaving a waist much
+ * thinner than either lobe.
+ *
+ * The arrangement exists to separate the two ways of drawing an inner border. A
+ * stroke clipped to the shape follows the outline through the waist whatever its
+ * width, because it is the outline pushed inward. A true iso offset stops
+ * existing there once the inset exceeds half the waist — measured at inset 26 for
+ * this spacing, where one surface loop becomes two inner loops. Same shape, same
+ * requested width, genuinely different answer, and only one of them is what
+ * "16px in from the edge" actually means.
+ */
+export const createNeckedBalls = (): Ball[] => [
+  { x: VIEW / 2 - 65, y: VIEW / 2 },
+  { x: VIEW / 2 + 65, y: VIEW / 2 },
+];
+
+export const createArrangement = (arrangement: Arrangement, count: number): Ball[] =>
+  arrangement === 'neck' ? createNeckedBalls() : createBalls(count);
+
 /**
  * Drives the balls along lissajous-ish orbits that repeatedly merge and split
  * them. Mutates in place — the caller owns the array, and this runs per frame.
