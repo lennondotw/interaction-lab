@@ -25,6 +25,7 @@
 import { Button } from '#src/components/button/button.js';
 import { cn } from '@monorepo/utils';
 import { useIntervalEffect, useMeasure } from '@react-hookz/web';
+import { useAnimationFrame } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import { timeBatched } from '../bench-timing.js';
 import { Field, Segmented, Stat, Toggle } from '../controls.js';
@@ -32,6 +33,8 @@ import { ContourTracer, quadtreeSafeView, type FieldShape, type TraceConfig, typ
 import { ShapeRegistry, useRegisteredRect } from '../rect-registry.js';
 import { CELL_SIZES, RollingMedian } from '../shape.js';
 import { renderRectScene } from './rect-renderer.js';
+import { TraceChart } from './trace-chart.js';
+import { TraceLog, type TraceHistory } from './trace-log.js';
 
 const OVERSCAN = 128;
 const STAT_WINDOW = 45;
@@ -41,13 +44,16 @@ const INSETS = [0, 8, 16] as const;
  * Region widths the `fit domain` demo can be pinned to.
  *
  * The cliff is *width-dependent*, which is exactly what makes it a trap: at most widths a
- * fitted domain roots acceptably and nothing looks wrong. 990 is one that does not —
- * `990 + 2*128 = 1246`, `nx = 623` at cell 2, which is odd, so the forest roots at 1 and
- * every root is a leaf. 640 and 734 are the neighbours that bracket it: one roots fine,
- * one collapses. Leaving this on `auto` would make the toggle demonstrate the cliff only
- * by luck.
+ * fitted domain roots acceptably and nothing looks wrong, so leaving this on `auto` would
+ * demonstrate it only by luck.
+ *
+ * A fitted domain roots at 1 when `(width + 2*128) / cell` comes out odd. At cell 2 that
+ * means widths congruent to 2 mod 4, so **630** collapses (`886 / 2 = 443`) while 512 roots
+ * at 128 and 448 at 32. All three are under the column's own width — an earlier pass used
+ * 990, which silently did nothing because the control sets a maximum and the column is only
+ * ~680px inside `max-w-6xl` beside the panel.
  */
-const WIDTHS = ['auto', 990, 734, 640] as const;
+const WIDTHS = ['auto', 630, 512, 448] as const;
 type WidthMode = (typeof WIDTHS)[number];
 
 const numberFormatter = new Intl.NumberFormat('en-US');
@@ -89,6 +95,8 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
 
   const registry = useMemo(() => new ShapeRegistry(), []);
   const samples = useMemo(() => new RollingMedian(STAT_WINDOW), []);
+  const traceLog = useMemo(() => new TraceLog(), []);
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const lastRef = useRef<LiveStats | null>(null);
   /** Last traced geometry + config, so `Measure` can re-time exactly what is on screen. */
   const configRef = useRef<{ shapes: readonly FieldShape[]; config: TraceConfig } | null>(null);
@@ -109,6 +117,8 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
    * outlive the thing it describes.
    */
   const [measured, setMeasured] = useState<{ ms: number; signature: string } | null>(null);
+  const [autoplay, setAutoplay] = useState(false);
+  const [history, setHistory] = useState<TraceHistory>(() => traceLog.read());
   const [showOverlay, setShowOverlay] = useState(true);
   const [showRects, setShowRects] = useState(true);
   const [showFill, setShowFill] = useState(true);
@@ -156,8 +166,10 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
 
     const start = performance.now();
     tracer.trace(shapes, config);
-    samples.push(performance.now() - start);
+    const elapsed = performance.now() - start;
+    samples.push(elapsed);
     const result = tracer.trace(shapes, config);
+    traceLog.push(elapsed, result.fieldEvals);
     configRef.current = { shapes, config };
 
     lastRef.current = {
@@ -198,6 +210,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
     showFill,
     showOverlay,
     showRects,
+    traceLog,
     tracer,
     traversal,
     width,
@@ -225,10 +238,46 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
     };
   }, [registry, schedule]);
 
+  /**
+   * Autoplay drives `width` and `gap` — layout properties, deliberately, not transforms.
+   * A transform would move the boxes on screen while the field stayed put, because the
+   * measurement is a layout anchor and transforms fire no observer. Animating layout is
+   * what makes this exercise the real path: resize observed, registry updated, redraw
+   * coalesced onto a frame. It is also why the chart fills up while it runs.
+   *
+   * Written straight to the elements rather than through state: a React render per frame
+   * would be a cost the tracer is being blamed for.
+   */
+  useAnimationFrame((time) => {
+    if (!autoplay) return;
+    const row = rowRef.current;
+    if (!row) return;
+    row.style.gap = `${(6 + 26 * (0.5 + 0.5 * Math.sin(time / 900))).toFixed(1)}px`;
+    for (let index = 0; index < row.children.length; index++) {
+      const child = row.children[index];
+      if (!(child instanceof HTMLElement)) continue;
+      child.style.width = `${(70 + 46 * (0.5 + 0.5 * Math.sin(time / 700 + index))).toFixed(1)}px`;
+    }
+  });
+
+  // Hand layout back to the controls when autoplay stops, or the last animated frame
+  // would stick and the `Gap` control would look broken.
+  useEffect(() => {
+    if (autoplay) return;
+    const row = rowRef.current;
+    if (!row) return;
+    row.style.removeProperty('gap');
+    for (const child of row.children) {
+      if (child instanceof HTMLElement) child.style.removeProperty('width');
+    }
+  }, [autoplay, count, pill]);
+
   useIntervalEffect(() => {
     const last = lastRef.current;
-    if (last === null) return;
-    setStats({ ...last, traceMs: samples.value });
+    if (last !== null) setStats({ ...last, traceMs: samples.value });
+    // Polled rather than pushed: `idle` is the *absence* of traces, so nothing fires to
+    // announce it and only a clock can notice.
+    setHistory(traceLog.read());
   }, 200);
 
   const signature = `${traversal}|${cell}|${blend}|${inset}|${count}|${String(pill)}|${gap}|${String(fitDomain)}|${String(widthMode)}`;
@@ -279,10 +328,11 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
           <div
             ref={containerRef}
             className="relative w-full"
-            style={{ maxWidth: widthMode === 'auto' ? undefined : widthMode }}
+            style={widthMode === 'auto' ? undefined : { width: widthMode, maxWidth: widthMode, flex: 'none' }}
           >
             <canvas ref={canvasRef} style={{ width, height }} className="pointer-events-none absolute inset-0" />
             <div
+              ref={rowRef}
               data-testid="rect-region"
               className={cn('flex w-full flex-row items-center justify-center py-10')}
               style={{ gap }}
@@ -372,7 +422,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
                 options={WIDTHS.map((value) => ({
                   value,
                   label: `${value}`,
-                  title: value === 990 ? 'Roots at 1 when the domain is fitted' : undefined,
+                  title: value === 630 ? 'Roots at 1 when the domain is fitted' : undefined,
                 }))}
               />
             </Field>
@@ -392,10 +442,13 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
             <Toggle label="pills" checked={pill} onChange={setPill} />
             <Toggle label="domain edge" checked={showDomain} onChange={setShowDomain} />
             <Toggle label="fit domain" checked={fitDomain} onChange={setFitDomain} />
+            <Toggle label="autoplay" checked={autoplay} onChange={setAutoplay} />
             <Button size="sm" onClick={runMeasure} data-testid="measure" allPossibleContents={['Measure']}>
               Measure
             </Button>
           </div>
+
+          <TraceChart history={history} />
 
           <div
             className={`

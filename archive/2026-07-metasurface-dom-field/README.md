@@ -77,11 +77,13 @@ the two are equal.
 root size so the failure is assertable rather than silent. A unit test fits a domain on
 purpose to prove the check can see the bug.
 
-The `Animations/SdfEdgeTrace/RectField` story reproduces it live: pin `Width` to 990,
-toggle `fit domain`, and `root` drops to 1 while `probes` goes from 4,517 to 388,129 and
-the measured trace from 0.259ms to 11.1ms — 43x. Pinning the width is necessary because
-the cliff is **width-dependent**, which is the whole reason it is a trap: at most sizes a
-fitted domain roots acceptably and nothing looks wrong.
+The `Animations/SdfEdgeTrace/RectField` story reproduces it live: pin `Width` to 630,
+toggle `fit domain`, and `root` drops to 1 while `probes` and the measured trace jump.
+Pinning the width is necessary because the cliff is **width-dependent** — a fitted domain
+roots at 1 only when `(width + 2*overscan) / cell` comes out odd, so at most sizes it
+roots acceptably and nothing looks wrong. That is the whole reason it is a trap. (The
+table above uses 990 for the same arithmetic; the story uses 630 because its column is
+narrower than 990.)
 
 Two consequences worth stating:
 
