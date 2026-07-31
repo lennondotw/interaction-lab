@@ -32,6 +32,23 @@ export interface StepTransitionProps {
    * @default false
    */
   noFilter?: boolean;
+  /**
+   * Lay the showing step out in normal flow instead of `absolute inset-0`.
+   *
+   * Off by default because a step that fills its host is what a fixed-size stage
+   * wants, and it is also the only shape that works without a host size: every step
+   * is out of flow, so the wrapper has no intrinsic height at all and the caller is
+   * expected to give it one.
+   *
+   * On, the showing step keeps a natural height and the wrapper is as tall as
+   * whatever is currently showing — which is what a surface that fits its content
+   * has to measure. The step *leaving* still goes out of flow either way:
+   * `AnimatePresence mode='popLayout'` pins it at its old box, so it slides out
+   * without holding the wrapper open at the height it is leaving.
+   *
+   * @default false
+   */
+  inFlow?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -118,6 +135,13 @@ const hiddenStyle: CSSProperties = {
 
 const fillStyle: CSSProperties = { position: 'absolute', inset: 0 };
 
+/**
+ * The `inFlow` counterpart. Still a positioning context, so `popLayout`'s absolute
+ * pin on the outgoing step resolves against the wrapper rather than against
+ * whatever further up the tree happens to be positioned.
+ */
+const inFlowStyle: CSSProperties = { position: 'relative' };
+
 export const StepTransition: FC<StepTransitionProps> = ({
   step,
   children,
@@ -125,6 +149,7 @@ export const StepTransition: FC<StepTransitionProps> = ({
   next,
   mode = 'slide',
   noFilter = false,
+  inFlow = false,
   className,
   style,
 }) => {
@@ -153,6 +178,7 @@ export const StepTransition: FC<StepTransitionProps> = ({
 
   const variants = VARIANTS[mode][noFilter ? 'plain' : 'filtered'](step);
   const duration = DURATIONS[mode];
+  const stepStyle = inFlow ? inFlowStyle : fillStyle;
 
   return (
     <div className={className} style={{ position: 'relative', ...style }}>
@@ -168,7 +194,7 @@ export const StepTransition: FC<StepTransitionProps> = ({
       )}
 
       {prefersReducedMotion ? (
-        <div key={step} style={fillStyle}>
+        <div key={step} style={stepStyle}>
           {children}
         </div>
       ) : (
@@ -181,7 +207,7 @@ export const StepTransition: FC<StepTransitionProps> = ({
             animate="center"
             exit="exit"
             transition={{ duration, ease: STEP_TRANSITION_EASE }}
-            style={fillStyle}
+            style={stepStyle}
           >
             {children}
           </motion.div>
