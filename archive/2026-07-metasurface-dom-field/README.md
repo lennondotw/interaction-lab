@@ -77,6 +77,12 @@ the two are equal.
 root size so the failure is assertable rather than silent. A unit test fits a domain on
 purpose to prove the check can see the bug.
 
+The `Animations/SdfEdgeTrace/RectField` story reproduces it live: pin `Width` to 990,
+toggle `fit domain`, and `root` drops to 1 while `probes` goes from 4,517 to 388,129 and
+the measured trace from 0.259ms to 11.1ms — 43x. Pinning the width is necessary because
+the cliff is **width-dependent**, which is the whole reason it is a trap: at most sizes a
+fitted domain roots acceptably and nothing looks wrong.
+
 Two consequences worth stating:
 
 - **A square domain over a non-square region costs nothing for the empty part.** The

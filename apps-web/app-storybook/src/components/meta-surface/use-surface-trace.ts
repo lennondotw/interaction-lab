@@ -20,8 +20,8 @@ import {
   type FieldShape,
   type TraceConfig,
 } from '#src/animations/sdf-edge-trace/field.js';
+import type { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ShapeRegistry } from './registry.js';
 
 /** Margin sampled past the region, and half the quadtree tile. */
 export const SURFACE_OVERSCAN = 128;
