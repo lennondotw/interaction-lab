@@ -1,5 +1,5 @@
-import { buildPath2D } from './contour-path.js';
-import { Ball, CELL_LEAF, ContourTracer } from './field.js';
+import { buildPath2D } from '../contour-path.js';
+import { Ball, CELL_LEAF, ContourTracer } from '../field.js';
 
 /**
  * Fixed palette rather than themed colours: the canvas draws over a

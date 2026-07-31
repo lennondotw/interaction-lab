@@ -2,56 +2,32 @@ import { cn } from '@monorepo/utils';
 import { useIntervalEffect, useMeasure } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Field, Segmented, Stat, Toggle } from '../controls.js';
+import { Ball, ContourTracer, FieldKind, Traversal, effectiveTraversal } from '../field.js';
+import {
+  BLEND,
+  CELL_SIZES,
+  MAX_BALLS,
+  MIN_CELL,
+  OVERSCAN,
+  RADIUS,
+  SIGMA,
+  TRACED,
+  VIEW,
+  createBalls,
+  median,
+  orbitBalls,
+} from '../shape.js';
+import { useBallDrag } from '../use-ball-drag.js';
 import { BenchmarkPanel } from './benchmark-panel.js';
-import { Field, Segmented, Stat, Toggle } from './controls.js';
-import { Ball, ContourTracer, FieldKind, Traversal, effectiveTraversal } from './field.js';
 import { renderScene } from './renderer.js';
-import { useBallDrag } from './use-ball-drag.js';
 
-/** The visible, interactive box. Power of two so the quadtree tiles it cleanly. */
-const VIEW = 512;
-const MIN_CELL = 1;
-const CELL_SIZES = [8, 4, 2, 1] as const;
-const RADIUS = 60;
-const SIGMA = 12;
-const BLEND = 40;
-/**
- * Sampled beyond every side of the view. Ball centres are clamped to the view,
- * but the shape around a centre is not — it reaches `RADIUS + max(BLEND, 3 *
- * SIGMA)` = 100px further out — so a ball parked on the frame would have its
- * contour cut off there and come back as an open chain. 128 is that 100px bound
- * rounded up to a power of two, which keeps the 768px sampled domain tiling into
- * 256px quadtree roots.
- *
- * archive/2026-07-contour-domain-overscan measures both halves of that: 90.3px
- * is the worst reach any arrangement of 12 balls achieves against the 100px
- * bound, and the margin costs `sparse` 0.1% and `bounded` nothing. Only `dense`
- * pays for it, 2.25x, which is the O(area) tax showing up again.
- */
-const OVERSCAN = 128;
-const TRACED = VIEW + 2 * OVERSCAN;
-const MAX_BALLS = 12;
 const STAT_WINDOW = 90;
 
 const FIELD_HINTS = { sdf: 'distance', density: 'density, saturates' } as const;
 const ALL_FIELD_HINTS = [FIELD_HINTS.sdf, FIELD_HINTS.density] as const;
 /** The only degradation that exists: density + quadtree falls back to bounded. */
 const ALL_TRAVERSAL_HINTS = ['→ bounded'] as const;
-
-const createBalls = (count: number): Ball[] =>
-  Array.from({ length: count }, (_, index) => {
-    const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
-    return {
-      x: VIEW / 2 + Math.cos(angle) * 110,
-      y: VIEW / 2 + Math.sin(angle) * 110,
-    };
-  });
-
-const median = (values: readonly number[]): number => {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? 0;
-};
 
 const numberFormatter = new Intl.NumberFormat('en-US');
 
@@ -73,7 +49,7 @@ const EMPTY_STATS: LiveStats = {
   cellsCulled: 0,
 };
 
-export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
+export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [measures, containerRef] = useMeasure<HTMLDivElement>(true);
 
@@ -124,16 +100,7 @@ export const SdfEdgeTrace: FC<{ className?: string }> = ({ className }) => {
     const context = canvas.getContext('2d');
     if (!context) return;
 
-    if (autoplay && activeBallRef.current === null) {
-      const balls = ballsRef.current;
-      for (let index = 0; index < balls.length; index++) {
-        const ball = balls[index];
-        if (!ball) continue;
-        const phase = time / 1000 + (index * Math.PI * 2) / balls.length;
-        ball.x = VIEW / 2 + Math.cos(phase * 0.7) * (95 + 45 * Math.sin(phase * 0.9));
-        ball.y = VIEW / 2 + Math.sin(phase * 0.8) * (95 + 45 * Math.cos(phase * 1.1));
-      }
-    }
+    if (autoplay && activeBallRef.current === null) orbitBalls(ballsRef.current, time);
 
     const start = performance.now();
     const result = tracer.trace(ballsRef.current, {
