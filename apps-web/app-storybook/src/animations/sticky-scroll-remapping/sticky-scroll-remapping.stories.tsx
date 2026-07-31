@@ -75,9 +75,25 @@ export const SmoothRemap: Story = {
   },
 };
 
+export const SmoothRemapWithLenis: Story = {
+  args: {
+    children: renderSpecimen,
+    remap: true,
+    smoothScroll: true,
+  },
+};
+
 export const SmoothRemapWithColor: Story = {
   args: {
     children: renderColoredSpecimen,
     remap: true,
+  },
+};
+
+export const SmoothRemapWithColorAndLenis: Story = {
+  args: {
+    children: renderColoredSpecimen,
+    remap: true,
+    smoothScroll: true,
   },
 };

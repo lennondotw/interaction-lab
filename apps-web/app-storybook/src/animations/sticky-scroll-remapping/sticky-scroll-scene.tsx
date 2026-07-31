@@ -3,15 +3,22 @@ import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type
 import { useLayoutEffect, useRef, type FC, type ReactNode } from 'react';
 
 import { NativeScrollRuler } from '../../components/native-scroll-ruler/native-scroll-ruler.js';
+import { useLenisSmoothScroll } from './lenis-smooth-scroll.js';
 import { getStickyScrollCompensation } from './sticky-scroll-remapping.js';
 
 export interface StickyScrollSceneProps {
   children: (progress: MotionValue<number>) => ReactNode;
   className?: string;
   remap?: boolean;
+  smoothScroll?: boolean;
 }
 
-export const StickyScrollScene: FC<StickyScrollSceneProps> = ({ children, className, remap = false }) => {
+export const StickyScrollScene: FC<StickyScrollSceneProps> = ({
+  children,
+  className,
+  remap = false,
+  smoothScroll = false,
+}) => {
   const trackRef = useRef<HTMLElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
   const trackTop = useMotionValue(0);
@@ -49,6 +56,10 @@ export const StickyScrollScene: FC<StickyScrollSceneProps> = ({ children, classN
       viewportHeight: measuredViewportHeight,
     });
   });
+
+  // Hijacked scrolling is exactly what a reduced-motion preference asks us not to do, so it opts
+  // out of the smoothing along with the remap.
+  useLenisSmoothScroll(smoothScroll && !prefersReducedMotion);
 
   useLayoutEffect(() => {
     const track = trackRef.current;
