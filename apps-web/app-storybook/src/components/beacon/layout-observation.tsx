@@ -1,3 +1,15 @@
+import {
+  fmt,
+  framesText,
+  nextFrame,
+  sleep,
+  startSampling,
+  useTracer,
+  verdictOf,
+  type TraceEntry,
+  type TraceKind,
+  type Tracer,
+} from '#src/utils/observation-trace.js';
 import { cn } from '@monorepo/utils';
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type FC } from 'react';
 import { BeaconStoreContext } from './context.js';
@@ -15,22 +27,7 @@ import {
   type LayoutCase,
   type StageNodes,
 } from './layout-cases.js';
-import {
-  boxDelta,
-  boxText,
-  fmt,
-  framesText,
-  MATCH_EPSILON,
-  nextFrame,
-  sleep,
-  startSampling,
-  useLayoutTracer,
-  verdictOf,
-  type Box,
-  type LayoutTraceEntry,
-  type LayoutTraceKind,
-  type LayoutTracer,
-} from './layout-trace.js';
+import { boxDelta, boxText, MATCH_EPSILON, type Box } from './layout-trace.js';
 import { BeaconProvider } from './provider.js';
 import type { BeaconStore } from './store.js';
 import { useBeaconAnchor } from './use-beacon.js';
@@ -58,7 +55,7 @@ const BUTTON_CLASS = `
   disabled:cursor-default disabled:opacity-30 disabled:hover:bg-neutral-500/10
 `;
 
-const KIND_CLASS: Record<LayoutTraceKind, string> = {
+const KIND_CLASS: Record<TraceKind, string> = {
   case: 'font-semibold text-sky-500',
   setup: 'opacity-40',
   baseline: 'opacity-60',
@@ -68,7 +65,7 @@ const KIND_CLASS: Record<LayoutTraceKind, string> = {
   verdict: 'font-semibold',
 };
 
-const TraceLog: FC<{ tracer: LayoutTracer }> = ({ tracer }) => {
+const TraceLog: FC<{ tracer: Tracer }> = ({ tracer }) => {
   const entries = useSyncExternalStore(tracer.subscribe, tracer.getEntries);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +82,7 @@ const TraceLog: FC<{ tracer: LayoutTracer }> = ({ tracer }) => {
       {entries.length === 0 ? (
         <p className="opacity-40">Press a case.</p>
       ) : (
-        entries.map((entry: LayoutTraceEntry, i) => (
+        entries.map((entry: TraceEntry, i) => (
           <div key={i} className={cn('flex gap-2', KIND_CLASS[entry.kind])} style={{ whiteSpace: 'pre-wrap' }}>
             <span className="shrink-0 tabular-nums opacity-50" style={{ width: 44, textAlign: 'right' }}>
               {entry.t}ms
@@ -130,7 +127,7 @@ const StoreBridge: FC<{ storeRef: React.RefObject<BeaconStore | null> }> = ({ st
 };
 
 export const BeaconLayoutObservation: FC = () => {
-  const tracer = useLayoutTracer();
+  const tracer = useTracer();
   const storeRef = useRef<BeaconStore | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -211,7 +208,7 @@ export const BeaconLayoutObservation: FC = () => {
       await sleep(spec.tail ?? 500);
       const samples = stop();
 
-      const verdict = verdictOf(samples);
+      const verdict = verdictOf(samples, MATCH_EPSILON);
       tracer.log('frames', `Δ per frame: ${framesText(samples)}`);
       const recovery = !verdict.sawGap
         ? 'no frame ever disagreed'

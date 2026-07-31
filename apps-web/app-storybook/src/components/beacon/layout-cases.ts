@@ -18,7 +18,7 @@
  * imported without dragging a component along.
  */
 
-import { nextFrame, sleep } from './layout-trace.js';
+import { nextFrame, sleep } from '#src/utils/observation-trace.js';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Stage geometry. Fixed, and inline at the use site: these numbers are the
