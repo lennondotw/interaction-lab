@@ -174,6 +174,17 @@ const MAX_OVERLAY_CELLS = 16384;
 const MAX_SHAPES = 64;
 
 /**
+ * Floor on the smin blend radius.
+ *
+ * The fold divides by `blend`: `h = max(blend - |d - di|, 0) / blend`. At exactly 0
+ * that is `0 / 0`, so the first fold returns NaN and the entire field follows —
+ * every sample NaN, no iso crossings, an empty contour and no error. A caller
+ * sliding "how much do these merge" down to nothing is asking for no merging, not
+ * for a poisoned field, so it is clamped rather than rejected.
+ */
+const MIN_BLEND = 1e-6;
+
+/**
  * Granularity the sampled domain must be a multiple of, and the largest quadtree
  * root the forest will use.
  *
@@ -549,7 +560,7 @@ export class ContourTracer {
   trace(shapes: readonly FieldShape[], config: TraceConfig): TraceStats {
     this.kind = config.field;
     this.radius = config.radius;
-    this.blend = config.blend;
+    this.blend = Math.max(config.blend, MIN_BLEND);
     this.band = config.sigma * BAND_SIGMAS;
     this.collectCells = config.collectCells;
     // Before anything reads a shape: `loadShapes` resolves the optional fields

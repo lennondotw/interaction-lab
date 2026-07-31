@@ -1,0 +1,4 @@
+export { MetaSurfaceItem, type MetaSurfaceItemProps } from './meta-surface-item.js';
+export { MetaSurface, type MetaSurfaceProps, type OutlineMode } from './meta-surface.js';
+export { ShapeRegistry, rectToShape, type ShapeRect } from './registry.js';
+export { SURFACE_OVERSCAN, type SurfaceTraceResult } from './use-surface-trace.js';
