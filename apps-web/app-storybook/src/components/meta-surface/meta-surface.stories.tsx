@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Eraser, Pencil, Square, Type } from 'lucide-react';
 import { useState } from 'react';
 import { MetaSurface } from './meta-surface.js';
 import { MetaSurfaceProbe } from './surface-probe.js';
+import { ToolbarGroup } from './toolbar-group.js';
 import type { SurfaceTraceResult } from './use-surface-trace.js';
 
 /**
@@ -104,4 +106,49 @@ export const Default: StoryObj = {
 export const LayoutTracking: StoryObj = {
   parameters: { layout: 'fullscreen', controls: { disable: true } },
   render: () => <MetaSurfaceProbe />,
+};
+
+const TOOLBAR_ACTIONS = [
+  { id: 'draw', label: 'Draw', icon: <Pencil className="size-5" /> },
+  { id: 'shape', label: 'Shape', icon: <Square className="size-5" /> },
+  { id: 'text', label: 'Text', icon: <Type className="size-5" /> },
+  { id: 'erase', label: 'Erase', icon: <Eraser className="size-5" /> },
+];
+
+/**
+ * The consumer's view. `ToolbarGroup` knows nothing about fields or contours — its
+ * buttons are buttons, in a flex row, with their own hit areas and focus rings, and the
+ * group merges their shapes when they sit close.
+ *
+ * Drag the gap down and the four separate pills fuse into one continuous bar. Nothing
+ * about the buttons changes as it happens: tab through them mid-merge and the focus ring
+ * still traces each button's own box, because the surface never touches their layout.
+ */
+export const Consumer: StoryObj = {
+  parameters: { layout: 'centered', controls: { disable: true } },
+  render: () => {
+    const [active, setActive] = useState<string | null>('draw');
+    const [gap, setGap] = useState(10);
+
+    return (
+      <div className="flex flex-col items-center gap-8 rounded-3xl bg-neutral-950 p-12">
+        <ToolbarGroup actions={TOOLBAR_ACTIONS} activeId={active} onSelect={setActive} gap={gap} />
+        <label className="flex flex-row items-center gap-3 font-mono text-xs text-neutral-400">
+          gap {String(gap).padStart(2)}
+          <input
+            type="range"
+            min={0}
+            max={40}
+            value={gap}
+            onChange={(event) => setGap(Number(event.target.value))}
+            data-testid="toolbar-gap"
+          />
+        </label>
+        <p className="max-w-sm text-center text-xs leading-relaxed text-neutral-500">
+          Selected: <span className="font-mono">{active ?? 'none'}</span>. Tab through the buttons at any gap — the
+          focus ring follows each button&apos;s own box, merged or not.
+        </p>
+      </div>
+    );
+  },
 };
