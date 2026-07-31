@@ -78,19 +78,25 @@ export interface TraceConfig {
    * What that shares is the *samples*, not the *traversal*, and the two
    * traversal families land on opposite sides of the distinction:
    *
-   * - `dense` and `bounded` walk a fixed grid, so the second level is exactly
-   *   free — measured at ×1.000 field evals, because it reads corner values the
-   *   row buffers already hold and only redoes the per-edge interpolation.
+   * - `dense` and `bounded` walk a fixed grid, so the second level takes no
+   *   sample of its own: ×1.000 field evals, exactly, because it reads corner
+   *   values the row buffers already hold. It is *not* free in wall time —
+   *   ×1.27 to ×1.43 — because marching squares and loop linking still run
+   *   again over every cell. Free in samples, not in work.
    * - `sparse` has to go *find* its contours, and a quadtree's cost is
    *   proportional to the length of what it finds. Two contours is two
-   *   perimeters: ×1.66 at cell=4 rising to ×1.83 at cell=1. It stays under ×2
+   *   perimeters, so it pays in samples too: ×1.31 at cell=8 rising to ×1.72 at
+   *   cell=1 on the 4-ball ring, ×1.42 to ×1.70 on two bridged lobes. The exact
+   *   figure is a property of the shape — how much inner perimeter it has for its
+   *   outer perimeter — so read the trend, not the number. It stays under ×2
    *   because both levels share their ancestor nodes until the tree gets fine
    *   enough to tell them apart, and it climbs toward ×2 as the cell shrinks
    *   because that shared prefix is a fixed number of levels while the leaves
    *   keep doubling.
    *
-   * So the inset is free where the walk was already paying for area, and costs
-   * about what it adds where the walk was paying for perimeter. Even at ×1.83
+   * So the inset is nearly free where the walk was already paying for area, and
+   * costs about what it adds where the walk was paying for perimeter. Even at
+   * the top of that range
    * sparse is far below either dense walk.
    *
    * This is emphatically *not* the same curve a stroke of width `2 * inset`

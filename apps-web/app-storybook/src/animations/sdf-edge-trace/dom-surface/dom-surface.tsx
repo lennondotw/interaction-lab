@@ -22,6 +22,7 @@ import {
 import { useBallDrag } from '../use-ball-drag.js';
 import { ClippedContent } from './clipped-content.js';
 import { CONTENT_KINDS, CONTENT_LABELS, ContentKind } from './content-kind.js';
+import { InsetBenchmarkPanel } from './inset-benchmark-panel.js';
 
 /**
  * One `d` string, three consumers: a fill, an inner border, and a `clip-path` over
@@ -65,6 +66,12 @@ import { CONTENT_KINDS, CONTENT_LABELS, ContentKind } from './content-kind.js';
 const STAT_WINDOW = 90;
 const PRECISION = 1;
 const INSETS = [4, 8, 16, 26] as const;
+/**
+ * Insets walked by the benchmark's topology table. Fine enough near the low end to
+ * locate the split, and carried past it to the width where the inner contour stops
+ * existing at all.
+ */
+const PINCH_INSETS = [2, 4, 6, 8, 10, 12, 14, 16, 20, 26, 34, 44] as const;
 
 type BorderMode = 'stroke-clip' | 'second-iso';
 
@@ -108,6 +115,9 @@ export const SdfDomSurface: FC<{ className?: string }> = ({ className }) => {
     ball.y = y;
   }, []);
   const { activeBallRef, handlers } = useBallDrag({ readBalls, moveBall, view: VIEW, radius: RADIUS });
+  // Copies, not the live array: the sweep runs across many frames and the shape
+  // must hold still for it even while autoplay keeps moving the real one.
+  const getBalls = useCallback(() => ballsRef.current.map((ball) => ({ ...ball })), []);
 
   const traceSamples = useMemo(() => new RollingMedian(STAT_WINDOW), []);
   const buildSamples = useMemo(() => new RollingMedian(STAT_WINDOW), []);
@@ -454,6 +464,24 @@ export const SdfDomSurface: FC<{ className?: string }> = ({ className }) => {
             </p>
           )}
         </div>
+      </div>
+
+      <div
+        className={`
+          border-t border-neutral-200 pt-5
+          dark:border-neutral-800
+        `}
+      >
+        <InsetBenchmarkPanel
+          tracer={tracer}
+          getBalls={getBalls}
+          radius={RADIUS}
+          sigma={SIGMA}
+          blend={BLEND}
+          cells={CELL_SIZES}
+          inset={inset}
+          pinchInsets={PINCH_INSETS}
+        />
       </div>
     </div>
   );

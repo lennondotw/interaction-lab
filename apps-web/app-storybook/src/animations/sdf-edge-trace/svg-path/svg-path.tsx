@@ -19,6 +19,7 @@ import {
   orbitBalls,
 } from '../shape.js';
 import { useBallDrag } from '../use-ball-drag.js';
+import { PathBenchmarkPanel } from './path-benchmark-panel.js';
 
 /**
  * The same contour, drawn twice: once to a canvas and once as an SVG `<path>`.
@@ -79,6 +80,9 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
     ball.y = y;
   }, []);
   const { activeBallRef, handlers } = useBallDrag({ readBalls, moveBall, view: VIEW, radius: RADIUS });
+  // Copies, not the live array: the sweep runs across many frames and the shape
+  // must hold still for it even while autoplay keeps moving the real one.
+  const getBalls = useCallback(() => ballsRef.current.map((ball) => ({ ...ball })), []);
 
   const traceSamples = useMemo(() => new RollingMedian(STAT_WINDOW), []);
   const buildSamples = useMemo(() => new RollingMedian(STAT_WINDOW), []);
@@ -391,6 +395,23 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
             </p>
           )}
         </div>
+      </div>
+
+      <div
+        className={`
+          border-t border-neutral-200 pt-5
+          dark:border-neutral-800
+        `}
+      >
+        <PathBenchmarkPanel
+          tracer={tracer}
+          getBalls={getBalls}
+          radius={RADIUS}
+          sigma={SIGMA}
+          blend={BLEND}
+          cells={CELL_SIZES}
+          precisions={PRECISIONS}
+        />
       </div>
     </div>
   );

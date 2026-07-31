@@ -51,11 +51,15 @@ export type Arrangement = 'ring' | 'neck';
  *
  * The arrangement exists to separate the two ways of drawing an inner border. A
  * stroke clipped to the shape follows the outline through the waist whatever its
- * width, because it is the outline pushed inward. A true iso offset stops
- * existing there once the inset exceeds half the waist — measured at inset 26 for
- * this spacing, where one surface loop becomes two inner loops. Same shape, same
- * requested width, genuinely different answer, and only one of them is what
- * "16px in from the edge" actually means.
+ * width, because it is the outline pushed inward. A true iso offset stops existing
+ * there once the inset exceeds half the waist, and the story's benchmark locates
+ * that by walking the width: for this spacing the single surface loop becomes two
+ * inner loops at **inset 6**, and stays split all the way out to 44. The `ring`
+ * arrangement never splits over the same range, which is the control — the
+ * divergence is a property of the waist, not of the technique being unstable.
+ *
+ * Same shape, same requested width, genuinely different answer, and only one of
+ * them is what "w px in from the edge" actually means.
  */
 export const createNeckedBalls = (): Ball[] => [
   { x: VIEW / 2 - 65, y: VIEW / 2 },
