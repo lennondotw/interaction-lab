@@ -23,7 +23,17 @@ const TOGGLE_CROSS_DISSOLVE_MS = 100;
 const TOGGLE_BLUR_ENTER_MS = 100;
 const TOGGLE_BLUR_EXIT_MS = 460;
 const WINDOW_RESIZE_COMMIT_DELAY_MS = 200;
-const EDGE_LABEL_CLASS = 'pointer-events-none absolute top-0 left-3 z-20 -translate-y-1/2 bg-white px-1 leading-none';
+// The knockout background has to match the surface behind it, or the dashed
+// outline the label sits on shows through the text.
+const EDGE_LABEL_CLASS =
+  'pointer-events-none absolute top-0 left-3 z-20 -translate-y-1/2 bg-white px-1 leading-none dark:bg-neutral-950';
+
+/**
+ * The commit flash is written as an inline style rather than swapped as a class.
+ * Its idle colour is theme-dependent, and a `dark:` utility beats a plain one on
+ * source order, so adding `bg-emerald-500` on top would do nothing in dark mode.
+ */
+const COMMIT_FLASH_COLOR = 'var(--color-emerald-500)';
 const MOTION_DEBUG_SCALE =
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('motionDebug') === 'slow' ? 4 : 1;
 
@@ -162,14 +172,14 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
       clearTimeout(commitTransitionCleanupTimerRef.current);
     }
 
-    indicator.classList.remove('bg-slate-300', 'transition-colors', 'duration-700', 'ease-out');
-    indicator.classList.add('bg-emerald-500');
+    indicator.classList.remove('transition-colors', 'duration-700', 'ease-out');
+    indicator.style.backgroundColor = COMMIT_FLASH_COLOR;
     indicator.getBoundingClientRect();
 
     commitFlashTimerRef.current = setTimeout(() => {
       indicator.classList.add('transition-colors', 'duration-700', 'ease-out');
-      indicator.classList.remove('bg-emerald-500');
-      indicator.classList.add('bg-slate-300');
+      // Clearing the override hands the colour back to the themed idle class.
+      indicator.style.backgroundColor = '';
       commitFlashTimerRef.current = null;
 
       commitTransitionCleanupTimerRef.current = setTimeout(() => {
@@ -686,7 +696,10 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
       data-buffered-split-layout-view-transition-demo
       data-trailing-collapsed={!trailingOpen ? 'true' : undefined}
       style={rootStyle}
-      className="relative h-dvh min-h-[620px] w-full overflow-hidden bg-white font-mono text-[12px] text-slate-500"
+      className={`
+        relative h-dvh min-h-[620px] w-full overflow-hidden bg-white font-mono text-[12px] text-slate-500
+        dark:bg-neutral-950 dark:text-neutral-400
+      `}
     >
       <style>
         {`
@@ -814,11 +827,23 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         `}
       </style>
 
-      <span className="pointer-events-none absolute top-2 right-14 z-40 flex items-center gap-2 bg-white px-1">
+      <span
+        className={`
+          pointer-events-none absolute top-2 right-14 z-40 flex items-center gap-2 bg-white px-1
+          dark:bg-neutral-950
+        `}
+      >
         <span ref={commitCountTextRef} data-demo-commit-count>
           commit 0
         </span>
-        <span ref={commitIndicatorRef} data-demo-commit-indicator className="size-2 bg-slate-300" />
+        <span
+          ref={commitIndicatorRef}
+          data-demo-commit-indicator
+          className={`
+            size-2 bg-slate-300
+            dark:bg-neutral-700
+          `}
+        />
       </span>
 
       <section
@@ -827,6 +852,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         className={`
           absolute inset-y-4 left-3 z-10 outline-[1px] -outline-offset-1 outline-slate-300
           [contain:layout]
+          dark:outline-neutral-700
         `}
       >
         <span className={EDGE_LABEL_CLASS}>left-live</span>
@@ -841,6 +867,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
                   -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300
                   [contain:layout]
                   outline-dashed
+                  dark:outline-sky-400/60
                 `}
               >
                 <span className={EDGE_LABEL_CLASS}>left-content-layer</span>
@@ -851,12 +878,19 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
                       relative left-1/2 my-7 min-h-[calc(100%-56px)]
                       [width:max(0px,calc(100%-40px))]
                       max-w-[640px] -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300 outline-dashed
+                      dark:outline-sky-400/60
                     `}
                   >
                     <span className={EDGE_LABEL_CLASS}>left-real-content</span>
                     <div className="p-4 pt-8 text-center">
                       {LEFT_PARAGRAPHS.map((text) => (
-                        <p key={text} className="mb-5 text-center text-[13px]/6 text-slate-600">
+                        <p
+                          key={text}
+                          className={`
+                            mb-5 text-center text-[13px]/6 text-slate-600
+                            dark:text-neutral-300
+                          `}
+                        >
                           {text}
                         </p>
                       ))}
@@ -873,6 +907,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
           className={`
             pointer-events-none absolute right-4 bottom-4 left-4 z-30 bg-white/90 p-2 text-left text-[11px]/4
             text-slate-600 outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
+            dark:bg-neutral-950/90 dark:text-neutral-300 dark:outline-neutral-700
           `}
         >
           <pre ref={leftMetricsRef} className="whitespace-pre-wrap" />
@@ -890,6 +925,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
           `
             absolute inset-y-4 z-10 outline-[1px] -outline-offset-1 outline-slate-300
             [contain:layout]
+            dark:outline-neutral-700
           `,
           !trailingOpen && `pointer-events-none`
         )}
@@ -906,6 +942,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
                   -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300
                   [contain:layout]
                   outline-dashed
+                  dark:outline-emerald-400/60
                 `}
               >
                 <span className={EDGE_LABEL_CLASS}>right-content-layer</span>
@@ -916,12 +953,19 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
                       relative left-1/2 my-7 min-h-[calc(100%-56px)]
                       [width:max(0px,calc(100%-40px))]
                       max-w-[640px] -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300 outline-dashed
+                      dark:outline-emerald-400/60
                     `}
                   >
                     <span className={EDGE_LABEL_CLASS}>right-real-content</span>
                     <div className="p-4 pt-8 text-center">
                       {RIGHT_PARAGRAPHS.map((text) => (
-                        <p key={text} className="mb-5 text-center text-[13px]/6 text-slate-600">
+                        <p
+                          key={text}
+                          className={`
+                            mb-5 text-center text-[13px]/6 text-slate-600
+                            dark:text-neutral-300
+                          `}
+                        >
                           {text}
                         </p>
                       ))}
@@ -938,6 +982,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
           className={`
             pointer-events-none absolute right-4 bottom-4 left-4 z-30 bg-white/90 p-2 text-left text-[11px]/4
             text-slate-600 outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
+            dark:bg-neutral-950/90 dark:text-neutral-300 dark:outline-neutral-700
           `}
         >
           <pre ref={rightMetricsRef} className="whitespace-pre-wrap" />
@@ -955,6 +1000,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
             [left:var(--split-divider-x)]
             z-20 w-px -translate-x-1/2 cursor-col-resize bg-slate-500
             before:absolute before:inset-y-0 before:-right-3 before:-left-3 before:content-[""]
+            dark:bg-neutral-500
           `,
           !trailingOpen && `pointer-events-none opacity-0`
         )}
@@ -969,6 +1015,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
         className={`
           absolute top-3 right-3 z-30 grid size-8 place-items-center bg-white text-slate-500 outline-[1px]
           -outline-offset-1 outline-slate-400
+          dark:bg-neutral-900 dark:text-neutral-300 dark:outline-neutral-600
         `}
       >
         {trailingOpen ? ']' : '['}
