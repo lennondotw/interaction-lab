@@ -3,21 +3,21 @@ import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type
 import { useLayoutEffect, useRef, type FC, type ReactNode } from 'react';
 
 import { NativeScrollRuler } from '../../components/native-scroll-ruler/native-scroll-ruler.js';
-import { useLenisSmoothScroll } from './lenis-smooth-scroll.js';
+import { useLenisScrollDriver, type StickyScrollDriver } from './lenis-scroll-driver.js';
 import { getStickyScrollCompensation } from './sticky-scroll-remapping.js';
 
 export interface StickyScrollSceneProps {
   children: (progress: MotionValue<number>) => ReactNode;
   className?: string;
   remap?: boolean;
-  smoothScroll?: boolean;
+  scrollDriver?: StickyScrollDriver;
 }
 
 export const StickyScrollScene: FC<StickyScrollSceneProps> = ({
   children,
   className,
   remap = false,
-  smoothScroll = false,
+  scrollDriver = 'native',
 }) => {
   const trackRef = useRef<HTMLElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
@@ -57,9 +57,9 @@ export const StickyScrollScene: FC<StickyScrollSceneProps> = ({
     });
   });
 
-  // Hijacked scrolling is exactly what a reduced-motion preference asks us not to do, so it opts
-  // out of the smoothing along with the remap.
-  useLenisSmoothScroll(smoothScroll && !prefersReducedMotion);
+  // A reduced-motion preference turns the remap off, which leaves Lenis nothing to keep in sync —
+  // and taking over the scroll input for its own sake is not something to do to that audience.
+  useLenisScrollDriver(prefersReducedMotion ? 'native' : scrollDriver);
 
   useLayoutEffect(() => {
     const track = trackRef.current;

@@ -109,7 +109,7 @@ are causally linked, not coincidental.
 
 ## The Lenis Path
 
-`useLenisSmoothScroll` implements solution 2. Lenis intercepts wheel and touch input, integrates
+`useLenisScrollDriver` implements solution 2. Lenis intercepts wheel and touch input, integrates
 its own target offset, and calls `window.scrollTo()` from a frame callback. The document scroll
 position becomes a main-thread-written value, so `position: sticky` and the compensation transform
 read the same number in the same frame. Failure mode changes from "the pinned layer slips 29px
@@ -129,6 +129,22 @@ Two things have to be right or it does not help:
   it. So we pass `autoRaf: false` and advance Lenis from Motion's `setup` step, which runs before
   every `read` job in the same frame, including the `useScroll` measurement.
 
+Notably, the smoothing itself is not part of the fix. Lenis does two separable things: it takes
+over who writes the scroll offset, and it eases input on the way through. Only the first one
+matters here. `Animate.advance` jumps straight to its target when neither `lerp` nor `duration` is
+set, so `lerp: 0` keeps a 1:1 input mapping while still writing the offset from the frame loop —
+the `lenis-unsmoothed` driver, and the control that separates the two claims. If the hitch is gone
+there too, the cure was pipeline unification, not smoothing.
+
+That also makes `lerp: 0` the cheapest form of solution 2 when the existing scroll feel is
+something to preserve rather than replace: it drops the "changes the scroll feel" and "the lerp
+does not bound the per-frame error" costs below, and keeps the rest.
+
+"Unsmoothed" is not the same as "native", though. Chrome runs its own smooth-scroll animation over
+a wheel notch, so applying the whole delta in one frame is a step change the browser would have
+spread across several — expect it to read as snappier and more stepped than native wheel, not
+identical to it.
+
 ## What Lenis Costs
 
 - **Scrolling joins the main-thread critical path.** The 290 `color` writes previously only made
@@ -147,13 +163,16 @@ removing the hitch, solution 1 is more targeted and has a higher robustness ceil
 
 ## Stories
 
-| Story                          | Demonstrates                                                          |
-| ------------------------------ | --------------------------------------------------------------------- |
-| `NativeSticky`                 | Baseline. `y` is `0`, so there is no desync channel at all.           |
-| `SmoothRemap`                  | The remap, with the two-pipeline desync exposed at pin/unpin.         |
-| `SmoothRemapWithLenis`         | Same remap, scroll flattened onto the main thread.                    |
-| `SmoothRemapWithColor`         | Adds 290 per-frame `color` writes, which makes dropped frames likely. |
-| `SmoothRemapWithColorAndLenis` | Same, under Lenis — where that paint cost stalls the page instead.    |
+| Story                            | Demonstrates                                                          |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `NativeSticky`                   | Baseline. `y` is `0`, so there is no desync channel at all.           |
+| `SmoothRemap`                    | The remap, with the two-pipeline desync exposed at pin/unpin.         |
+| `SmoothRemapWithLenis`           | Same remap, scroll flattened onto the main thread and smoothed.       |
+| `SmoothRemapWithUnsmoothedLenis` | Flattened but `lerp: 0` — the fix without the change in scroll feel.  |
+| `SmoothRemapWithColor`           | Adds 290 per-frame `color` writes, which makes dropped frames likely. |
+| `SmoothRemapWithColorAndLenis`   | Same, under Lenis — where that paint cost stalls the page instead.    |
 
-Comparing `NativeSticky` and `SmoothRemap` at the same scroll velocity isolates the desync from
-ordinary jank: only the second has a stale-transform path.
+Two comparisons carry the argument. `NativeSticky` against `SmoothRemap` at the same scroll
+velocity isolates the desync from ordinary jank, because only the second has a stale-transform
+path. `SmoothRemapWithLenis` against `SmoothRemapWithUnsmoothedLenis` then isolates the pipeline
+change from the smoothing, because only the first eases the input.

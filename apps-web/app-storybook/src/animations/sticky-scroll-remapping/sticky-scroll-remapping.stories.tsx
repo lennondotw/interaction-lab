@@ -79,7 +79,15 @@ export const SmoothRemapWithLenis: Story = {
   args: {
     children: renderSpecimen,
     remap: true,
-    smoothScroll: true,
+    scrollDriver: 'lenis',
+  },
+};
+
+export const SmoothRemapWithUnsmoothedLenis: Story = {
+  args: {
+    children: renderSpecimen,
+    remap: true,
+    scrollDriver: 'lenis-unsmoothed',
   },
 };
 
@@ -94,6 +102,6 @@ export const SmoothRemapWithColorAndLenis: Story = {
   args: {
     children: renderColoredSpecimen,
     remap: true,
-    smoothScroll: true,
+    scrollDriver: 'lenis',
   },
 };
