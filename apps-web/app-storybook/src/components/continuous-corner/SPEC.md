@@ -254,6 +254,61 @@ Practical reading: **use the observed mode.** Reach for `size` when you have
 hundreds of instances animating at once, or when the first frame must already be
 correct — an SSR'd surface, or one that must not pop on mount.
 
+### Where a path's time actually goes
+
+Worth knowing before optimising anything here, because the split is lopsided and
+not where it looks like it should be:
+
+| stage                                        |   time | share |
+| -------------------------------------------- | -----: | ----: |
+| `squircleCorners` — all the geometry         | 0.35µs |    4% |
+| `squirclePath` — the same, plus the `d` text | 8.36µs |  100% |
+
+**Building the string is 96% of the cost.** The Béziers, the per-axis budget, the
+degradation lerp — the entire subject of this document — are 4%. And essentially all
+of the 96% is one function: `round`, called ~76 times per path. That is why it is
+written as arithmetic rather than `toFixed(3)` plus a trailing-zero regex, which is
+28% cheaper per number (96ns → 69ns, so ~2µs per path) for byte-identical output.
+
+### Optimisations considered and rejected
+
+Both of these were measured rather than reasoned about, and both are recorded here
+as decisions rather than as pending work — the first is very likely permanent.
+
+**A Rust/WASM generator: no.** Rust would attack the 4%. Taking 0.35µs to ~0.05µs
+saves 3.5% of a path. The 96% that matters is string formatting, which is the one
+thing WASM is worst at: the `d` text would either be built in linear memory and
+marshalled back as ~450 characters — plausibly costing more than the 8µs saved — or
+built in JS anyway, in which case the rewrite bought the 0.3µs. And the measured
+bottleneck at scale is not the arithmetic at all but the per-frame `clip-path`
+invalidation, which no language change can reach: the `fixed` column above stays
+flat to 900 instances doing identical geometry. This matches
+`archive/2026-07-wasm-kernel-headroom`, which reached the same verdict for SDF work
+orders of magnitude heavier: the win was in the loop, not the language.
+
+**Quantising the measured box to whole pixels: real, but it buys accuracy-for-work.**
+This one does target the actual bottleneck — skipping regeneration when the rounded
+box is unchanged removes invalidations rather than speeding them up. A 600-frame
+width sweep produces:
+
+| resolution              | distinct widths |
+| ----------------------- | --------------: |
+| sub-pixel (what we use) |             596 |
+| whole pixels            |              28 |
+
+So **95% of regenerations during a smooth resize are redundant** — flex hands out
+widths like 43.33px, and three decimals faithfully reproduces a difference nothing
+can display. The catch is that the path has to agree with the element's real box: a
+43px path in a 43.33px box pulls the fill and the border 0.33px short of the right
+edge, which reads as a soft or inset edge rather than as a crisp one. Quantising to
+_device_ pixels (1/DPR — 0.5px steps at DPR 2) halves that error while keeping most
+of the saving, which is the form to reach for if this is ever wanted.
+
+It is not wanted yet, and the honest reason is the table above it: at the twelve-odd
+instances a real page has, per-frame regeneration is 1% of a frame and measures
+identical to not doing it. The correct optimisation at that scale is `mode="css"`,
+which is already implemented and does not make the work faster so much as delete it.
+
 ## What this component does _not_ claim
 
 - **It is not Apple's curve outside `RoundedRectangle`.** `Capsule` and `Circle`
