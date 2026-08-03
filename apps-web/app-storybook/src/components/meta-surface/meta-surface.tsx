@@ -57,7 +57,7 @@ export interface MetaSurfaceProps {
 
 interface MetaSurfaceComponent extends FC<MetaSurfaceProps> {
   Item: typeof MetaSurfaceItem;
-  Backdrop: FC<{ children?: ReactNode; className?: string }>;
+  Backdrop: FC<BackdropProps>;
 }
 
 /**
@@ -71,6 +71,15 @@ interface MetaSurfaceComponent extends FC<MetaSurfaceProps> {
 interface BackdropProps {
   children?: ReactNode;
   className?: string;
+  /**
+   * Set false to place the content in the same layer but leave it uncut.
+   *
+   * The layer matters as much as the clip: rendering unclipped content as an ordinary
+   * sibling instead would put it in a different stacking position, so switching the
+   * effect off would change two things at once and the comparison would be worthless.
+   * @default true
+   */
+  clip?: boolean;
 }
 
 const Backdrop: FC<BackdropProps> = () => null;
@@ -135,8 +144,14 @@ export const MetaSurface = (({
   const content: ReactNode[] = [];
   for (const child of Children.toArray(children)) {
     if (isValidElement<BackdropProps>(child) && child.type === Backdrop) {
+      // The clip goes on each backdrop rather than on the shared layer, so one can opt out
+      // without leaving the layer — see `BackdropProps.clip`.
       backdrops.push(
-        <div key={child.key ?? backdrops.length} className={cn('absolute inset-0', child.props.className)}>
+        <div
+          key={child.key ?? backdrops.length}
+          className={cn('absolute inset-0', child.props.className)}
+          style={(child.props.clip ?? true) ? { clipPath: `url(#${cssClipId})` } : undefined}
+        >
           {child.props.children}
         </div>
       );
@@ -208,11 +223,7 @@ export const MetaSurface = (({
               {wantsRing && <path ref={outlineRingRef} fill={outlineColor} fillRule="evenodd" />}
             </svg>
 
-            {backdrops.length > 0 && (
-              <div className="pointer-events-none absolute inset-0 -z-10" style={{ clipPath: `url(#${cssClipId})` }}>
-                {backdrops}
-              </div>
-            )}
+            {backdrops.length > 0 && <div className="pointer-events-none absolute inset-0 -z-10">{backdrops}</div>}
 
             {content}
           </div>

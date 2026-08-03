@@ -1,7 +1,10 @@
+import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Eraser, Pencil, Square, Type } from 'lucide-react';
 import { useState } from 'react';
 import { MetaSurface } from './meta-surface.js';
+import { OverflowContent } from './overflow-content.js';
+import { OVERFLOW_KINDS, OVERFLOW_LABELS, type OverflowKind } from './overflow-kind.js';
 import { MetaSurfaceProbe } from './surface-probe.js';
 import { ToolbarGroup } from './toolbar-group.js';
 import type { SurfaceTraceResult } from './use-surface-trace.js';
@@ -183,6 +186,95 @@ export const Consumer: StoryObj = {
           Selected: <span className="font-mono">{active ?? 'none'}</span>. Tab through the buttons at any gap — the
           focus ring follows each button&apos;s own box, merged or not.
         </p>
+      </div>
+    );
+  },
+};
+
+/**
+ * The clip, which the other stories never exercise. They draw a fill and an outline — both
+ * of which paint *inside* the shape and so can never show whether the boundary is right.
+ * A clip is the opposite: it decides what happens to content that does not belong to the
+ * shape at all.
+ *
+ * So the content here is deliberately wrong for the shape. Every option fills the whole
+ * region box, which is a rectangle, while the shape inside it is a blob — so all of it
+ * spills past the contour on four sides by construction. Turn `clip` off to see the
+ * rectangle it really is; turn it on and the same content is cut to the traced curve.
+ *
+ * `clip` moves nothing else. The content stays in the same layer either way, so the toggle
+ * changes exactly one thing — see `BackdropProps.clip` for why that mattered enough to be a
+ * prop rather than the story swapping the element out.
+ */
+export const ClippedOverflow: StoryObj = {
+  parameters: { layout: 'centered', controls: { disable: true } },
+  render: () => {
+    const [clip, setClip] = useState(true);
+    const [kind, setKind] = useState<OverflowKind>('grid');
+    const [gap, setGap] = useState(16);
+    const [outline, setOutline] = useState(3);
+
+    return (
+      <div className="flex flex-col gap-5">
+        <MetaSurface
+          blend={44}
+          outline={outline}
+          outlineColor="rgb(165 180 252 / 0.9)"
+          // No fill: a fill would sit under the backdrop and muddy what the clip is doing.
+          fill={null}
+          className="flex w-fit flex-row items-center p-12"
+        >
+          <MetaSurface.Backdrop clip={clip}>
+            <OverflowContent kind={kind} />
+          </MetaSurface.Backdrop>
+          <div className="flex flex-row items-center" style={{ gap }}>
+            <MetaSurface.Item className="size-28 shrink-0 rounded-[2rem]" />
+            <MetaSurface.Item className="h-20 w-20 shrink-0 rounded-full" />
+            <MetaSurface.Item className="h-24 w-36 shrink-0 rounded-3xl" />
+          </div>
+        </MetaSurface>
+
+        <div className="flex flex-col gap-2 font-mono text-xs text-neutral-500">
+          <label className="flex flex-row items-center gap-2">
+            <input
+              type="checkbox"
+              checked={clip}
+              onChange={(event) => setClip(event.target.checked)}
+              data-testid="clip-toggle"
+              className="size-3.5 accent-indigo-500"
+            />
+            clip to shape
+          </label>
+          <div className="flex flex-row items-center gap-2">
+            content
+            {OVERFLOW_KINDS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setKind(option)}
+                className={cn(
+                  'rounded px-2 py-0.5',
+                  option === kind
+                    ? 'bg-indigo-500 text-white'
+                    : `
+                      text-neutral-400
+                      hover:text-neutral-200
+                    `
+                )}
+              >
+                {OVERFLOW_LABELS[option]}
+              </button>
+            ))}
+          </div>
+          <label className="flex flex-row items-center gap-2">
+            gap {String(gap).padStart(3)}
+            <input type="range" min={0} max={80} value={gap} onChange={(e) => setGap(Number(e.target.value))} />
+          </label>
+          <label className="flex flex-row items-center gap-2">
+            outline {String(outline).padStart(2)}
+            <input type="range" min={0} max={16} value={outline} onChange={(e) => setOutline(Number(e.target.value))} />
+          </label>
+        </div>
       </div>
     );
   },
