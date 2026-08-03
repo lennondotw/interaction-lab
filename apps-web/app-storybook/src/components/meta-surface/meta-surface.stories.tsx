@@ -28,8 +28,71 @@ const Card = ({ children, className }: { children?: React.ReactNode; className?:
   </MetaSurface.Item>
 );
 
+const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+/**
+ * Every content the cell can hold, stacked at zero height, so the cell keeps the width of
+ * its widest state instead of resizing as the value changes.
+ *
+ * The value is reserved one digit *position* at a time — ten stacked digits per slot —
+ * rather than enumerating every number the slider can produce. Each `slots` entry is a
+ * column of alternatives contributing its widest one; the row sums the slots.
+ */
+const ReservedWidth = ({ slots }: { slots: string[][] }) => (
+  <span aria-hidden className="invisible flex h-0 flex-row overflow-clip leading-0">
+    {slots.map((alternatives, index) => (
+      <span className="flex flex-col" key={`${index}-${alternatives[0]}`}>
+        {alternatives.map((alternative) => (
+          <span key={alternative}>{alternative}</span>
+        ))}
+      </span>
+    ))}
+  </span>
+);
+
+/**
+ * One row of a two-column knob grid: the label ends and the track begins on the same
+ * column line, and neither moves as the value changes.
+ */
+const Knob = ({
+  label,
+  value,
+  max,
+  onChange,
+  testId,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  onChange: (value: number) => void;
+  testId?: string;
+}) => (
+  <label className="col-span-2 grid grid-cols-subgrid items-center">
+    <span className="text-right">
+      {label} {value}
+      {/*
+        A block-level sibling of the visible line, so the cell resolves to the wider of
+        the two rather than to their sum. The label carries a non-breaking space: a plain
+        trailing space collapses away and would reserve nothing.
+      */}
+      <ReservedWidth slots={[[`${label}\u00a0`], ...Array.from({ length: String(max).length }, () => DIGITS)]} />
+    </span>
+    <input
+      type="range"
+      min={0}
+      max={max}
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+      data-testid={testId}
+    />
+  </label>
+);
+
 /** Two items far enough apart to stay separate, close enough to bridge on demand. */
 export const Default: StoryObj = {
+  // Top-left, not centred: the surface grows as the gap widens, and growing away from a
+  // fixed corner is easier to read than growing symmetrically about a moving centre.
+  parameters: { layout: 'padded' },
   render: () => {
     const [gap, setGap] = useState(56);
     const [blend, setBlend] = useState(40);
@@ -37,7 +100,7 @@ export const Default: StoryObj = {
     const [traced, setTraced] = useState<SurfaceTraceResult | null>(null);
 
     return (
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col items-start gap-5">
         <MetaSurface
           blend={blend}
           outline={outline}
@@ -56,37 +119,17 @@ export const Default: StoryObj = {
           </div>
         </MetaSurface>
 
-        <div className="flex flex-col gap-2 font-mono text-xs text-neutral-500">
-          <label className="flex flex-row items-center gap-2">
-            gap {String(gap).padStart(3)}
-            <input
-              type="range"
-              min={0}
-              max={140}
-              value={gap}
-              onChange={(event) => setGap(Number(event.target.value))}
-            />
-          </label>
-          <label className="flex flex-row items-center gap-2">
-            blend {String(blend).padStart(3)}
-            <input
-              type="range"
-              min={0}
-              max={90}
-              value={blend}
-              onChange={(event) => setBlend(Number(event.target.value))}
-            />
-          </label>
-          <label className="flex flex-row items-center gap-2">
-            outline {String(outline).padStart(2)}
-            <input
-              type="range"
-              min={0}
-              max={24}
-              value={outline}
-              onChange={(event) => setOutline(Number(event.target.value))}
-            />
-          </label>
+        <div className="flex flex-col items-start gap-2 font-mono text-xs text-neutral-500">
+          {/*
+            One grid for the three knobs, so every label ends and every track begins on the
+            same column line. Each label spans both columns of this grid rather than
+            nesting a row of its own, which keeps the label wrapping its input.
+          */}
+          <div className="grid grid-cols-[auto_auto] items-center gap-x-2 gap-y-2">
+            <Knob label="gap" value={gap} max={140} onChange={setGap} />
+            <Knob label="blend" value={blend} max={90} onChange={setBlend} />
+            <Knob label="outline" value={outline} max={24} onChange={setOutline} />
+          </div>
           <div data-testid="surface-stats">
             loops {traced?.surfaceLoops ?? 0}
             {outline > 0 ? ` + ${traced?.insetLoops ?? 0}` : ''} · {traced?.vertices ?? 0} verts ·{' '}
@@ -133,17 +176,9 @@ export const Consumer: StoryObj = {
     return (
       <div className="flex flex-col items-center gap-8 rounded-3xl bg-neutral-950 p-12">
         <ToolbarGroup actions={TOOLBAR_ACTIONS} activeId={active} onSelect={setActive} gap={gap} />
-        <label className="flex flex-row items-center gap-3 font-mono text-xs text-neutral-400">
-          gap {String(gap).padStart(2)}
-          <input
-            type="range"
-            min={0}
-            max={40}
-            value={gap}
-            onChange={(event) => setGap(Number(event.target.value))}
-            data-testid="toolbar-gap"
-          />
-        </label>
+        <div className="grid grid-cols-[auto_auto] items-center gap-x-3 font-mono text-xs text-neutral-400">
+          <Knob label="gap" value={gap} max={40} onChange={setGap} testId="toolbar-gap" />
+        </div>
         <p className="max-w-sm text-center text-xs leading-relaxed text-neutral-500">
           Selected: <span className="font-mono">{active ?? 'none'}</span>. Tab through the buttons at any gap — the
           focus ring follows each button&apos;s own box, merged or not.

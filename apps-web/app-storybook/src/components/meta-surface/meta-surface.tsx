@@ -163,11 +163,18 @@ export const MetaSurface = (({
               thing it costs is that the container must not paint its own background,
               or it would cover the surface.
             */}
-            <svg
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10 size-full overflow-visible"
-              viewBox={`0 0 ${Math.max(width, 1)} ${Math.max(height, 1)}`}
-            >
+            {/*
+              No `viewBox`, deliberately. The traced `d` is already in region CSS px, and
+              an `<svg>` without a viewBox maps one user unit to one CSS px from its own
+              top-left — the identity this needs, for free.
+              A viewBox would have to be `0 0 width height`, and `width`/`height` come
+              from a ResizeObserver, so they are one frame behind the box during any
+              resize. `preserveAspectRatio` then resolves that disagreement by *scaling
+              and centring* the whole drawing: mid-drag on the gap slider, a 400px-wide
+              box against a stale 512-unit viewBox painted the surface at 78% and 9px
+              left of its items, which reads as the shape jittering under them.
+            */}
+            <svg aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 size-full overflow-visible">
               <defs>
                 <clipPath id={cssClipId} clipPathUnits="userSpaceOnUse">
                   <path ref={clipCssRef} />
