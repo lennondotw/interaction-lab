@@ -655,3 +655,268 @@ describe('overlay rects', () => {
     expect((y ?? 0) + (height ?? 0)).toBeGreaterThanOrEqual(262 + REACH);
   });
 });
+
+/**
+ * The polygon primitive, which is the first shape here that is not a rounded box.
+ *
+ * A star, a triangle or a traced outline is not a member of the box family at any
+ * exponent — no `hw`, `hh`, `r` or `n` produces a concave vertex — so this is a second
+ * distance function rather than a generalisation of the first. Two things therefore need
+ * proving rather than assuming: that its sign is right where a polygon is *concave*, which
+ * is the case a nearest-edge test gets wrong, and that it is exact enough for the quadtree
+ * to cull against, which is what the traversal-agreement tests are for.
+ *
+ * The rectangle identity is the sharpest of these. A rounded box of half-extents `hw, hh`
+ * and radius `r` is *exactly* the rectangle of half-extents `hw - r, hh - r` offset outward
+ * by `r`, so the two primitives have to return the same number to full precision on a shape
+ * they both express. Nothing else here pins the offset's meaning that tightly.
+ */
+describe('the polygon primitive', () => {
+  /** Exact polygon distance, written out independently of the tracer's copy. */
+  const sdPoly = (px: number, py: number, cx: number, cy: number, pts: readonly number[], r = 0): number => {
+    const count = pts.length / 2;
+    let best = Infinity;
+    let inside = false;
+    for (let v = 0, j = count - 1; v < count; j = v++) {
+      const ax = cx + (pts[v * 2] ?? 0);
+      const ay = cy + (pts[v * 2 + 1] ?? 0);
+      const bx = cx + (pts[j * 2] ?? 0);
+      const by = cy + (pts[j * 2 + 1] ?? 0);
+      const ex = bx - ax;
+      const ey = by - ay;
+      const wx = px - ax;
+      const wy = py - ay;
+      const t = Math.min(Math.max((wx * ex + wy * ey) / (ex * ex + ey * ey), 0), 1);
+      best = Math.min(best, (wx - ex * t) ** 2 + (wy - ey * t) ** 2);
+      if (ay > py !== by > py && px < ax + ((py - ay) / (by - ay)) * (bx - ax)) inside = !inside;
+    }
+    return (inside ? -Math.sqrt(best) : Math.sqrt(best)) - r;
+  };
+
+  /** A `spikes`-pointed star, outer radius `outer`, inner `inner`. Concave by construction. */
+  const star = (spikes: number, outer: number, inner: number): number[] => {
+    const pts: number[] = [];
+    for (let s = 0; s < spikes * 2; s++) {
+      const angle = (s / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
+      const radius = s % 2 === 0 ? outer : inner;
+      pts.push(Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+    return pts;
+  };
+
+  const TRIANGLE = [0, -80, 70, 60, -70, 60];
+  const STAR = star(5, 90, 38);
+
+  it('is the rounded box, when the polygon is a rectangle offset by r', () => {
+    // Exact identity rather than an approximation: this is the same shape reached by two
+    // different code paths, so any disagreement is one of them being wrong.
+    const hw = 90;
+    const hh = 50;
+    for (const r of [0, 1, 12, 40]) {
+      const rect = [-(hw - r), -(hh - r), hw - r, -(hh - r), hw - r, hh - r, -(hw - r), hh - r];
+      for (const px of [-200, -90, -40, 0, 33, 89, 140]) {
+        for (const py of [-160, -50, -12, 0, 27, 51, 120]) {
+          const asBox =
+            Math.min(Math.max(Math.abs(px) - hw + r, Math.abs(py) - hh + r), 0) +
+            Math.hypot(Math.max(Math.abs(px) - hw + r, 0), Math.max(Math.abs(py) - hh + r, 0)) -
+            r;
+          expect(sdPoly(px, py, 0, 0, rect, r)).toBeCloseTo(asBox, 9);
+        }
+      }
+    }
+  });
+
+  it('reports a star’s notch as outside, though it sits well inside the hull', () => {
+    // The concavity case, and the reason the sign comes from a crossing count rather than
+    // from whichever edge happens to be nearest. A notch point is 45px from the centre of a
+    // star whose points reach 90 — inside every circumscribed reading of the shape.
+    const notchAngle = (1.5 / 10) * Math.PI * 2 - Math.PI / 2;
+    const probe = { x: Math.cos(notchAngle) * 52, y: Math.sin(notchAngle) * 52 };
+    expect(Math.hypot(probe.x, probe.y)).toBeLessThan(90);
+    expect(sdPoly(probe.x, probe.y, 0, 0, STAR)).toBeGreaterThan(0);
+    // And a point just inside a spike is negative, so the test is not simply always positive.
+    expect(sdPoly(0, -70, 0, 0, STAR)).toBeLessThan(0);
+    expect(sdPoly(0, 0, 0, 0, STAR)).toBeLessThan(0);
+  });
+
+  it('puts every traced vertex on the iso of an independent polygon field', () => {
+    const tracer = makeTracer();
+    const shapes = [
+      { x: 170, y: 190, points: TRIANGLE },
+      { x: 350, y: 330, points: STAR, r: 10 },
+    ];
+    tracer.trace(shapes, config({ cell: 1 }));
+
+    const field = (x: number, y: number): number => {
+      let d = 1e9;
+      for (const s of shapes) {
+        const di = sdPoly(x, y, s.x, s.y, s.points, s.r ?? 0);
+        const h = Math.max(BLEND - Math.abs(d - di), 0) / BLEND;
+        d = Math.min(d, di) - (h * h * BLEND) / 4;
+      }
+      return d;
+    };
+
+    const points = allPoints(tracer);
+    expect(points.length).toBeGreaterThan(100);
+    for (const point of points) expect(Math.abs(field(point.x, point.y))).toBeLessThan(0.6);
+  });
+
+  it('agrees across traversals, so the quadtree may cull against it', () => {
+    // The polygon distance is a true Euclidean distance and so 1-Lipschitz, which is what
+    // entitles `sparse` to cull on it with no extra slack — unlike the p-norm corner, which
+    // needed `gradientBound`. If that were wrong, sparse would drop nodes that do contain
+    // the surface and this would disagree.
+    const tracer = makeTracer();
+    const shapes = [
+      { x: 150, y: 170, points: TRIANGLE },
+      { x: 330, y: 200, points: STAR },
+      { x: 250, y: 380, points: star(7, 70, 20), r: 6 },
+    ];
+    for (const cell of CELLS) {
+      const dense = tracer.trace(shapes, config({ traversal: 'dense', cell }));
+      const reference = `${dense.loopCount}/${dense.pointCount}`;
+      for (const traversal of ['bounded', 'sparse'] as const) {
+        const stats = tracer.trace(shapes, config({ traversal, cell }));
+        expect(`${stats.loopCount}/${stats.pointCount}`, `${traversal} at cell ${cell}`).toBe(reference);
+      }
+    }
+  });
+
+  it('stays 1-Lipschitz, including through the concave vertices', () => {
+    // Measured rather than argued, because it is the assumption the cull rests on: a node is
+    // discarded when its centre is farther from the surface than its half-diagonal, which is
+    // only sound if the field cannot change faster than distance does.
+    //
+    // Asserted by the definition — |d(p) - d(q)| <= |p - q| — and NOT by differencing a
+    // gradient. A distance field has kinks along its medial axis, where it is 1-Lipschitz but
+    // not differentiable; a finite-difference `hypot(gx, gy)` straddling one reads 1.18 on
+    // this very star, which says something about the instrument rather than the field.
+    const offsets = [
+      [0.05, 0],
+      [0, 0.05],
+      [3, 4],
+      [-7, 2],
+      [11, -13],
+      [-21, -8],
+      [40, 40],
+      [-60, 5],
+    ] as const;
+    let worst = 0;
+    for (let x = -140; x <= 140; x += 2.7) {
+      for (let y = -140; y <= 140; y += 2.7) {
+        const d = sdPoly(x, y, 0, 0, STAR, 8);
+        for (const [dx, dy] of offsets) {
+          const moved = Math.abs(sdPoly(x + dx, y + dy, 0, 0, STAR, 8) - d) / Math.hypot(dx, dy);
+          worst = Math.max(worst, moved);
+        }
+      }
+    }
+    expect(worst).toBeLessThanOrEqual(1 + 1e-9);
+  });
+
+  it('closes every loop for a concave shape, spikes included', () => {
+    const tracer = makeTracer();
+    for (const cell of CELLS) {
+      tracer.trace([{ x: 256, y: 256, points: STAR }], config({ cell, blend: 1e-6 }));
+      expect(tracer.loops.length).toBe(1);
+      for (let index = 0; index < tracer.loops.length; index++) {
+        expect(longestStep(loopPoints(tracer, index))).toBeLessThanOrEqual(cell * Math.SQRT2 + 1e-6);
+      }
+    }
+  });
+
+  it('offsets outward by r, growing the shape rather than rounding inside it', () => {
+    // The opposite of the box's radius, which is inscribed. A polygon's `r` is a true offset,
+    // so the area only ever grows — which is what makes an irregular curved blob reachable
+    // from a coarse polygon.
+    const tracer = makeTracer();
+    const sharp = tracer.trace([{ x: 256, y: 256, points: TRIANGLE }], config({ cell: 1, blend: 1e-6 }));
+    const sharpSpan = Math.max(...allPoints(tracer).map((p) => p.y));
+    expect(sharp.loopCount).toBe(1);
+
+    tracer.trace([{ x: 256, y: 256, points: TRIANGLE, r: 20 }], config({ cell: 1, blend: 1e-6 }));
+    const roundedSpan = Math.max(...allPoints(tracer).map((p) => p.y));
+    expect(roundedSpan - sharpSpan).toBeCloseTo(20, 0);
+  });
+
+  it('refuses a degenerate polygon instead of drawing a phantom', () => {
+    // Two vertices are a line segment, not a shape. Loading it as a box would silently draw
+    // something unrelated at that centre, so it must contribute nothing at all.
+    const tracer = makeTracer();
+    const alone = tracer.trace([{ x: 200, y: 200, points: TRIANGLE }], config({ cell: 2, blend: 1e-6 }));
+    const withDegenerate = tracer.trace(
+      [
+        { x: 200, y: 200, points: TRIANGLE },
+        { x: 380, y: 380, points: [0, 0, 10, 10] },
+      ],
+      config({ cell: 2, blend: 1e-6 })
+    );
+    expect(`${withDegenerate.loopCount}/${withDegenerate.pointCount}`).toBe(`${alone.loopCount}/${alone.pointCount}`);
+  });
+
+  it('leaves no stale shape behind when a trace loads fewer than the last one', () => {
+    // `loadShapes` writes through a cursor that only advances for a shape actually loaded.
+    // Counting a skipped slot would leave the previous trace's shape in it, still folding
+    // into the field — a phantom that appears only in the second of two traces.
+    const tracer = makeTracer();
+    const three = [
+      { x: 150, y: 150, points: TRIANGLE },
+      { x: 350, y: 150, points: STAR },
+      { x: 250, y: 350, points: star(6, 60, 24) },
+    ];
+    tracer.trace(three, config({ cell: 2 }));
+    const after = tracer.trace([{ x: 150, y: 150, points: TRIANGLE }], config({ cell: 2 }));
+
+    const fresh = makeTracer().trace([{ x: 150, y: 150, points: TRIANGLE }], config({ cell: 2 }));
+    expect(`${after.loopCount}/${after.pointCount}`).toBe(`${fresh.loopCount}/${fresh.pointCount}`);
+  });
+
+  it('keeps the fold’s early-out exact once there are enough shapes to trigger it', () => {
+    // `SKIP_MIN_SHAPES` is 8, so a smaller scene never runs the skip at all and cannot
+    // catch a wrong bound. The skip tests `max(|dx| - hw, |dy| - hh)` as a lower bound on
+    // this shape's distance, which for a polygon is only a bound if `hw` / `hh` cover the
+    // outward offset too — hence the `+ r` in `loadPolygon`. Too small, and a shape whose
+    // rounded outline does reach the sample gets skipped, losing part of the contour.
+    const tracer = makeTracer();
+    const ring = Array.from({ length: 10 }, (_, index) => {
+      const angle = (index / 10) * Math.PI * 2;
+      return {
+        x: 256 + Math.cos(angle) * 150,
+        y: 256 + Math.sin(angle) * 150,
+        points: index % 2 === 0 ? star(5, 44, 18) : [-34, -26, 34, -26, 20, 30, -30, 34],
+        r: 14,
+      };
+    });
+
+    const field = (x: number, y: number): number => {
+      let d = 1e9;
+      for (const s of ring) {
+        const di = sdPoly(x, y, s.x, s.y, s.points, s.r);
+        const h = Math.max(BLEND - Math.abs(d - di), 0) / BLEND;
+        d = Math.min(d, di) - (h * h * BLEND) / 4;
+      }
+      return d;
+    };
+
+    const dense = tracer.trace(ring, config({ traversal: 'dense', cell: 1 }));
+    for (const point of allPoints(tracer)) expect(Math.abs(field(point.x, point.y))).toBeLessThan(0.6);
+
+    const sparse = tracer.trace(ring, config({ traversal: 'sparse', cell: 1 }));
+    expect(`${sparse.loopCount}/${sparse.pointCount}`).toBe(`${dense.loopCount}/${dense.pointCount}`);
+    for (const point of allPoints(tracer)) expect(Math.abs(field(point.x, point.y))).toBeLessThan(0.6);
+  });
+
+  it('mixes with boxes in one field, which is the point of one primitive set', () => {
+    const tracer = makeTracer();
+    const mixed = [
+      { x: 180, y: 200, hw: 70, hh: 40, r: 18, n: 2.611 },
+      { x: 330, y: 240, points: STAR },
+      { x: 250, y: 380, hw: 50, hh: 50, r: 50 },
+    ];
+    const dense = tracer.trace(mixed, config({ traversal: 'dense', cell: 1 }));
+    const sparse = tracer.trace(mixed, config({ traversal: 'sparse', cell: 1 }));
+    expect(`${sparse.loopCount}/${sparse.pointCount}`).toBe(`${dense.loopCount}/${dense.pointCount}`);
+    expect(dense.loopCount).toBeGreaterThan(0);
+  });
+});

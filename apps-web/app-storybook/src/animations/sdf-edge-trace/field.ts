@@ -73,6 +73,29 @@ export interface FieldShape {
    * archive/2026-08-corner-shape-vs-apple.
    */
   n?: number;
+  /**
+   * Polygon vertices, interleaved `x, y` and **relative to `{ x, y }`**, which makes the
+   * shape this polygon instead of a box. Any winding, convex or concave, ≥ 3 vertices.
+   *
+   * This is the one primitive that is not a rounded box, and it exists because a star, a
+   * triangle or a traced logo is not a member of the box family at any exponent — no `hw`,
+   * `hh`, `r` or `n` produces a concave vertex.
+   *
+   * With `points` set, `hw` / `hh` / `n` are ignored (`hw` / `hh` are *derived* from the
+   * vertices for the bounding box and the fold's early-out), and `r` changes meaning: on a
+   * box it is a corner radius inscribed in the corner, on a polygon it is a true **outward
+   * offset**, so the shape grows by `r` in every direction and every corner — convex and
+   * concave alike — is filleted at that radius. That is what makes an irregular curved blob
+   * reachable from the same primitive: a coarse polygon with a large `r`.
+   *
+   * The rounding is circular, not p-norm. `n` has no polygon meaning: a superellipse is
+   * defined against a corner's two edges and a polygon's corners have arbitrary angles, so
+   * there is no single exponent to apply.
+   *
+   * Exact and 1-Lipschitz — the distance is a real Euclidean distance to the edge set, so
+   * unlike the p-norm corner it needs no extra cull slack.
+   */
+  points?: readonly number[];
 }
 
 /**
@@ -189,6 +212,16 @@ const MAX_OVERLAY_CELLS = 16384;
  * count multiplies every single field evaluation.
  */
 const MAX_SHAPES = 64;
+/**
+ * Upper bound on polygon vertices per trace, summed over every shape.
+ *
+ * The same cost argument as `MAX_SHAPES`, one level down: a polygon's distance is a loop
+ * over its edges *inside* the loop over shapes, so a sample costs the total vertex count,
+ * not the shape count. 1024 is ~16 shapes of 64 vertices, which is already 1024 segment
+ * distances per sample — far past where this stays interactive, so it bounds allocation
+ * rather than promising performance.
+ */
+const MAX_POLY_POINTS = 1024;
 
 /**
  * Floor on the smin blend radius.
@@ -345,6 +378,22 @@ export class ContourTracer {
   private readonly shapeN: Float64Array;
   /** `hw === hh === r`, i.e. the shape is a plain disc and can skip the box maths. */
   private readonly shapeIsDisc: Uint8Array;
+  /**
+   * Vertex count per shape, 0 for a box. Doubles as the primitive discriminator, so the
+   * sample loop branches on a number it already has to load rather than on a separate tag.
+   */
+  private readonly shapeVerts: Int32Array;
+  /** Where this shape's vertices start in `polyXY`, in vertices. */
+  private readonly shapePolyStart: Int32Array;
+  /**
+   * Every polygon's vertices, interleaved and in **absolute** domain coordinates.
+   *
+   * One shared pool rather than an array per shape: the sample loop is the hot path and a
+   * `Float64Array` read beats dereferencing a per-shape array. Absolute rather than relative
+   * so the loop does not add the centre back on every edge of every sample.
+   */
+  private readonly polyXY: Float64Array;
+  private polyCursor = 0;
 
   // --- scratch, allocated once ---
   private readonly rowA: Float32Array;
@@ -413,6 +462,9 @@ export class ContourTracer {
     this.segFrom = new Int32Array(maxPoints * 2);
     this.segTo = new Int32Array(maxPoints * 2);
     this.cellRects = new Float32Array(MAX_OVERLAY_CELLS * 5);
+    this.shapeVerts = new Int32Array(MAX_SHAPES);
+    this.shapePolyStart = new Int32Array(MAX_SHAPES);
+    this.polyXY = new Float64Array(MAX_POLY_POINTS * 2);
     this.shapeX = new Float64Array(MAX_SHAPES);
     this.shapeY = new Float64Array(MAX_SHAPES);
     this.shapeHW = new Float64Array(MAX_SHAPES);
@@ -431,23 +483,84 @@ export class ContourTracer {
   // ---------------------------------------------------------------- fields
 
   /**
-   * Exact signed distance to shape `i`'s rounded box.
+   * Exact signed distance to shape `i`, whichever primitive it is.
+   *
+   * Both are exact, so `|∇d| = 1` almost everywhere for either — better behaved than the
+   * smooth-min that combines them, which is only Lipschitz-bounded and is what
+   * `CULL_SAFETY` exists for. The p-norm corner is the one exception, and it is why
+   * `gradientBound` exists; polygons do not contribute to it.
+   */
+  private shapeDistance(i: number, x: number, y: number): number {
+    if (this.shapeVerts[i] !== 0) return this.polyDistance(i, x, y);
+    return this.boxDistance(i, x, y);
+  }
+
+  /**
+   * Exact signed distance to shape `i`'s polygon, offset outward by `r`.
+   *
+   * Two independent things per edge, both cheap enough to keep in one pass:
+   *
+   * - **Magnitude**, as the minimum distance to any edge *segment* — `t` clamped to `[0, 1]`
+   *   so a vertex is handled by both its edges agreeing rather than by a special case.
+   *   Accumulated squared, with a single `sqrt` at the end.
+   * - **Sign**, by the even-odd crossing count of a ray cast in `+x`. This is what makes
+   *   concavity work: a star's notch is outside the polygon while sitting inside its hull,
+   *   and a crossing count says so where a "nearest edge, which side" test does not.
+   *
+   * The `!==` on the two `y` comparisons is a half-open rule — an edge counts if it spans
+   * `y` downward but not upward — which is what stops a ray that passes exactly through a
+   * vertex from counting it twice and reporting inside as outside.
+   *
+   * Exact, so `|∇d| = 1` almost everywhere and the quadtree needs no extra slack. The
+   * outward offset does not change that: subtracting a constant moves every level set
+   * without steepening any of them.
+   */
+  private polyDistance(i: number, x: number, y: number): number {
+    const start = this.shapePolyStart[i] ?? 0;
+    const count = this.shapeVerts[i] ?? 0;
+    let best = Infinity;
+    let inside = false;
+
+    let jx = this.polyXY[(start + count - 1) * 2] ?? 0;
+    let jy = this.polyXY[(start + count - 1) * 2 + 1] ?? 0;
+    for (let v = 0; v < count; v++) {
+      const ix = this.polyXY[(start + v) * 2] ?? 0;
+      const iy = this.polyXY[(start + v) * 2 + 1] ?? 0;
+
+      const ex = jx - ix;
+      const ey = jy - iy;
+      const wx = x - ix;
+      const wy = y - iy;
+      const len2 = ex * ex + ey * ey;
+      const t = len2 > 0 ? Math.min(Math.max((wx * ex + wy * ey) / len2, 0), 1) : 0;
+      const cx = wx - ex * t;
+      const cy = wy - ey * t;
+      const d2 = cx * cx + cy * cy;
+      if (d2 < best) best = d2;
+
+      if (iy > y !== jy > y && x < ix + ((y - iy) / (jy - iy)) * (jx - ix)) inside = !inside;
+
+      jx = ix;
+      jy = iy;
+    }
+
+    return (inside ? -Math.sqrt(best) : Math.sqrt(best)) - (this.shapeR[i] ?? 0);
+  }
+
+  /**
+   * The rounded box, and what a shape without `points` means.
    *
    * ```
    * q = |p - c| - halfExtent + r
    * d = min(max(q.x, q.y), 0) + length(max(q, 0)) - r
    * ```
    *
-   * Exact rather than a bound, and `|∇d| = 1` almost everywhere — better behaved
-   * than the smooth-min that combines these, which is only Lipschitz-bounded and is
-   * what `CULL_SAFETY` exists for.
-   *
    * With `hw = hh = r` the half-extent cancels: `q = |p - c|`, whose components are
    * non-negative, so `min(max(q.x, q.y), 0)` is 0 and the whole thing reduces to
    * `length(p - c) - r`. That identity is why discs need no branch here for
    * correctness — the fast path in `density` is purely about skipping a sqrt.
    */
-  private shapeDistance(i: number, x: number, y: number): number {
+  private boxDistance(i: number, x: number, y: number): number {
     const r = this.shapeR[i] ?? 0;
     const qx = Math.abs(x - (this.shapeX[i] ?? 0)) - (this.shapeHW[i] ?? 0) + r;
     const qy = Math.abs(y - (this.shapeY[i] ?? 0)) - (this.shapeHH[i] ?? 0) + r;
@@ -609,31 +722,99 @@ export class ContourTracer {
    * for makes the distance formula report a shape that bulges outside its own
    * extent, which would then escape the bounding box `bounded` and `sparse` derive
    * from and get silently clipped.
+   *
+   * Written through a cursor that only advances for a shape actually loaded, so anything
+   * unusable — a hole in the input array, a polygon the vertex pool has no room left for —
+   * is genuinely absent rather than present with whatever the previous trace left in that
+   * slot. A stale slot would keep contributing to the fold, which reads as a phantom shape.
    */
   private loadShapes(shapes: readonly FieldShape[]): void {
     const fallback = this.radius;
     let steepest = 1;
-    const count = Math.min(shapes.length, MAX_SHAPES);
-    for (let i = 0; i < count; i++) {
+    const limit = Math.min(shapes.length, MAX_SHAPES);
+    let w = 0;
+    this.polyCursor = 0;
+
+    for (let i = 0; i < limit; i++) {
       const shape = shapes[i];
       if (shape === undefined) continue;
+
+      if (shape.points !== undefined) {
+        if (this.loadPolygon(w, shape)) w++;
+        continue;
+      }
+
       const hw = shape.hw ?? fallback;
       const hh = shape.hh ?? fallback;
       const r = Math.min(shape.r ?? fallback, hw, hh);
       const n = shape.n ?? 2;
-      this.shapeX[i] = shape.x;
-      this.shapeY[i] = shape.y;
-      this.shapeHW[i] = hw;
-      this.shapeHH[i] = hh;
-      this.shapeR[i] = r;
-      this.shapeN[i] = n;
+      this.shapeVerts[w] = 0;
+      this.shapeX[w] = shape.x;
+      this.shapeY[w] = shape.y;
+      this.shapeHW[w] = hw;
+      this.shapeHH[w] = hh;
+      this.shapeR[w] = r;
+      this.shapeN[w] = n;
       // A disc needs a circular corner as well as square half-extents; a superelliptical
       // one is a different shape and must not take the sqrt fast path.
-      this.shapeIsDisc[i] = hw === r && hh === r && n === 2 ? 1 : 0;
+      this.shapeIsDisc[w] = hw === r && hh === r && n === 2 ? 1 : 0;
       if (n < 2) steepest = Math.max(steepest, Math.pow(2, 1 / n - 0.5));
+      w++;
     }
-    this.shapeCount = count;
+
+    this.shapeCount = w;
     this.gradientBound = steepest;
+  }
+
+  /**
+   * Copies one polygon into the vertex pool and derives the box fields the rest of the
+   * class needs.
+   *
+   * `hw` / `hh` are the vertex extent from the centre **grown by `r`**, which is what keeps
+   * two existing mechanisms correct without either of them learning about polygons:
+   *
+   * - `shapeBounds` reads them to size the `bounded` and `sparse` domains, so they have to
+   *   cover the offset outline, not the raw vertices.
+   * - `sdf`'s early-out reads them as a lower bound on this shape's distance. Distance to a
+   *   polygon is at least distance to its bounding box, and the `+ r` keeps that true after
+   *   the offset — so the skip stays *exact* rather than becoming a heuristic.
+   *
+   * The centre is the caller's `{ x, y }`, not the centroid: vertices are relative to it, and
+   * moving the shape must not reshape it. A lopsided polygon therefore gets a lopsided
+   * `hw` / `hh` around that point, taken as the larger side so the box still contains it.
+   *
+   * Returns whether the shape was loaded. Fewer than three vertices is not a polygon, and a
+   * pool with no room for all of them would be a *different* polygon — half a star is a
+   * plausible-looking shape that nobody asked for — so both are refused outright.
+   */
+  private loadPolygon(i: number, shape: FieldShape): boolean {
+    const points = shape.points ?? [];
+    const verts = Math.floor(points.length / 2);
+    if (verts < 3 || verts > MAX_POLY_POINTS - this.polyCursor) return false;
+
+    const r = Math.max(shape.r ?? 0, 0);
+    let spanX = 0;
+    let spanY = 0;
+    for (let v = 0; v < verts; v++) {
+      const px = points[v * 2] ?? 0;
+      const py = points[v * 2 + 1] ?? 0;
+      this.polyXY[(this.polyCursor + v) * 2] = shape.x + px;
+      this.polyXY[(this.polyCursor + v) * 2 + 1] = shape.y + py;
+      spanX = Math.max(spanX, Math.abs(px));
+      spanY = Math.max(spanY, Math.abs(py));
+    }
+
+    this.shapeVerts[i] = verts;
+    this.shapePolyStart[i] = this.polyCursor;
+    this.shapeX[i] = shape.x;
+    this.shapeY[i] = shape.y;
+    this.shapeR[i] = r;
+    this.shapeN[i] = 2;
+    this.shapeIsDisc[i] = 0;
+    this.shapeHW[i] = spanX + r;
+    this.shapeHH[i] = spanY + r;
+    this.polyCursor += verts;
+    return true;
   }
 
   /** Axis-aligned bounds of every shape, grown by `influence`. Empty when there are none. */
