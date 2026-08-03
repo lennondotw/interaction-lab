@@ -13,12 +13,16 @@ const meta: Meta<typeof ContinuousCorner> = {
   parameters: { layout: 'fullscreen' },
   argTypes: {
     radius: { control: { type: 'range', min: 0, max: 120, step: 1 } },
+    mode: { control: 'inline-radio', options: ['path', 'css'] },
+    debugForceCssBaseline: { control: 'boolean' },
     clipContent: { control: 'boolean' },
     className: { control: 'text' },
     surfaceClassName: { control: 'text' },
   },
   args: {
     radius: 28,
+    mode: 'path',
+    debugForceCssBaseline: false,
     clipContent: true,
     className: 'size-40',
     surfaceClassName: SURFACE,
@@ -126,6 +130,102 @@ export const Circle: Story = {
   render: (args) => (
     <Stage>
       <ContinuousCorner {...args} />
+    </Stage>
+  ),
+};
+
+/**
+ * `mode="css"` — `border-radius` plus the fitted `corner-shape` instead of a
+ * generated path. 0.0031r from Apple's curve, and it costs no measurement, no SVG
+ * and no per-frame path, so it composes with the rest of CSS for free. Correct only
+ * below the clamp; use `path` for pills and circles.
+ */
+export const CssMode: Story = {
+  args: { mode: 'css', className: 'h-40 w-72' },
+  render: (args) => (
+    <Stage>
+      <ContinuousCorner {...args} />
+    </Stage>
+  ),
+};
+
+/**
+ * What the first frame looks like before the box has been measured: plain
+ * `border-radius`, no `corner-shape`. 0.0138r from Apple below the clamp — 0.33px at
+ * `r = 24` — and **exact at the clamp**, since `border-radius` clamps to a true pill
+ * or circle by itself. That is why the baseline does not try to be clever: it is
+ * never the wrong silhouette, only a slightly less smooth corner, and it needs to
+ * know nothing about the box to be safe.
+ */
+export const DebugBaseline: Story = {
+  args: { debugForceCssBaseline: true, className: 'h-40 w-72' },
+  render: (args) => (
+    <Stage>
+      <ContinuousCorner {...args} />
+    </Stage>
+  ),
+};
+
+/**
+ * Composed, because a third of a pixel is not something a single instance can show.
+ * All three shape paths at `r = 40` on a 160px box — deliberately below the crossover
+ * at 52.3, since that is the only regime where `css` claims to be close. They should
+ * be indistinguishable; `ShapeModesAtTheClamp` is where they stop being.
+ *
+ * `data-shape` on each root says which path it took.
+ */
+export const ShapeModes: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => (
+    <Stage>
+      <div className="flex flex-row flex-wrap items-center justify-center gap-8">
+        {(
+          [
+            { label: 'path · exact', props: {} },
+            { label: 'css · 0.0031r', props: { mode: 'css' as const } },
+            { label: 'baseline · 0.0138r', props: { debugForceCssBaseline: true } },
+          ] as const
+        ).map(({ label, props }) => (
+          <div key={label} className="flex flex-col items-center gap-2">
+            <ContinuousCorner radius={40} border={HAIRLINE} className="size-40" surfaceClassName={SURFACE} {...props} />
+            <Caption>{label}</Caption>
+          </div>
+        ))}
+      </div>
+    </Stage>
+  ),
+};
+
+/**
+ * The clamp is where `css` mode stops being an approximation and starts being a
+ * different shape. At a pill radius `corner-shape` keeps bulging where Apple
+ * flattens onto an arc — 12.5% of the radius — while the plain-`border-radius`
+ * baseline is exactly right. Read left to right: correct, wrong, correct.
+ */
+export const ShapeModesAtTheClamp: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => (
+    <Stage>
+      <div className="flex flex-col items-center gap-6">
+        {(
+          [
+            { label: 'path · exact pill', props: {} },
+            { label: 'css · 12.5% off', props: { mode: 'css' as const } },
+            { label: 'baseline · exact pill', props: { debugForceCssBaseline: true } },
+          ] as const
+        ).map(({ label, props }) => (
+          <div key={label} className="flex flex-col items-center gap-2">
+            <ContinuousCorner
+              radius={9999}
+              border={HAIRLINE}
+              className="h-24 w-96"
+              surfaceClassName={SURFACE}
+              {...props}
+            />
+            <Caption>{label}</Caption>
+          </div>
+        ))}
+      </div>
     </Stage>
   ),
 };

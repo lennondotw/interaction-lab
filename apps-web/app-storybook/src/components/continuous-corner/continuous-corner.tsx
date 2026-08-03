@@ -12,7 +12,17 @@ import {
   useRef,
   useState,
 } from 'react';
-import { RadiusInput, resolveRadii, squirclePath } from './squircle-path.js';
+import { CornerRadii, RadiusInput, resolveRadii, squirclePath } from './squircle-path.js';
+
+/**
+ * The `superellipse(k)` that best fits Apple's curve, and the radius scale it needs.
+ * Fitted in `archive/2026-08-corner-shape-vs-apple` to **0.0031r** — 0.07px at
+ * `r = 24`. Note that `k` is 1.3844 rather than the 1.6 usually quoted, and the
+ * scale is 1.2409 rather than the 1.4330 that matches corner *depth*: fitting a
+ * whole curve and fitting its apex are different objectives.
+ */
+const CSS_SHAPE_K = 1.3844;
+const CSS_SHAPE_RADIUS_SCALE = 1.2409;
 
 export interface ContinuousCornerBorder {
   width: number;
@@ -58,6 +68,26 @@ export interface ContinuousCornerProps extends HTMLAttributes<HTMLElement> {
    */
   surfaceClassName?: string;
   border?: ContinuousCornerBorder;
+  /**
+   * How the shape is drawn.
+   *
+   * `path` (default) generates Apple's curve exactly and needs the box measured.
+   * `css` uses `border-radius` plus `corner-shape` instead, which is **0.0031r**
+   * from Apple's curve — 0.07px at `r = 24` — and costs no measurement, no extra
+   * layer, and no per-frame path. It composes with the rest of CSS for free.
+   *
+   * `css` is only that close **below the clamp**. `corner-shape` has no edge budget
+   * to run out of, so it never degrades: on a pill it keeps bulging where Apple
+   * flattens onto an arc, and the gap becomes 12.5% of the radius. Use `css` when
+   * the radius is comfortably under 65% of half the short side, which is most cards
+   * and panels, and `path` for anything pill- or circle-shaped.
+   */
+  mode?: 'path' | 'css';
+  /**
+   * Hold the pre-measurement baseline instead of ever upgrading to the real path,
+   * so the first frame can actually be looked at. Debug only.
+   */
+  debugForceCssBaseline?: boolean;
   asChild?: boolean;
   children?: ReactNode;
 }
@@ -100,6 +130,40 @@ const useBorderBoxSize = (enabled: boolean): [RefObject<HTMLDivElement | null>, 
 
   return [ref, size];
 };
+
+type ShapeStyle = CSSProperties & { '--continuous-corner-shape'?: string };
+
+/**
+ * The CSS-only shape, used both as the pre-measurement baseline and as `css` mode.
+ *
+ * Unsmoothed it is a plain `border-radius` at the radius asked for, which is
+ * **0.0138r** from Apple's curve — 0.33px at `r = 24` — and, far more usefully,
+ * **exact at the clamp**: `border-radius` clamps to a true pill or circle on its
+ * own, which is precisely where Apple's curve is the arc. So the baseline is never
+ * the wrong silhouette, only a slightly less smooth one, and it needs no knowledge
+ * of the box to be safe. That is why the baseline does not use `corner-shape`, which
+ * would be four times closer below the clamp and 12.5% wrong at it.
+ *
+ * Smoothed, it adds the fitted `superellipse` and scales the radius to match — the
+ * `css` mode, for callers who know they are below the clamp.
+ */
+const cssShapeStyle = (radii: CornerRadii, smoothed: boolean): ShapeStyle => {
+  const scale = smoothed ? CSS_SHAPE_RADIUS_SCALE : 1;
+  const px = (value: number) => `${value * scale}px`;
+  return {
+    borderRadius: `${px(radii.topLeft)} ${px(radii.topRight)} ${px(radii.bottomRight)} ${px(radii.bottomLeft)}`,
+    // Set through a custom property because React will not write an unknown
+    // longhand like `corner-shape` from a style object.
+    ...(smoothed ? { '--continuous-corner-shape': `superellipse(${CSS_SHAPE_K})` } : {}),
+  };
+};
+
+/** Where the stroke sits, as an `outline-offset`. Outlines follow `corner-shape`. */
+const OUTLINE_OFFSET = {
+  inner: (width: number) => -width,
+  center: (width: number) => -width / 2,
+  outer: () => 0,
+} as const;
 
 const Edge: FC<{ size: Size; path: string; border: ContinuousCornerBorder }> = ({ size, path, border }) => {
   const id = useId();
@@ -186,15 +250,19 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
   className,
   clipContent = true,
   contentClassName,
+  debugForceCssBaseline = false,
+  mode = 'path',
   radius = 0,
   size,
   style,
   surfaceClassName,
   ...props
 }) => {
+  // `css` mode never measures, and neither does the pinned baseline.
+  const wantsPath = mode === 'path' && !debugForceCssBaseline;
   const observed = size === undefined;
-  const [ref, measured] = useBorderBoxSize(observed);
-  const resolved = size ?? measured;
+  const [ref, measured] = useBorderBoxSize(wantsPath && observed);
+  const resolved = wantsPath ? (size ?? measured) : null;
 
   const radii = useMemo(() => resolveRadii(radius), [radius]);
   const path = useMemo(
@@ -202,22 +270,53 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
     [resolved, radii]
   );
 
-  const clip: CSSProperties = path ? { clipPath: `path("${path}")` } : {};
+  // Until there is a path — first paint, `css` mode, or the pinned baseline — the
+  // shape is CSS. Both fall out of the same helper; only `smoothed` differs.
+  const usingPath = Boolean(path);
+  const smoothed = mode === 'css' && !debugForceCssBaseline;
+  const shape: ShapeStyle = usingPath ? { clipPath: `path("${path}")` } : cssShapeStyle(radii, smoothed);
+
+  // A CSS shape carries its border as an `outline`, which follows `border-radius`
+  // and `corner-shape` and costs no layout — so `css` mode needs no SVG at all, and
+  // gets all three alignments from `outline-offset`.
+  const cssBorder: CSSProperties =
+    !usingPath && border
+      ? {
+          outline: `${border.width}px solid ${border.color}`,
+          outlineOffset: OUTLINE_OFFSET[border.align ?? 'inner'](border.width),
+        }
+      : {};
+
   const Component = asChild ? Slot.Root : 'div';
 
   return (
     <Component
       ref={ref}
-      className={cn('relative isolate', className)}
+      className={cn(
+        `
+          relative isolate
+          [corner-shape:var(--continuous-corner-shape)]
+        `,
+        className
+      )}
       data-slot="continuous-corner"
+      data-shape={usingPath ? 'path' : smoothed ? 'css' : 'baseline'}
       data-sizing={observed ? 'observed' : 'fixed'}
-      style={style}
+      // The root carries the radius only to give the outline something to follow;
+      // it never clips, so the border can still paint outside the outline.
+      style={{ ...style, ...(usingPath ? {} : shape), ...cssBorder }}
       {...props}
     >
       <div
         aria-hidden="true"
-        className={cn('absolute inset-0 -z-10', surfaceClassName)}
-        style={clip}
+        className={cn(
+          `
+            absolute inset-0 -z-10
+            [corner-shape:var(--continuous-corner-shape)]
+          `,
+          surfaceClassName
+        )}
+        style={shape}
         data-slot="fill"
       />
       {clipContent ? (
@@ -226,13 +325,28 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
         // the right shape at the wrong offset and cut into the content. Against an
         // auto-height root `height: 100%` resolves to `auto`, so this fills a
         // definite root and still grows with content in an indefinite one.
-        <div className={cn('size-full', contentClassName)} style={clip} data-slot="content">
+        //
+        // A CSS shape needs `overflow-hidden` to clip at all; a `clip-path` already
+        // does, and adding overflow there would make the content box a scroll
+        // container for no reason.
+        <div
+          className={cn(
+            `
+              size-full
+              [corner-shape:var(--continuous-corner-shape)]
+            `,
+            !usingPath && 'overflow-hidden',
+            contentClassName
+          )}
+          style={shape}
+          data-slot="content"
+        >
           {children}
         </div>
       ) : (
         children
       )}
-      {border && resolved && path ? <Edge size={resolved} path={path} border={border} /> : null}
+      {border && usingPath && resolved ? <Edge size={resolved} path={path} border={border} /> : null}
     </Component>
   );
 };

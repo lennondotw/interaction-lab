@@ -105,6 +105,47 @@ pass is required.
 `RoundedRectangle`: a radius past half the short side has no effect, so
 `cornerRadius: 10000` and `cornerRadius: height / 2` are the same shape.
 
+## Which shape path to use
+
+Measured in `archive/2026-08-corner-shape-vs-apple`: CSS can get much closer to this
+curve than the SVG machinery suggests, so most callers do not need it.
+
+| path                       | deviation from Apple |           at the clamp | cost                              |
+| -------------------------- | -------------------: | ---------------------: | --------------------------------- |
+| `mode="path"`              |                exact |                  exact | measure, regenerate, extra layers |
+| `mode="css"`               |              0.0031r | **12.5% off — do not** | nothing                           |
+| baseline (pre-measurement) |              0.0138r |              **exact** | nothing                           |
+
+`css` mode is `border-radius × 1.2409` plus `corner-shape: superellipse(1.3844)`.
+Both numbers are fitted; note that `k` is **not** the 1.6 usually quoted and the
+scale is **not** the 1.4330 that matches corner depth — fitting a whole curve and
+fitting its apex are different objectives. In that mode the border becomes an
+`outline` with a negative offset, which follows `corner-shape` and gives all three
+alignments for free, so there is no SVG and no measurement at all.
+
+**So use `css` for cards, panels and buttons**, where the radius is comfortably below
+65% of half the short side, and it composes with everything CSS already does.
+**Use `path` for pills, circles, and anything near the clamp**, which is the one
+regime where `corner-shape` is not an approximation but a different shape:
+it has no edge budget to run out of, so it never degrades.
+
+### The pre-measurement baseline
+
+Before the box is measured — first paint, SSR — the shape is a plain `border-radius`
+at the radius asked for, with no `corner-shape`. That is 0.0138r below the clamp, and
+0.33px at `r = 24`.
+
+It deliberately does _not_ use the closer `corner-shape` fit, because **plain
+`border-radius` is exact at the clamp**: it clamps to a true pill or circle by
+itself, which is precisely where Apple's curve is the arc. So the baseline is never
+the _wrong silhouette_, only a slightly less smooth corner — and it needs to know
+nothing about the box to be safe, which matters because before measuring there is no
+way to tell whether the radius is past the clamp. A `corner-shape` baseline would be
+four times closer below the clamp and 12.5% wrong at it, and a pill popping from
+squircle to arc is far more visible than a corner getting slightly smoother.
+
+`debugForceCssBaseline` pins it there so the first frame can be looked at.
+
 ## Cost of the two sizing modes
 
 Measured in Chrome 152 on a 144Hz display (6.9ms frame budget), via the
