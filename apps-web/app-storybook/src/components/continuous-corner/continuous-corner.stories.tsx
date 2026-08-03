@@ -483,13 +483,20 @@ export const ResizeStress: Story = {
 
           <div className="flex flex-col gap-2" style={{ width: STRESS_MAX_WIDTH }}>
             <Caption>observed — ResizeObserver, path regenerated per frame</Caption>
-            <div className="flex flex-row flex-wrap gap-2" data-testid="observed-group" style={{ width }}>
+            {/*
+              A fixed column count rather than `flex-wrap`: wrapping would change
+              how many items fit as the width animates, so the group would flip
+              between row counts and jump vertically. Grid columns stretch instead,
+              which is what makes every instance re-measure — the thing under test —
+              at a constant height.
+            */}
+            <div className="grid grid-cols-6 gap-2" data-testid="observed-group" style={{ width }}>
               {Array.from({ length: count }, (_, index) => (
                 <ContinuousCorner
                   key={index}
                   radius={18}
                   border={HAIRLINE}
-                  className="h-16 grow"
+                  className="h-16"
                   surfaceClassName={SURFACE}
                 />
               ))}
@@ -498,7 +505,13 @@ export const ResizeStress: Story = {
 
           <div className="flex flex-col gap-2" style={{ width: STRESS_MAX_WIDTH }}>
             <Caption>fixed — size declared, no observer, path never rebuilt</Caption>
-            <div className="flex flex-row flex-wrap gap-2" data-testid="fixed-group" style={{ width }}>
+            {/*
+              Deliberately not animated. `size` is a promise about the box, so the
+              box has to actually stay 64px — stretching these would make the
+              declared size a lie, which is the failure mode that prop has. This is
+              the control: same instance count, same painting, no observer.
+            */}
+            <div className="grid w-max grid-cols-6 gap-2" data-testid="fixed-group">
               {Array.from({ length: count }, (_, index) => (
                 <ContinuousCorner
                   key={index}
