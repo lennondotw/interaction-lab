@@ -24,6 +24,13 @@ const CONTENT_MAX_WIDTH_PX = 640;
 
 const CLIP_BLUR_PX = 6;
 const BLUR_ENTER_MS = 140;
+/**
+ * A blur appearing must not front-load. `ease` puts most of the change in the
+ * first frame or two, which reads as a pop whatever the nominal duration is, so
+ * the enter and the exit carry their own curves rather than sharing one.
+ */
+const BLUR_ENTER_EASE = 'cubic-bezier(0.42, 0, 0.58, 1)';
+const BLUR_EXIT_EASE = 'ease-out';
 const BLUR_EXIT_MS = 420;
 const TOGGLE_LAYOUT_MS = 500;
 const TOGGLE_BLUR_EXIT_MS = 460;
@@ -248,6 +255,7 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
     if (!root) return;
 
     root.style.setProperty('--split-blur-duration', `${motionMs(durationMs)}ms`);
+    root.style.setProperty('--split-blur-ease', blurPx > 0 ? BLUR_ENTER_EASE : BLUR_EXIT_EASE);
     root.style.setProperty('--split-left-blur', cssPx(blurPx));
     root.style.setProperty('--split-right-blur', cssPx(blurPx));
   };
@@ -547,6 +555,7 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
 
   const rootStyle = {
     '--split-blur-duration': `${motionMs(BLUR_ENTER_MS)}ms`,
+    '--split-blur-ease': BLUR_ENTER_EASE,
     '--split-divider-x': '60%',
     '--split-leading-layout-width': '60%',
     '--split-leading-visual-width': '60%',
@@ -575,7 +584,7 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
     position: 'absolute',
     right: 0,
     top: 0,
-    transition: 'filter var(--split-blur-duration) ease',
+    transition: 'filter var(--split-blur-duration) var(--split-blur-ease)',
   } as CSSProperties;
 
   const leftScaleSurfaceStyle = {
@@ -600,7 +609,7 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
     position: 'absolute',
     right: 0,
     top: 0,
-    transition: 'filter var(--split-blur-duration) ease',
+    transition: 'filter var(--split-blur-duration) var(--split-blur-ease)',
   } as CSSProperties;
 
   const rightScaleSurfaceStyle = {

@@ -50,6 +50,7 @@ const LAYOUT_SPRING = {
 // which we consider the committed layout to be settling, so buffered blur is
 // prevented from reappearing on small spring overshoots.
 const COMMIT_ANIMATION_MS = 500;
+const BLUR_ENTER_MS = 140;
 const BLUR_EXIT_MS = 180;
 const BLUR_EXIT_DELAY_MS = Math.max(0, COMMIT_ANIMATION_MS - BLUR_EXIT_MS);
 
@@ -166,6 +167,18 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     left?: { stop: () => void };
     right?: { stop: () => void };
   }>({});
+
+  /**
+   * Blur enter is re-evaluated on every live frame, so the animation may only be
+   * (re)started when the *target* changes. Without this the enter would either
+   * restart every pointermove or, as it originally did, be written straight to
+   * its end value and never ramp at all.
+   */
+  const blurEnterAnimationControlsRef = useRef<{
+    left?: { stop: () => void };
+    right?: { stop: () => void };
+  }>({});
+  const blurTargetRef = useRef({ left: 0, right: 0 });
   const dragOffsetRef = useRef(0);
   const dragViewportWidthRef = useRef(0);
   const dragActiveRef = useRef(false);
@@ -263,6 +276,23 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     blurExitAnimationControlsRef.current.right?.stop();
   };
 
+  /**
+   * Moves one side's blur toward `targetPx`, doing nothing if it is already
+   * heading there. `easeInOut` rather than the exit's `easeOut`: a front-loaded
+   * curve puts most of the blur in the first frame or two, which reads as a pop
+   * however long the nominal duration is.
+   */
+  const setBlurTarget = (side: 'left' | 'right', targetPx: number) => {
+    if (blurTargetRef.current[side] === targetPx) return;
+
+    blurTargetRef.current[side] = targetPx;
+    blurEnterAnimationControlsRef.current[side]?.stop();
+    blurEnterAnimationControlsRef.current[side] = animate(side === 'left' ? leftBlurPx : rightBlurPx, targetPx, {
+      duration: (targetPx > 0 ? BLUR_ENTER_MS : BLUR_EXIT_MS) / 1000,
+      ease: targetPx > 0 ? 'easeInOut' : 'easeOut',
+    });
+  };
+
   const scheduleBlurExitAnimation = () => {
     stopBlurExitAnimation();
 
@@ -270,6 +300,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       blurExitTimerRef.current = null;
       blurExitAnimationControlsRef.current.left?.stop();
       blurExitAnimationControlsRef.current.right?.stop();
+      blurEnterAnimationControlsRef.current.left?.stop();
+      blurEnterAnimationControlsRef.current.right?.stop();
+      blurTargetRef.current = { left: 0, right: 0 };
       blurExitAnimationControlsRef.current.left = animate(leftBlurPx, 0, {
         duration: BLUR_EXIT_MS / 1000,
         ease: 'easeOut',
@@ -355,8 +388,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
     const shouldShowBufferedBlur = pendingCommitRef.current && !commitAnimationActiveRef.current;
 
     if (!commitAnimationActiveRef.current) {
-      leftBlurPx.set(shouldShowBufferedBlur && leftContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
-      rightBlurPx.set(shouldShowBufferedBlur && rightContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
+      setBlurTarget('left', shouldShowBufferedBlur && leftContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
+      setBlurTarget('right', shouldShowBufferedBlur && rightContentDiffPx > WIDTH_DIFF_EPSILON_PX ? CLIP_BLUR_PX : 0);
     }
 
     metricsRef.current = {
@@ -441,6 +474,9 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       stopBlurExitAnimation();
       pendingCommitRef.current = false;
       commitAnimationActiveRef.current = false;
+      blurEnterAnimationControlsRef.current.left?.stop();
+      blurEnterAnimationControlsRef.current.right?.stop();
+      blurTargetRef.current = { left: 0, right: 0 };
       leftBlurPx.set(0);
       rightBlurPx.set(0);
       leftCommittedXPx.jump(nextLeftXPx);
@@ -613,6 +649,7 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   useEffect(() => {
     const commitAnimationControls = commitAnimationControlsRef.current;
     const blurExitAnimationControls = blurExitAnimationControlsRef.current;
+    const blurEnterAnimationControls = blurEnterAnimationControlsRef.current;
 
     return () => {
       if (commitTimerRef.current != null) {
@@ -640,6 +677,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
       commitAnimationControls.right?.stop();
       blurExitAnimationControls.left?.stop();
       blurExitAnimationControls.right?.stop();
+      blurEnterAnimationControls.left?.stop();
+      blurEnterAnimationControls.right?.stop();
     };
   }, []);
 

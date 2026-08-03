@@ -15,6 +15,13 @@ const LOCKED_CONTENT_LAYER_INSET_PX = 40;
 const CONTENT_HORIZONTAL_INSET_PX = 40;
 const CLIP_BLUR_PX = 6;
 const BLUR_ENTER_MS = 140;
+/**
+ * A blur appearing must not front-load. `ease` puts most of the change in the
+ * first frame or two, which reads as a pop whatever the nominal duration is, so
+ * the enter and the exit carry their own curves rather than sharing one.
+ */
+const BLUR_ENTER_EASE = 'cubic-bezier(0.42, 0, 0.58, 1)';
+const BLUR_EXIT_EASE = 'ease-out';
 const BLUR_EXIT_MS = 420;
 const CONTENT_MAX_WIDTH_PX = 640;
 const VIEW_TRANSITION_MS = BLUR_EXIT_MS;
@@ -204,12 +211,13 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     }
   };
 
-  const writeBlurTransitionDuration = (durationMs: number) => {
+  const writeBlurTransitionDuration = (durationMs: number, ease = BLUR_ENTER_EASE) => {
     const root = rootRef.current;
     if (!root) return;
 
     root.style.setProperty('--split-left-blur-transition-duration', `${motionMs(durationMs)}ms`);
     root.style.setProperty('--split-right-blur-transition-duration', `${motionMs(durationMs)}ms`);
+    root.style.setProperty('--split-blur-ease', ease);
   };
 
   const startBlurExit = () => {
@@ -217,7 +225,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     if (!root) return;
 
     cancelBlurExit();
-    writeBlurTransitionDuration(BLUR_EXIT_MS);
+    writeBlurTransitionDuration(BLUR_EXIT_MS, BLUR_EXIT_EASE);
     root.getBoundingClientRect();
     root.style.setProperty('--split-left-blur', '0px');
     root.style.setProperty('--split-right-blur', '0px');
@@ -230,6 +238,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     cancelBlurExit();
     root.style.setProperty('--split-left-blur-transition-duration', `${motionMs(TOGGLE_BLUR_EXIT_MS)}ms`);
     root.style.setProperty('--split-right-blur-transition-duration', `${motionMs(TOGGLE_BLUR_EXIT_MS)}ms`);
+    root.style.setProperty('--split-blur-ease', BLUR_EXIT_EASE);
     root.getBoundingClientRect();
     root.style.setProperty('--split-left-blur', '0px');
     root.style.setProperty('--split-right-blur', '0px');
@@ -368,7 +377,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     root.style.setProperty('--split-right-scale', '1');
     if (options.clearBlur ?? true) {
       cancelBlurExit();
-      writeBlurTransitionDuration(BLUR_EXIT_MS);
+      writeBlurTransitionDuration(BLUR_EXIT_MS, BLUR_EXIT_EASE);
       root.style.setProperty('--split-left-blur', '0px');
       root.style.setProperty('--split-right-blur', '0px');
     }
@@ -619,6 +628,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
 
   const rootStyle = {
     '--split-left-blur': '0px',
+    '--split-blur-ease': BLUR_ENTER_EASE,
     '--split-left-blur-transition-duration': `${motionMs(BLUR_ENTER_MS)}ms`,
     '--split-right-blur': '0px',
     '--split-right-blur-transition-duration': `${motionMs(BLUR_ENTER_MS)}ms`,
@@ -642,7 +652,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     position: 'absolute',
     right: 0,
     top: 0,
-    transition: `filter var(--split-left-blur-transition-duration) ease`,
+    transition: `filter var(--split-left-blur-transition-duration) var(--split-blur-ease)`,
     viewTransitionName: 'buffered-split-left',
   } as CSSProperties;
 
@@ -672,7 +682,7 @@ export const BufferedSplitLayoutViewTransitionDemo: FC<BufferedSplitLayoutViewTr
     position: 'absolute',
     right: 0,
     top: 0,
-    transition: `filter var(--split-right-blur-transition-duration) ease`,
+    transition: `filter var(--split-right-blur-transition-duration) var(--split-blur-ease)`,
     viewTransitionName: 'buffered-split-right',
   } as CSSProperties;
 
