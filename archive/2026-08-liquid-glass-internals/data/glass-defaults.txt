@@ -1,0 +1,36 @@
+# AppKit glass-related NSUserDefaults keys, macOS 27.0 (26A5388g).
+#
+# Key names: strings present in the dyld shared cache (AppKit references them).
+# Values:    this machine's NSGlobalDomain, read-only.
+
+## keys found in the shared cache
+NSGlassDiffusionSetting
+NSGlassEffectDiffusionDidChangeNotification
+NSGlassTintAmount
+NSGlassBuddyTintAmount
+NSGlassEverEditedInBuddy
+NSGlassEverEditedInSettings
+NSGlassEffectViewEnableDefaultInteractivity
+NSGlassEffectContainerViewAutomaticallySplitsGroups
+NSGlassEffectContentClipping
+NSGlassFrameDebugHighlight
+NSGlassMenusEnabled / NSGlassMenuLayoutEnabled / NSGlassMenuContentAboveGlass
+NSGlassSuggestionMenusEnabled / NSGlassSuggestionMenuWindowsEnabled
+NSGlassMaterialProviderPocketWrapper
+
+## this machine's values
+NSGlassTintAmount              1
+NSGlassBuddyTintAmount         0.8
+NSGlassEverEditedInBuddy       1
+NSGlassDiffusionSetting        (unset)
+NSGlassEverEditedInSettings    (unset)
+
+## accessibility (ruled out as the cause of the frosting)
+contrast = 0;
+increaseContrast = 0;
+reduceTransparency = 0;
+
+## override attempt: none of these took effect through NSArgumentDomain
+-NSGlassTintAmount 0 | 0.5 | 1        → output identical to no override
+-NSGlassDiffusionSetting 0..3         → output identical to no override
+-NSGlassDiffusionSetting clear|opaque → output identical to no override

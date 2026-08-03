@@ -1,0 +1,104 @@
+
+
+########## style = .regular ##########
+
+wrote glass-regular-grid.png (1280×984)
+── capture 1280×984 px, scale 2×, background=grid
+── glass rect in image px: x 280…1000, y 324…724
+── scanline y=524 (glass vertical centre)
+── window key=false app active=false
+
+reference scanline y=264, 26 crossings, mean spacing 48.000 px (expected 48.0)
+
+crossing displacement under the glass (px, + = pulled right):
+  x= 1000.39  d_rim=   -0.39  shift=  -7.11
+  x= 1007.50  d_rim=   -7.50  shift=  +0.00
+
+chromatic pixels on the scanline (chroma > 0.008):
+      x    d_rim        R      G      B   chroma     hue
+  (none — no dispersion on this scanline)
+
+wrote glass-regular-edge.png (1280×984)
+── capture 1280×984 px, scale 2×, background=edge
+── glass rect in image px: x 280…1000, y 324…724
+── scanline y=524 (glass vertical centre)
+── window key=false app active=false
+
+
+chromatic pixels on the scanline (chroma > 0.008):
+      x    d_rim        R      G      B   chroma     hue
+  (none — no dispersion on this scanline)
+2D sweep over glass±20px (760×440 px): 0 px above chroma 0.008
+  peak chroma 0.0039 at (381, 323) rgb=(0.8941, 0.8902, 0.8902) hue 0.0°
+
+wrote glass-regular-card.png (1280×984)
+── capture 1280×984 px, scale 2×, background=card
+── glass rect in image px: x 280…1000, y 324…724
+── scanline y=524 (glass vertical centre)
+── window key=false app active=false
+
+swatch    outside glass (R,G,B)      inside glass (R,G,B)        Δluma
+red       (0.9961, 0.0000, 0.0000)   (0.5490, 0.1608, 0.1569)   +0.0313
+green     (0.0000, 1.0000, 0.0000)   (0.1373, 0.3843, 0.0157)   -0.4100
+blue      (0.0000, 0.0000, 1.0000)   (0.0745, 0.2039, 0.5922)   +0.1322
+cyan      (0.0000, 1.0000, 1.0000)   (0.0000, 0.3961, 0.4667)   -0.4704
+
+
+
+########## style = .clear ##########
+
+wrote glass-clear-grid.png (1280×984)
+── capture 1280×984 px, scale 2×, background=grid
+── glass rect in image px: x 280…1000, y 324…724
+── scanline y=524 (glass vertical centre)
+── window key=false app active=false
+
+reference scanline y=264, 26 crossings, mean spacing 48.000 px (expected 48.0)
+
+crossing displacement under the glass (px, + = pulled right):
+  x=  279.84  d_rim=   -0.16  shift=  -7.66
+  x=  331.71  d_rim=  +51.71  shift=  -3.79
+  x=  396.50  d_rim= +116.50  shift= +13.00
+  x=  416.50  d_rim= +136.50  shift= -15.00
+  x=  492.50  d_rim= +212.50  shift= +13.00
+  x=  512.50  d_rim= +232.50  shift= -15.00
+  x=  588.50  d_rim= +308.50  shift= +13.00
+  x=  608.50  d_rim= +328.50  shift= -15.00
+  x=  684.50  d_rim= +315.50  shift= +13.00
+  x=  704.50  d_rim= +295.50  shift= -15.00
+  x=  780.50  d_rim= +219.50  shift= +13.00
+  x=  800.50  d_rim= +199.50  shift= -15.00
+  x=  876.50  d_rim= +123.50  shift= +13.00
+  x=  896.50  d_rim= +103.50  shift= -15.00
+  x=  959.50  d_rim=  +40.50  shift=  +0.00
+  x= 1007.50  d_rim=   -7.50  shift=  -0.00
+
+chromatic pixels on the scanline (chroma > 0.008):
+      x    d_rim        R      G      B   chroma     hue
+  (none — no dispersion on this scanline)
+
+wrote glass-clear-edge.png (1280×984)
+── capture 1280×984 px, scale 2×, background=edge
+── glass rect in image px: x 280…1000, y 324…724
+── scanline y=524 (glass vertical centre)
+── window key=false app active=false
+
+
+chromatic pixels on the scanline (chroma > 0.008):
+      x    d_rim        R      G      B   chroma     hue
+  (none — no dispersion on this scanline)
+2D sweep over glass±20px (760×440 px): 0 px above chroma 0.008
+  peak chroma 0.0078 at (364, 324) rgb=(0.9882, 0.9961, 0.9922) hue 150.0°
+
+wrote glass-clear-card.png (1280×984)
+── capture 1280×984 px, scale 2×, background=card
+── glass rect in image px: x 280…1000, y 324…724
+── scanline y=524 (glass vertical centre)
+── window key=false app active=false
+
+swatch    outside glass (R,G,B)      inside glass (R,G,B)        Δluma
+red       (0.9961, 0.0000, 0.0000)   (0.8000, 0.1961, 0.1882)   +0.1121
+green     (0.0000, 1.0000, 0.0000)   (0.2157, 0.6431, 0.0000)   -0.2094
+blue      (0.0000, 0.0000, 1.0000)   (0.0431, 0.2706, 0.7882)   +0.1874
+cyan      (0.0000, 1.0000, 1.0000)   (0.0000, 0.6706, 0.9020)   -0.2427
+

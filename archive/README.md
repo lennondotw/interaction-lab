@@ -2,9 +2,12 @@
 
 Frozen records of investigations that shaped the implementations in this repo.
 
-Each subdirectory is one question, self-contained and still runnable: a
-`probe.mjs` that measures the cases and prints a table, and a `README.md` with
-the question, the numbers, and what was decided.
+Each subdirectory is one question, self-contained and still runnable: an
+instrument that measures the cases and prints a table — usually a `probe.mjs`,
+sometimes whatever the question actually needs — and a `README.md` with the
+question, the numbers, and what was decided. Where an investigation kept the
+output it measured rather than only the conclusion, that sits in a `data/`
+directory beside the probe.
 
 They are deliberately not wired into lint, typecheck, or the test suites — the
 root ESLint config ignores `archive/`. Regressions are guarded by the unit and
@@ -20,20 +23,27 @@ Probes have no dependencies beyond Node unless their README says otherwise.
 Absolute timings track whatever machine they run on; the ratios between rows are
 what the decisions rest on.
 
-Two exceptions carry their own toolchain, and both say so at the top of their
-probe. Swift probes run against the macOS SDK through `xcrun swift <file>.swift`
-— a single file, no Xcode project and no simulator, because the questions they
-answer are about geometry rather than about a platform.
+Some carry their own toolchain, and all of them say so at the top of the probe.
+Swift probes run against the macOS SDK through `xcrun swift <file>.swift`, or
+`xcrun swiftc -parse-as-library` where they need an `@main` — a single file
+either way, no Xcode project and no simulator. Most ask for nothing else,
+because the questions they answer are about geometry rather than about a
+platform. `2026-08-liquid-glass-internals` is the one that is about the
+platform: it also wants the Metal toolchain that ships with Xcode, and its pixel
+probe wants Screen Recording permission, because the effect it measures is
+composited by the window server and an in-process render would miss it silently.
 
 Browser probes are the exception, and they say so: they need
 `pnpm exec playwright install chromium` and a running Storybook
 (`pnpm --filter @monorepo/app-storybook dev`, or `STORYBOOK_URL` for a
 non-default port). They drive the **real stories** rather than a copy of them, so
 they cannot quietly drift from what ships — which is also the one thing they ask
-of the app, a `data-testid` handle on the stage under test. Those probes write a
-padded 2× screenshot to `__screenshots__/`, committed through Git LFS; cloning without
-LFS gives you everything except the images, and re-running the probe regenerates
-them.
+of the app, a `data-testid` handle on the stage under test.
+
+Probes that produce images write them to `__screenshots__/`, committed through Git
+LFS — the browser probes a padded 2× shot of the stage, the glass probe its own
+window. Cloning without LFS gives you everything except the images, and re-running
+the probe regenerates them.
 
 | Investigation                                                                                    | Question                                                                     | Outcome                                             |
 | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------------- |
@@ -51,3 +61,4 @@ them.
 | [2026-07-metasurface-dom-field](./2026-07-metasurface-dom-field/README.md)                       | What does it take to seed the distance field from laid-out DOM rects?        | The shape work is free; never derive the domain.    |
 | [2026-07-sdf-field-throughput](./2026-07-sdf-field-throughput/README.md)                         | How does the field scale with shape count, and what is left to squeeze?      | Quadratic — and smin not being commutative caps it. |
 | [2026-08-view-transition-overlay-stacking](./2026-08-view-transition-overlay-stacking/README.md) | What does a View Transition commit do to overlays it knows nothing about?    | Covers and freezes them — naming fixes only paint.  |
+| [2026-08-liquid-glass-internals](./2026-08-liquid-glass-internals/README.md)                     | How does Apple's Liquid Glass compute its refraction and its dispersion?     | Six overlapping taps — and it ships with them off.  |

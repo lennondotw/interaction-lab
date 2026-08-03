@@ -1,0 +1,179 @@
+── slices in default.metallib ( 46M)
+air64_v29 g15g_b0 g15s_b0 g15d_a0 applegpu_g15d applegpu_g15g g16s_a0 applegpu_g13g applegpu_g17p applegpu_g17g applegpu_g17s applegpu_g14g applegpu_g16g applegpu_g15s applegpu_g14s applegpu_g16s applegpu_g14d applegpu_g13s applegpu_g13d 
+
+── extracting the AIR slice and disassembling to LLVM IR
+   /tmp/glass-probe/out/air.ll —   135935 lines, 240 modules
+
+── glass and aberration entry points
+   chromatic_aberration_lpf
+   chromatic_aberration_lph
+   chromatic_aberration_map_lpf
+   chromatic_aberration_map_lph
+   displacement_map_lpf
+   displacement_map_lph
+   glass_background_all_lpf
+   glass_background_all_lph
+   glass_background_c_lpf
+   glass_background_c_lph
+   glass_background_ce_lpf
+   glass_background_ce_lph
+   glass_background_cr_lpf
+   glass_background_cr_lph
+   glass_background_e_lpf
+   glass_background_e_lph
+   glass_background_minimal_lpf
+   glass_background_minimal_lph
+   glass_background_r_lpf
+   glass_background_r_lph
+   glass_background_re_lpf
+   glass_background_re_lph
+   glass_background_sdf_all_lpf
+   glass_background_sdf_all_lph
+   glass_background_sdf_c_lpf
+   glass_background_sdf_c_lph
+   glass_background_sdf_ce_lpf
+   glass_background_sdf_ce_lph
+   glass_background_sdf_cr_lpf
+   glass_background_sdf_cr_lph
+   glass_background_sdf_e_lpf
+   glass_background_sdf_e_lph
+   glass_background_sdf_minimal_lpf
+   glass_background_sdf_minimal_lph
+   glass_background_sdf_r_lpf
+   glass_background_sdf_r_lph
+   glass_background_sdf_re_lpf
+   glass_background_sdf_re_lph
+   glass_foreground_lpf
+   glass_foreground_lph
+   glass_foreground_sdf_lpf
+   glass_foreground_sdf_lph
+   sdf_filter_vert_lpf
+   sdf_filter_vert_lph
+   sdf_gen_field_lpf
+   sdf_gen_field_lph
+   sdf_gen_gradients_lpf
+   sdf_gen_gradients_lph
+
+── slicing out the modules of interest
+   /tmp/glass-probe/out/gb.ll —     1527 lines
+   /tmp/glass-probe/out/ca.ll —      170 lines
+
+── uniform field lists, in declaration order
+
+   GlassBackgroundUniforms — 63 fields
+     float4   displacement_mat
+     float    inner_refraction_amount
+     float    inner_refraction_inv_height
+     float    outer_refraction_amount
+     float    outer_refraction_inv_height
+     float    refraction_threshold0
+     float    refraction_threshold1
+     float    blur_radius
+     float    edge_bleed_blur_radius
+     float    edge_bleed_amount
+     float    edge_bleed_inv_height
+     float    shadow_amount
+     float    shadow_inv_height
+     float2   shadow_offset
+     float    shadow_blur_radius
+     float    shadow_inv_radius
+     half4    face_cm0
+     half4    face_cm1
+     half4    face_cm2
+     half4    bleed_cm0
+     half4    bleed_cm1
+     half4    bleed_cm2
+     half4    shadow_cm0
+     half4    shadow_cm1
+     half4    shadow_cm2
+     float    shadow_contribution
+     float    shadow_face_opacity
+     float    blur_alpha0
+     float    blur_alpha1
+     float    blur_alpha2
+     float    blur_alpha3
+     float    blur_dist0
+     float    blur_dist1
+     float    blur_dist2
+     float    blur_dist3
+     float    edge_bleed_dist0
+     float    edge_bleed_dist1
+     float    edge_bleed_opacity
+     float    face_opacity
+     float2   bleed_darken
+     float    shadow_dist_offset
+     float    shadow_opacity
+     float    refraction_opacity
+     float    holding_tone_opacity
+     float    sdr_shadow_dist0
+     float    sdr_shadow_inv
+     float2   ring_shadow_offset
+     float    ring_shadow_stroke_width
+     float    ring_shadow_radius
+     float    ring_shadow_opacity
+     float    ring_shadow_mask
+     float2   key_fill_highlight_dir
+     float    key_fill_highlight_height
+     float    key_fill_highlight_spread
+     float    key_fill_highlight_amount
+     float    key_fill_highlight_effect_offset
+     float    key_fill_highlight_color_bias
+     float    blur_fill_blur_radius
+     float    blur_fill_lighten_opacity
+     float    blur_fill_darken_opacity
+     float    blur_fill_normal_opacity
+     float    aberration_amount
+     float2   aberration_dir
+
+   GlassBackgroundUniformsExt — 10 fields
+     float    inv_aberration_height
+     float    aberration_offset
+     float    sdr_white_value
+     float    clamp_limit
+     float    face_color_matrix_max_luma_complement
+     bool     preserve_hue
+     bool     blur_fill_enabled
+     bool     stroke_mode
+     bool     highlight_extension
+     bool     wants_highlight_bias_correction
+
+   ChromaticAberrationUniforms — layout only, no names in metadata
+     { <2 x float>, <2 x float>, <2 x float>, <2 x float>, <2 x float> }
+     roles from the IR: off0, off1, off2, uvMin, uvMax
+
+── constants in glass_background (LLVM prints float literals as double bits)
+
+   vector literals (per-channel weights show up here)
+     x2   <3 x float> ['0.2126', '0.7152', '0.0722']
+     x1   <2 x float> ['0.25', '0.25']
+     x1   <2 x float> ['1e-06', '1e-06']
+     x1   <3 x float> ['0.2125', '0.7154', '0.0721']
+     x1   <3 x float> ['-2.0', '-2.0', '-2.0']
+     x1   <3 x float> ['3.0', '3.0', '3.0']
+     x1   <3 x float> ['-0.75', '-0.75', '-0.75']
+
+   scalar constants
+     x38  1e-06
+     x2   0.21259999
+     x2   0.71520001
+     x2   0.0722
+     x1   0.0001
+     x1   0.21250001
+     x1   0.71539998
+     x1   0.0721
+     x1   0.33333334
+
+── the dispersion loops (weight init and step)
+   1188:  %14 = phi float [ 1.000000e+00, %7 ], [ %83, %61 ]
+   1263:  %83 = fadd fast float %14, 0xBFD5555560000000
+
+   w starts at 1.0 and steps by -1/3 (0xBFD5555560000000), three iterations per loop.
+   Final normalisation is the <0.5, 1/3, 0.5> vector literal above; alpha gets 1/7.
+
+── which channel each tap of the generic chromaticAberration filter feeds
+   45:  %32 = extractelement <4 x float> %16, i64 0
+   69:  %50 = extractelement <4 x float> %18, i64 1
+   93:  %68 = extractelement <4 x float> %20, i64 2
+   tap0 -> R, tap1 -> G, tap2 -> B: three point samples, one per primary.
+
+done — see /tmp/glass-probe/out/

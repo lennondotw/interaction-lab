@@ -1,0 +1,47 @@
+── CAFilter types (44) ──
+  alphaSmoothThreshold
+  alphaThreshold
+  averageColor
+  bias
+  chromaticAberration
+  chromaticAberrationMap
+  colorAdd
+  colorBrightness
+  colorContrast
+  colorHueRotate
+  colorInvert
+  colorInvertDisplayAware
+  colorMatrix
+  colorMonochrome
+  colorSaturate
+  colorSubtract
+  compressLuminance
+  curves
+  displacementMap
+  distanceField
+  edrGain
+  edrGainMultiply
+  gaussianBlur
+  glassBackground
+  glassForeground
+  lanczosResize
+  limitAveragePixelLuminance
+  luminanceCurveMap
+  luminanceMap
+  luminanceToAlpha
+  lut
+  meteor
+  multiplyColor
+  opacityPair
+  pageCurl
+  plusLIgnoreAlphaSourceOverBlend
+  sdrNormalize
+  srl
+  variableBlur
+  vibrantColorMatrix
+  vibrantColorMatrixSourceOver
+  vibrantDark
+  vibrantLight
+  vibrantLuminanceCurveIgnoreAlpha
+
+── glass-adjacent filter types, instantiated with their defaults ──
