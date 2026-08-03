@@ -1,0 +1,82 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/Story conventions" />
+
+# Story conventions
+
+How stories in this Storybook are expected to be written. Three rules, and the
+reasoning behind each, because the reasoning is what tells you when to break them.
+
+## 1. Don't wrap a story in its own background
+
+Use the Storybook canvas background. A per-story plate or wrapper competes with the
+theme toolbar, drifts from every other story, and hides whether the component
+actually works against the real page background.
+
+The exception is a component whose behaviour **depends** on what is behind it —
+`ContinuousCorner`'s `BackdropFilter` story has to sit on a busy, fixed pattern
+because there is nothing to see otherwise. That is a story about the backdrop, not
+a story that happens to have one.
+
+## 2. Prefer single stories, one per parameter — and add the composed one too
+
+Most stories should render **one instance** and correspond to **one parameter
+value**, so the Controls panel is meaningful and the story name says what it is
+showing. A grid of twelve variants is a matrix, not a story: nothing in Controls
+does anything, and a regression in one cell is easy to miss.
+
+But composed stories earn their place where a value can only be judged against its
+neighbours — corner smoothing next to a circular arc, an easing curve next to
+another easing curve. So ship both: singles for the parameters, one composed story
+for the comparison, and say in the composed story's doc comment why comparison is
+the point.
+
+## 3. Default to `layout: 'fullscreen'` and centre the subject yourself
+
+```text
+// Typed as Meta<typeof Thing> / StoryObj<typeof Thing> in a real story file.
+const meta = {
+  title: 'Components/Thing',
+  component: Thing,
+  parameters: { layout: 'fullscreen' },
+};
+
+export const Default = {
+  render: (args) => (
+    <div className="flex min-h-screen w-full items-center justify-center px-2">
+      <Thing {...args} />
+    </div>
+  ),
+};
+```
+
+`layout: 'centered'` gives away control of the box the component lives in, which
+matters most for exactly the components where sizing is the interesting part.
+Owning the frame yourself means the story states its own constraints.
+
+Three parts of that wrapper are decisions, not boilerplate:
+
+- **A width container** — `max-w-* mx-auto` — only when the component needs a
+  parent width to be meaningful. Containers, `w-full` blocks and anything that
+  measures itself do. A button or a switch does not; give those an intrinsic size
+  and let them sit at their natural width.
+- **Horizontal padding** — `px-2` — only when the subject would otherwise touch
+  the viewport edge. Genuinely full-bleed subjects such as scroll remapping or
+  `BubblePicker` want the edges.
+- **`min-h-screen`** so vertical centring has something to centre within, and so a
+  story that grows taller than the viewport scrolls rather than clipping.
+
+## Controls
+
+Name `component` in `meta` — without it Storybook cannot infer prop types and the
+Controls panel is empty, which is the most common way a story ends up with no
+knobs at all.
+
+Give numeric props a `range` control with sensible bounds rather than a bare number
+field; a slider is how you find the value where a component breaks. Set defaults in
+`args` as the type the control renders — a `text` control cannot display a number,
+so a numeric default shows as an empty field that lies about what is applied.
+
+Turn Controls off (`parameters: { controls: { disable: true } }`) on composed
+stories that hard-code what they would otherwise take from args. A knob that does
+nothing is worse than no knob.
