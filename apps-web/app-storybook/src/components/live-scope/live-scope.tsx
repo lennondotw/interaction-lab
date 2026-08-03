@@ -165,21 +165,34 @@ export const LiveScope: FC<LiveScopeProps> = ({
       }
     }
 
+    // Clipped to the plot, because a bar at either end of the window straddles the boundary:
+    // the oldest would reach into the label gutter, the newest past the right edge. Clipping
+    // rather than insetting the ends keeps the strip pinned to both, so it neither leaks out
+    // of the box nor stops short of it.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(plotLeft, 0, plotWidth, height);
+    ctx.clip();
+    for (const sample of samples) {
+      const age = now - sample.at;
+      if (age < 0 || age > spanMs) continue;
+      // Centred on the instant it was produced. Drawing the bar to the left of that instant
+      // instead lags the whole series by a bar width, which reads as the newest bar never
+      // quite reaching the live edge.
+      const x = plotLeft + plotWidth * (1 - age / spanMs) - barWidth / 2;
+      const barHeight = Math.max((sample.value / scale) * plotHeight, 1);
+      ctx.fillStyle = threshold !== undefined && sample.value >= threshold ? palette.barOverThreshold : palette.bar;
+      ctx.fillRect(x, baseline - barHeight, barWidth, barHeight);
+    }
+    ctx.restore();
+
+    // Last, so the oldest bar in the window cannot paint over it.
     if (axisWidth > 0) {
       ctx.strokeStyle = palette.axis;
       ctx.beginPath();
       ctx.moveTo(plotLeft + 0.5, 0);
       ctx.lineTo(plotLeft + 0.5, baseline);
       ctx.stroke();
-    }
-
-    for (const sample of samples) {
-      const age = now - sample.at;
-      if (age < 0 || age > spanMs) continue;
-      const x = plotLeft + plotWidth * (1 - age / spanMs);
-      const barHeight = Math.max((sample.value / scale) * plotHeight, 1);
-      ctx.fillStyle = threshold !== undefined && sample.value >= threshold ? palette.barOverThreshold : palette.bar;
-      ctx.fillRect(x - barWidth, baseline - barHeight, barWidth, barHeight);
     }
   });
 
