@@ -74,7 +74,7 @@ The actual fade, transform, and blur timing is controlled by this component's CS
 
 This is serious and deliberately unmitigated. This demo is an experiment, so it does not carry the guards a real component would need.
 
-Checked against [CSS View Transitions Level 1](https://drafts.csswg.org/css-view-transitions-1/) — section numbers below refer to that spec — and then measured in Chromium. The numbers, the screenshots, and a runnable probe are in [archive/2026-08-view-transition-overlay-stacking](../../../../../archive/2026-08-view-transition-overlay-stacking/README.md).
+Checked against [CSS View Transitions Level 1](https://drafts.csswg.org/css-view-transitions-1/) — section numbers below refer to that spec — and then measured in Chromium. The numbers, the screenshots, and a runnable probe are in [archive/2026-08-view-transition-overlay-stacking](../../../../../../archive/2026-08-view-transition-overlay-stacking/README.md).
 
 ### What the spec says
 
@@ -117,7 +117,7 @@ Which is where it stops being a mere inconsistency. `startViewTransition` is a d
 
 So an interrupted commit cannot be retargeted, only discarded. The second transition captures the live DOM as its "old" state, and the live DOM is already at the end of the first animation — so it starts from a place the user never saw. There is no equivalent of a FLIP or spring interruption, where the new animation picks up the current visual state and its velocity, because under View Transition that state is not a value anywhere; it is a bitmap and a transform on a pseudo-element that the next transition cannot read.
 
-[buffered-split-layout-blur-commit](../buffered-split-layout-blur-commit/README.md) does not have this problem, and not by being careful about it — its toggle animates plain numbers, so the current visual geometry is always a readable value and an interrupted toggle simply re-animates from wherever it is.
+[buffered-split-layout-blur-commit](../blur-commit/README.md) does not have this problem, and not by being careful about it — its toggle animates plain numbers, so the current visual geometry is always a readable value and an interrupted toggle simply re-animates from wherever it is.
 
 ### Window resize is still the worst path
 
@@ -131,7 +131,7 @@ One last consequence of the same root cause: View Transition is a document-level
 
 Escaping any of this properly means confining the snapshot layer to the component's own stacking context instead of the top layer — element-scoped view transitions — rather than patching it at this level.
 
-The cheaper escape is to not need a snapshot. [buffered-split-layout-blur-commit](../buffered-split-layout-blur-commit/README.md) is this demo with View Transition removed and nothing put in its place: the same size model, the same one-commit-per-gesture buffering, the reflow hidden by the 6px blur alone. It measures 0% overlay occlusion and keeps overlays clickable, which places the whole of this section on the cross-dissolve rather than on the buffering.
+The cheaper escape is to not need a snapshot. [buffered-split-layout-blur-commit](../blur-commit/README.md) is this demo with View Transition removed and nothing put in its place: the same size model, the same one-commit-per-gesture buffering, the reflow hidden by the 6px blur alone. It measures 0% overlay occlusion and keeps overlays clickable, which places the whole of this section on the cross-dissolve rather than on the buffering.
 
 ## Debug Overlay
 

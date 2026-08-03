@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { BufferedSplitLayoutDemo } from './buffered-split-layout.js';
+import { BufferedSplitLayoutViewTransitionDemo } from './view-transition-commit.js';
 
 const meta = {
-  title: 'Demos/BufferedSplitLayout',
-  component: BufferedSplitLayoutDemo,
+  title: 'Demos/Buffered Split Layout/View Transition Commit',
+  component: BufferedSplitLayoutViewTransitionDemo,
   parameters: {
     layout: 'fullscreen',
   },
@@ -15,7 +15,7 @@ const meta = {
       control: { type: 'boolean' },
     },
   },
-} satisfies Meta<typeof BufferedSplitLayoutDemo>;
+} satisfies Meta<typeof BufferedSplitLayoutViewTransitionDemo>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

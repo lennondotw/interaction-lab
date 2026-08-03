@@ -1,8 +1,8 @@
 # Known issue: a View Transition commit hides and freezes every overlay on the page
 
-**Date:** 2026-08 · **Status:** confirmed, spec-mandated; half of it has no author-side fix · **Applies to:** Chromium 141.0.7390.37, `Demos/BufferedSplitLayoutViewTransition`
+**Date:** 2026-08 · **Status:** confirmed, spec-mandated; half of it has no author-side fix · **Applies to:** Chromium 141.0.7390.37, `Demos/Buffered Split Layout/View Transition Commit`
 
-`buffered-split-layout-view-transition` commits its layout inside
+`view-transition-commit` commits its layout inside
 `document.startViewTransition`. For the length of that commit, an overlay that
 has nothing to do with the split — a portalled toast, a modal dialog — is
 painted over by the split's panes and stops responding to clicks. Neither is
@@ -135,7 +135,7 @@ phase at `animating` indefinitely.
 ## What we do about it
 
 Nothing. The demo is an experiment and says so; the note lives in
-[its README](../../apps-web/app-storybook/src/demos/buffered-split-layout-view-transition/README.md).
+[its README](../../apps-web/app-storybook/src/demos/buffered-split-layout/view-transition-commit/README.md).
 
 The demo's own debug overlays are C3 — named, with a hand-assigned group
 `z-index`. They get away with the half that stays broken only because they are

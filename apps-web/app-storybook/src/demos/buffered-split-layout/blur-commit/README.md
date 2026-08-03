@@ -1,7 +1,7 @@
 # Buffered Split Layout — Blur Commit
 
 The same buffered split layout as
-[buffered-split-layout-view-transition](../buffered-split-layout-view-transition/README.md),
+[buffered-split-layout-view-transition](../view-transition-commit/README.md),
 with View Transition removed and nothing put in its place.
 
 The size model is unchanged: a `locked` width the real content lays out at, a
@@ -44,7 +44,7 @@ side by side with `?motionDebug=slow`.
 
 An overlay appended to `body` at `z-index: 2147483647`, sampled at the same
 moment in a commit — see
-[archive/2026-08-view-transition-overlay-stacking](../../../../../archive/2026-08-view-transition-overlay-stacking/README.md)
+[archive/2026-08-view-transition-overlay-stacking](../../../../../../archive/2026-08-view-transition-overlay-stacking/README.md)
 for how the snapshot version was measured:
 
 |                  | overlay covered | overlay clickable | `startViewTransition` calls |
