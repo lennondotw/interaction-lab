@@ -86,7 +86,7 @@ scale = (1 − 2^(−1/2)) / (1 − 2^(−1/2ᵏ))
 | **closed form**          | **1.4334** | what the component now derives    |
 | inherited from `opal-ui` |        1.5 | overshoots by 4.7%                |
 
-1.5 is suspiciously close to 1.528, the edge extension of Apple's continuous
+1.5 is suspiciously close to 1.528665, the edge extension of Apple's continuous
 corner — plausibly where it came from, but that is the answer to a different
 question (see below), not to this one.
 
@@ -106,8 +106,11 @@ is not.**
 | apparent size | **shrinks** — needs compensation     | roughly preserved — needs none                            |
 | degenerate at | large `r` → squircle                 | short edges → smoothing has to be clamped                 |
 
-Apple's corner reaches about `1.528r` along each edge (reverse-engineered by
-others, not measured here) and is not a superellipse at all, so no single `k`
+Apple's corner reaches exactly `1.528665r` along each edge — measured from its
+control points in
+[`2026-08-swiftui-corner-shapes`](../2026-08-swiftui-corner-shapes/README.md),
+which also confirms it preserves corner depth to 0.48% where this compensation
+has to make up 43.3% — and it is not a superellipse at all, so no single `k`
 reproduces it; `1.6` is a fit, not an equivalence. Superellipse buys a wider
 space in exchange — bevels and concave scoops are one parameter away, and are
 not expressible in Figma's 0–100% smoothing at all.

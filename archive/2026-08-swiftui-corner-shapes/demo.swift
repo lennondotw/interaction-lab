@@ -35,7 +35,7 @@ private struct Overlay: View {
         ZStack(alignment: .topLeading) {
           Color.clear
           tick(at: radius, color: arcColor)
-          tick(at: radius * 1.52, color: contColor)
+          tick(at: radius * 1.528665, color: contColor)
         }
       }
     }
@@ -77,13 +77,13 @@ struct DemoView: View {
       section("1. Same radius, two curves") {
         HStack(spacing: 36) {
           ForEach([24.0, 48, 72], id: \.self) { r in
-            Labelled(title: "r = \(Int(r))", subtitle: "ticks: r and 1.52r") {
+            Labelled(title: "r = \(Int(r))", subtitle: "ticks: r and 1.528665r") {
               Overlay(side: 180, radius: r, showExtents: true)
             }
           }
         }
         Text(
-          "The two curves meet at the corner apex — the depth is the same — and part company along the edge. Continuous reaches ~1.52r before it is straight again."
+          "The two curves meet at the corner apex — the depth is the same — and part company along the edge. Continuous reaches exactly 1.528665r before it is straight again."
         )
         .modifier(Caption())
       }
@@ -93,14 +93,14 @@ struct DemoView: View {
           ForEach([0.3, 0.6, 0.8, 1.0], id: \.self) { frac in
             Labelled(
               title: "r = \(Int(frac * 100))% of side/2",
-              subtitle: frac >= 0.66 ? "no edge budget left" : nil
+              subtitle: frac >= 0.655 ? "no edge budget left" : nil
             ) {
               Overlay(side: 150, radius: frac * 75)
             }
           }
         }
         Text(
-          "Past ~66% the continuous curve has no edge left to spread into and collapses onto the arc. At 100% the orange is hidden under the blue: both are a circle."
+          "Past 65.42% the continuous curve has no edge left to spread into and collapses onto the arc. At 100% the orange is hidden under the blue: both are a circle."
         )
         .modifier(Caption())
       }

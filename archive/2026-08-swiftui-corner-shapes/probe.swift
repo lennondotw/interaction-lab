@@ -53,9 +53,32 @@ func cornerDepth(_ path: Path, limit: Double) -> Double {
   return (lo + hi) / 2
 }
 
-/// How far along the top edge the corner treatment reaches: the x where the
-/// boundary comes within `delta` of y = 0. For a circular arc this is ~r.
-func edgeExtent(_ path: Path, width: Double, delta: Double = 0.002) -> Double {
+/// How far along the top edge the corner treatment reaches, read off the path's
+/// own vertices: the leftmost on-curve point that still lies exactly on `y = 0`.
+/// Everything left of it belongs to the corner, so this is the tangent point by
+/// construction — no tolerance, no bisection, exact.
+func edgeExtent(_ path: Path, width: Double) -> Double {
+  var leftmostOnTop = Double.infinity
+  path.forEach { element in
+    func note(_ p: CGPoint) {
+      if abs(p.y) < 1e-9 { leftmostOnTop = min(leftmostOnTop, p.x) }
+    }
+    switch element {
+    case .move(let to): note(to)
+    case .line(let to): note(to)
+    case .quadCurve(let to, _): note(to)
+    case .curve(let to, _, _): note(to)
+    case .closeSubpath: break
+    }
+  }
+  return leftmostOnTop.isFinite ? leftmostOnTop : width / 2
+}
+
+/// The same quantity by hit-testing, kept only to show why it is the wrong tool
+/// here. See the bias section at the end: the boundary approaches the straight
+/// edge *tangentially*, so asking "where does it come within delta of y = 0"
+/// answers systematically short, and the error does not cancel in a ratio.
+func hitTestedEdgeExtent(_ path: Path, width: Double, delta: Double) -> Double {
   var lo = 0.0
   var hi = width / 2
   guard !path.contains(CGPoint(x: lo, y: delta)) else { return 0 }
@@ -369,3 +392,85 @@ table(
 print("iOS spends edge length and keeps the depth; CSS keeps the footprint and")
 print("spends the depth. That is the whole difference, and it is why only one of")
 print("the two needs a compensating radius scale.\n")
+
+// MARK: - 9. The control points themselves
+
+print("## 9. Apple's construction, verbatim\n")
+print("Three cubic Béziers per corner. Normalised by r, these twelve numbers are")
+print("the whole curve — enough to port it to an SVG `d` string exactly rather")
+print("than fitting an approximation to it.\n")
+
+let dumpBox = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+let dumpR = 100.0
+print("`RoundedRectangle(cornerRadius: 100, style: .continuous)` in 1000x1000,")
+print("top-left corner, values divided by r:\n")
+print("```")
+var emitted = 0
+RoundedRectangle(cornerRadius: dumpR, style: .continuous).path(in: dumpBox).forEach { element in
+  // The top-left corner is the third `line` plus the three curves after it.
+  guard case .curve(let to, let c1, let c2) = element else {
+    if case .line(let to) = element, abs(to.x) < 1e-9 {
+      print(String(format: "from (%.6f, %.6f)", to.x / dumpR, to.y / dumpR))
+      emitted = 1
+    }
+    return
+  }
+  guard emitted >= 1, emitted <= 3 else { return }
+  print(
+    String(
+      format: "C (%.6f, %.6f) (%.6f, %.6f) -> (%.6f, %.6f)",
+      c1.x / dumpR, c1.y / dumpR, c2.x / dumpR, c2.y / dumpR, to.x / dumpR, to.y / dumpR))
+  emitted += 1
+}
+print("```\n")
+print("Symmetric about the diagonal: the first and third segments are mirrors,")
+print("and the middle one is its own mirror.\n")
+
+// MARK: - 10. Why the primary instrument reads the path instead of hit-testing
+
+print("## 10. What hit-testing gets wrong here, and by how much\n")
+print("The exact extent above is 1.528665r at every radius. Hit-testing the same")
+print("quantity converges toward it only as delta goes to zero, and at any")
+print("practical delta it reads short — because the boundary meets the straight")
+print("edge tangentially, so a large span of x maps to a tiny span of y.\n")
+print("The bias does NOT cancel in the ratio: it is a different absolute error on")
+print("each curve. This cost a wrong published figure of 1.520 before the exact")
+print("method replaced it.\n")
+
+var rows10: [[String]] = []
+for delta in [0.5, 0.1, 0.02, 0.002, 0.0002] {
+  let hc = hitTestedEdgeExtent(swiftCircular, width: side, delta: delta)
+  let hn = hitTestedEdgeExtent(swiftContinuous, width: side, delta: delta)
+  rows10.append([
+    String(format: "%g", delta), f(hc, 3), f(hn, 3), f(hn / hc, 4),
+    f((hn / hc / 1.528665 - 1) * 100, 2) + "%",
+  ])
+}
+rows10.append(["exact", f(edgeArc, 3), f(edgeCont, 3), f(edgeCont / edgeArc, 4), "0.00%"])
+table(["delta", "hit .circ", "hit .cont", "ratio", "error vs exact"], rows10)
+
+print("### The depth ratio, exactly\n")
+print("By symmetry the middle segment's t = 0.5 point is where the curve crosses")
+print("the diagonal, so the apex follows from the control points with no")
+print("measurement at all: B(0.5) = (P0 + 3P1 + 3P2 + P3) / 8.\n")
+
+// Middle segment of the normalised corner, from section 9.
+let p0 = 0.074911
+let p1 = 0.169060
+let p2 = 0.372824
+let p3 = 0.631494
+let apex = (p0 + 3 * p1 + 3 * p2 + p3) / 8
+let exactContDepth = apex * 2.0.squareRoot()
+let exactArcDepth = (1 - pow(2.0, -0.5)) * 2.0.squareRoot()
+
+print("```")
+print(String(format: "apex        = %.6f r   (on each axis)", apex))
+print(String(format: "depth .cont = %.6f r", exactContDepth))
+print(String(format: "depth .circ = %.6f r   = sqrt(2)(1 - 2^-0.5)", exactArcDepth))
+print(String(format: "depth ratio = %.6f", exactArcDepth / exactContDepth))
+print("```\n")
+print(
+  String(
+    format:
+      "So Apple preserves apparent corner size to %.2f%%, against CSS's 43.3%% deficit.\n",
+    (exactArcDepth / exactContDepth - 1) * 100))

@@ -1,8 +1,8 @@
 # What Apple's continuous corner actually does, measured
 
-**Date:** 2026-08 · **Outcome:** it spends **edge length** (1.520r per side,
-measured) and keeps the corner depth (ratio 1.005–1.02), which is why it needs no
-radius compensation where CSS needs 1.433 · **Applies to:** macOS 27 SDK /
+**Date:** 2026-08 · **Outcome:** it spends **edge length** (exactly `1.528665r`
+per side) and keeps the corner depth (ratio `1.004755`), which is why it needs no
+radius compensation where CSS needs 1.4334 · **Applies to:** macOS 27 SDK /
 Swift 6.2, cross-checked against `archive/2026-07-corner-shape-superellipse`
 
 ## The question
@@ -49,19 +49,40 @@ inside a live view tree, or how something feels under a finger.
 
 ## The instrument
 
-`Path.contains` bisected along a ray, the same method the CSS probe uses, so the
-two sets of numbers are directly comparable. Nothing is rendered.
-
 Two quantities per corner:
 
 - **corner depth** — distance from the sharp box corner inward to the curve, along
-  the 45° diagonal. "How big does the corner look."
+  the 45° diagonal. "How big does the corner look." Measured by bisecting a ray
+  with `Path.contains`, the same method the CSS probe uses, so the two sets of
+  numbers are directly comparable. This is a _transverse_ crossing, which is what
+  makes it safe to measure that way.
 - **edge extent** — how far along the top edge the treatment reaches before the
-  boundary is straight again. For `.circular` this is exactly `r`, which doubles
-  as the instrument's calibration.
+  boundary is straight again. Read off the path's **own vertices**: the leftmost
+  on-curve point still lying exactly on `y = 0`. No tolerance, no bisection.
 
-Calibration comes out at 149.98 against a true 150, so the numbers below are good
-to about 0.02px.
+### The first version of this got the edge extent wrong
+
+It bisected for "where does the boundary come within δ of `y = 0`" and published
+**1.520**, then used that to declare the second-hand 1.528 superseded. Both halves
+were wrong: the figure, and the confidence.
+
+The boundary meets the straight edge **tangentially**, so a large span of `x` maps
+to a vanishing span of `y` and any finite δ reads short. The error also does not
+cancel in the ratio, because it is a different absolute error on each curve.
+Section 10 of the probe sweeps δ and shows the convergence:
+
+| δ      |  ratio | error vs exact |
+| ------ | -----: | -------------: |
+| 0.5    | 1.1136 |        −27.15% |
+| 0.02   | 1.4495 |         −5.18% |
+| 0.002  | 1.5208 |         −0.52% |
+| 0.0002 | 1.5279 |         −0.05% |
+| exact  | 1.5287 |          0.00% |
+
+`0.002` is the δ that produced the published mistake. The lesson is narrow and
+worth keeping: **hit-testing measures a boundary well only where it is crossed
+steeply.** Depth qualifies; a tangent point never does. Where the geometry is
+available as control points, read the control points.
 
 ## 1. Apple spends edge length, not depth
 
@@ -69,15 +90,15 @@ to about 0.02px.
 
 | r   | edge `.circular` | edge `.continuous` | edge ratio | depth `.circular` | depth `.continuous` | depth ratio |
 | --- | ---------------: | -----------------: | ---------: | ----------------: | ------------------: | ----------: |
-| 10  |             9.99 |              15.17 |  **1.519** |              4.47 |                4.12 |       1.084 |
-| 30  |            29.99 |              45.59 |  **1.520** |             12.78 |               12.66 |       1.009 |
-| 60  |            59.98 |              91.22 |  **1.521** |             25.21 |               24.74 |       1.019 |
-| 90  |            89.98 |             136.78 |  **1.520** |             37.28 |               37.10 |       1.005 |
-| 120 |           119.98 |             149.72 |      1.248 |             50.14 |               49.89 |       1.005 |
-| 150 |           149.98 |             149.88 |      0.999 |             62.13 |               62.36 |       0.996 |
+| 10  |            10.00 |              15.29 |  **1.529** |              4.47 |                4.12 |       1.084 |
+| 30  |            30.00 |              45.86 |  **1.529** |             12.78 |               12.66 |       1.009 |
+| 60  |            60.00 |              91.72 |  **1.529** |             25.21 |               24.74 |       1.019 |
+| 90  |            90.00 |             137.58 |  **1.529** |             37.28 |               37.10 |       1.005 |
+| 120 |           120.00 |             150.00 |      1.250 |             50.14 |               49.89 |       1.005 |
+| 150 |           150.00 |             150.00 |      1.000 |             62.13 |               62.36 |       0.996 |
 
-The reverse-engineered figure holds: **1.520**, stable across the whole usable
-range. And the depth ratio is **1.00–1.02** — the corner apex barely moves.
+The reverse-engineered figure holds exactly: **1.528665**, identical at every
+radius. And the depth ratio is **1.004755** — the corner apex barely moves.
 
 That is the answer. Apple buys curvature continuity with edge length and leaves
 the apparent corner size alone, so nothing needs compensating. CSS buys the same
@@ -90,20 +111,23 @@ Edge extent saturates at half the side — there is no more edge to take:
 
 | r / (side/2) |     r | edge `.circ` | edge `.cont` |     ratio |
 | ------------ | ----: | -----------: | -----------: | --------: |
-| 5%           |   7.5 |         7.49 |        11.35 |     1.515 |
-| 40%          |  60.0 |        59.98 |        91.22 |     1.521 |
-| 65%          |  97.5 |        97.48 |       148.25 |     1.521 |
-| 70%          | 105.0 |       104.98 |       149.33 |     1.422 |
-| 80%          | 120.0 |       119.98 |       149.72 |     1.248 |
-| 90%          | 135.0 |       134.98 |       149.83 |     1.110 |
-| 100%         | 150.0 |       149.98 |       149.88 | **0.999** |
+| 5%           |   7.5 |         7.50 |        11.46 |     1.529 |
+| 20%          |  30.0 |        30.00 |        45.86 |     1.529 |
+| 40%          |  60.0 |        60.00 |        91.72 |     1.529 |
+| 50%          |  75.0 |        75.00 |       114.65 |     1.529 |
+| 60%          |  90.0 |        90.00 |       137.58 |     1.529 |
+| 65%          |  97.5 |        97.50 |       149.04 |     1.529 |
+| 70%          | 105.0 |       105.00 |       150.00 |     1.429 |
+| 80%          | 120.0 |       120.00 |       150.00 |     1.250 |
+| 90%          | 135.0 |       135.00 |       150.00 |     1.111 |
+| 100%         | 150.0 |       150.00 |       150.00 | **1.000** |
 
-So the behaviour is `edge extent = min(1.52r, side/2)`, and the crossover is where
-`1.52r = side/2` — at `r = 65.8%` of half the side, which is exactly where the
-table turns.
+So the behaviour is `edge extent = min(1.528665r, side/2)`, and the crossover is
+where `1.528665r = side/2` — at `r = 1/1.528665 = 65.42%` of half the side, which
+is exactly where the table turns.
 
 Past that the curve degrades continuously back toward the arc, and at maximum
-radius it _is_ the arc (0.999). This is the graceful degradation CSS does not
+radius it _is_ the arc (1.000, saturating at exactly `side/2`). This is the graceful degradation CSS does not
 have: the superellipse has no edge budget to run out of, so it never notices the
 limit and keeps drawing a squircle where a circle was wanted.
 
@@ -174,16 +198,48 @@ the same geometry.
 Depth only, deliberately. A raster cannot locate the tangent point where the curve
 rejoins the straight edge: the boundary approaches it quadratically, so the answer
 you get is set by pixel size rather than by the shape — at 4× it reads 1.30 where
-the true ratio is 1.52. Depth is a transverse crossing and survives
+the true ratio is 1.5287. Depth is a transverse crossing and survives
 rasterisation. This is the reason the primary instrument queries the path.
+
+## Apple's construction, verbatim
+
+Three cubic Béziers per corner. Normalised by `r`, these are the whole curve —
+enough to port it to an SVG `d` string exactly, rather than fitting an
+approximation to it. Top-left corner, `RoundedRectangle(cornerRadius: 100,
+style: .continuous)` in a 1000×1000 box, divided by `r`:
+
+```
+from (0.000000, 1.528665)
+C (0.000000, 1.088490) (0.000000, 0.868407) -> (0.074911, 0.631494)
+C (0.169060, 0.372824) (0.372824, 0.169060) -> (0.631494, 0.074911)
+C (0.868407, 0.000000) (1.088490, 0.000000) -> (1.528665, 0.000000)
+```
+
+Symmetric about the diagonal: the outer two segments are mirrors of each other and
+the middle one is its own mirror.
+
+That symmetry also gives the depth ratio in closed form, with no measurement at
+all. The middle segment's `t = 0.5` point is where the curve crosses the diagonal,
+and for a cubic that is `(P₀ + 3P₁ + 3P₂ + P₃) / 8`:
+
+```
+apex        = 0.291507 r   on each axis
+depth .cont = 0.412253 r
+depth .circ = 0.414214 r  = sqrt(2)(1 - 2^-0.5)
+depth ratio = 1.004755
+```
+
+**0.48%.** That is how much apparent corner size Apple gives up, against the
+43.3% CSS gives up — and it is the whole reason one platform needs a compensating
+radius scale and the other does not.
 
 ## Against CSS
 
-|                         | edge extent / r | corner depth / r | compensation                  |
-| ----------------------- | --------------- | ---------------- | ----------------------------- |
-| arc, both platforms     | 1.000           | 0.4202           | —                             |
-| iOS `.continuous`       | **1.520**       | 0.4123           | **none** — depth ratio 1.019  |
-| CSS `superellipse(1.6)` | 1.000           | 0.2891           | **1.433** — depth ratio 1.433 |
+|                         | edge extent / r | corner depth / r | compensation                    |
+| ----------------------- | --------------- | ---------------- | ------------------------------- |
+| arc, both platforms     | 1.000           | 0.414214         | —                               |
+| iOS `.continuous`       | **1.528665**    | 0.412253         | **none** — depth ratio 1.004755 |
+| CSS `superellipse(1.6)` | 1.000           | 0.289059         | **1.4330** — depth ratio 1.4330 |
 
 One table, two design philosophies. Apple's corner treatment is a _budget
 consumer_: it takes edge length, so it can preserve apparent size, and it must
@@ -204,5 +260,5 @@ xcrun swiftc -parse-as-library demo.swift -o demo && ./demo --png __screenshots_
 
 `probe.swift` prints all eight sections. `demo.swift` draws the overlay in
 `__screenshots__/shapes.png`, committed through Git LFS: the two curves at one
-radius with ticks at `r` and `1.52r`, the collapse as the radius approaches the
+radius with ticks at `r` and `1.528665r`, the collapse as the radius approaches the
 clamp, and `Circle()` failing to fill its frame.
