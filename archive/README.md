@@ -20,6 +20,11 @@ Probes have no dependencies beyond Node unless their README says otherwise.
 Absolute timings track whatever machine they run on; the ratios between rows are
 what the decisions rest on.
 
+Two exceptions carry their own toolchain, and both say so at the top of their
+probe. Swift probes run against the macOS SDK through `xcrun swift <file>.swift`
+— a single file, no Xcode project and no simulator, because the questions they
+answer are about geometry rather than about a platform.
+
 Browser probes are the exception, and they say so: they need
 `pnpm exec playwright install chromium` and a running Storybook
 (`pnpm --filter @monorepo/app-storybook dev`, or `STORYBOOK_URL` for a
@@ -41,5 +46,6 @@ them.
 | [2026-07-wasm-kernel-headroom](./2026-07-wasm-kernel-headroom/README.md)                     | With the quadtree shipped, is the remaining kernel worth a Rust/WASM port?   | No — the 2.5× is in the loop, not the language.     |
 | [2026-07-contour-to-dom](./2026-07-contour-to-dom/README.md)                                 | What does moving the contour from canvas into SVG and `clip-path` cost?      | The `d` string, ~6.4× a `Path2D`. Not the clip.     |
 | [2026-07-corner-shape-superellipse](./2026-07-corner-shape-superellipse/README.md)           | Why does corner smoothing shrink the corner, and never make a circle?        | It is corner-box-confined — 1.4334, and never.      |
+| [2026-08-swiftui-corner-shapes](./2026-08-swiftui-corner-shapes/README.md)                   | Does Apple's continuous corner really spread along the edge instead?         | Yes — 1.520r, so it needs no compensation.          |
 | [2026-07-metasurface-dom-field](./2026-07-metasurface-dom-field/README.md)                   | What does it take to seed the distance field from laid-out DOM rects?        | The shape work is free; never derive the domain.    |
 | [2026-07-sdf-field-throughput](./2026-07-sdf-field-throughput/README.md)                     | How does the field scale with shape count, and what is left to squeeze?      | Quadratic — and smin not being commutative caps it. |
