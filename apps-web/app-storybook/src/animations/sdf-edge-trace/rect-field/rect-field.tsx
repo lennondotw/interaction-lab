@@ -34,7 +34,7 @@ import { ShapeRegistry, useRegisteredRect } from '../rect-registry.js';
 import { CELL_SIZES, RollingMedian } from '../shape.js';
 import { renderRectScene } from './rect-renderer.js';
 import { TraceChart } from './trace-chart.js';
-import { TraceLog, type TraceHistory } from './trace-log.js';
+import { TraceLog, useTraceStatus, type TraceHistory } from './trace-log.js';
 
 const OVERSCAN = 128;
 const STAT_WINDOW = 45;
@@ -119,6 +119,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
   const [measured, setMeasured] = useState<{ ms: number; signature: string } | null>(null);
   const [autoplay, setAutoplay] = useState(false);
   const [history, setHistory] = useState<TraceHistory>(() => traceLog.read());
+  const { tracing, markTraced } = useTraceStatus();
   const [showOverlay, setShowOverlay] = useState(true);
   const [showRects, setShowRects] = useState(true);
   const [showFill, setShowFill] = useState(true);
@@ -170,6 +171,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
     samples.push(elapsed);
     const result = tracer.trace(shapes, config);
     traceLog.push(elapsed, result.fieldEvals);
+    markTraced();
     configRef.current = { shapes, config };
 
     lastRef.current = {
@@ -204,6 +206,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
     cell,
     height,
     inset,
+    markTraced,
     registry,
     samples,
     showDomain,
@@ -275,8 +278,9 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
   useIntervalEffect(() => {
     const last = lastRef.current;
     if (last !== null) setStats({ ...last, traceMs: samples.value });
-    // Polled rather than pushed: `idle` is the *absence* of traces, so nothing fires to
-    // announce it and only a clock can notice.
+    // Polled because these are aggregates — a median re-read faster than five times a second
+    // is unreadable, and `settled Xs ago` only needs to tick. The badge is *not* on this
+    // clock: `useTraceStatus` pushes it, or it would inherit up to 200ms of this interval.
     setHistory(traceLog.read());
   }, 200);
 
@@ -448,7 +452,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
             </Button>
           </div>
 
-          <TraceChart log={traceLog} history={history} />
+          <TraceChart log={traceLog} history={history} tracing={tracing} />
 
           <div
             className={`

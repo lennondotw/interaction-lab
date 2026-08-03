@@ -14,9 +14,19 @@
  */
 
 import type { LiveScopeSample } from '#src/components/live-scope/live-scope.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-/** No trace for this long and the surface is considered settled. */
-export const IDLE_AFTER_MS = 400;
+/**
+ * No trace for this long and the surface is considered settled.
+ *
+ * It cannot be zero, however tempting: a trace happens at most once per frame, so a
+ * threshold under a frame interval would flicker back to `idle` in the gap between two
+ * frames of a continuous animation. ~150ms is nine frames at 60Hz — long enough that the
+ * pauses inside a hand-driven drag do not read as settling, short enough that stopping
+ * reads as stopping. It is the whole of the lag now that `useTraceStatus` no longer waits
+ * for a poll to notice.
+ */
+export const IDLE_AFTER_MS = 150;
 /**
  * Traces retained for the chart.
  *
@@ -109,7 +119,48 @@ export class TraceLog {
 
 export type TraceStatus = 'never' | 'idle' | 'tracing';
 
-export const statusOf = (history: TraceHistory): TraceStatus => {
+/**
+ * Whether traces are still arriving, and the callback a tracer calls to say one landed.
+ *
+ * `idle` is the absence of an event, so *something* has to notice the absence, and the
+ * obvious something is a clock. Sampling `sinceLast` on the same 200ms poll that feeds the
+ * numbers was the first version, and it made both edges late: up to a poll to notice that
+ * tracing started, and up to `IDLE_AFTER_MS` *plus* a poll to notice that it stopped —
+ * about half a second of a badge claiming work that had already finished.
+ *
+ * A timer armed by the trace itself is exact instead: `tracing` on the frame a trace lands,
+ * `idle` exactly `IDLE_AFTER_MS` after the last one. `markTraced` runs every animated frame
+ * and re-arms the timer each time, which is cheap; the `setTracing(true)` behind it settles
+ * into React's same-value bail-out, so a burst costs one render, not one per frame.
+ */
+export const useTraceStatus = (): { tracing: boolean; markTraced: () => void } => {
+  const [tracing, setTracing] = useState(false);
+  const idleTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (idleTimer.current !== null) clearTimeout(idleTimer.current);
+    },
+    []
+  );
+
+  const markTraced = useCallback(() => {
+    setTracing(true);
+    if (idleTimer.current !== null) clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(() => {
+      idleTimer.current = null;
+      setTracing(false);
+    }, IDLE_AFTER_MS);
+  }, []);
+
+  return { tracing, markTraced };
+};
+
+/**
+ * `never` outranks both: a surface that has traced nothing is not settled, it is unmeasured,
+ * and the two must not read the same.
+ */
+export const statusOf = (history: TraceHistory, tracing: boolean): TraceStatus => {
   if (history.sinceLast === null) return 'never';
-  return history.sinceLast <= IDLE_AFTER_MS ? 'tracing' : 'idle';
+  return tracing ? 'tracing' : 'idle';
 };
