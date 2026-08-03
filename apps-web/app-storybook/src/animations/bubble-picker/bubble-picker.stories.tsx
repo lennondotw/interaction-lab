@@ -17,7 +17,7 @@ const Stage: FC<{ children: ReactNode }> = ({ children }) => (
   <div
     className={`
       flex min-h-screen w-full items-center justify-center
-      bg-[linear-gradient(180deg,#d4e3ff_0%,#e7d6ff_55%,#f3deca_100%)] p-2
+      bg-[linear-gradient(180deg,#d4e3ff_0%,#e7d6ff_55%,#f3deca_100%)]
       dark:bg-[linear-gradient(180deg,#06091a_0%,#12102b_55%,#090a1c_100%)]
     `}
   >
