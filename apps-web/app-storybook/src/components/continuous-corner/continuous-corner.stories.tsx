@@ -15,6 +15,7 @@ const meta: Meta<typeof ContinuousCorner> = {
     radius: { control: { type: 'range', min: 0, max: 120, step: 1 } },
     mode: { control: 'inline-radio', options: ['path', 'css'] },
     debugForceCssBaseline: { control: 'boolean' },
+    debugSimulateNoCornerShape: { control: 'boolean' },
     clipContent: { control: 'boolean' },
     className: { control: 'text' },
     surfaceClassName: { control: 'text' },
@@ -23,6 +24,7 @@ const meta: Meta<typeof ContinuousCorner> = {
     radius: 28,
     mode: 'path',
     debugForceCssBaseline: false,
+    debugSimulateNoCornerShape: false,
     clipContent: true,
     className: 'size-40',
     surfaceClassName: SURFACE,
@@ -159,6 +161,21 @@ export const CssMode: Story = {
  */
 export const DebugBaseline: Story = {
   args: { debugForceCssBaseline: true, className: 'h-40 w-72' },
+  render: (args) => (
+    <Stage>
+      <ContinuousCorner {...args} />
+    </Stage>
+  ),
+};
+
+/**
+ * `mode="css"` as Safari and Firefox render it today, with no `corner-shape`. The
+ * radius scale is gated behind the same `@supports` that applies the superellipse, so
+ * the two can only appear together: without it the shape degrades exactly onto the
+ * plain-`border-radius` baseline rather than drawing a circular arc 24% too large.
+ */
+export const CssModeWithoutCornerShape: Story = {
+  args: { mode: 'css', debugSimulateNoCornerShape: true, className: 'h-40 w-72' },
   render: (args) => (
     <Stage>
       <ContinuousCorner {...args} />

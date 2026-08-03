@@ -129,6 +129,48 @@ alignments for free, so there is no SVG and no measurement at all.
 regime where `corner-shape` is not an approximation but a different shape:
 it has no edge budget to run out of, so it never degrades.
 
+### When `corner-shape` is unsupported
+
+`corner-shape` needs Chrome 139+; Safari and Firefox do not have it yet. `css` mode
+degrades there **onto the baseline exactly** — the radius that was asked for, drawn
+as a plain arc, 0.0138r from Apple.
+
+That only holds because the radius compensation is gated by the same `@supports`
+that applies the superellipse, rather than baked into the number:
+
+```text
+border-radius: calc(<r>px * var(--continuous-corner-radius-scale, 1))
+
+@supports (corner-shape: squircle) {
+  --continuous-corner-radius-scale: var(--continuous-corner-radius-compensation)
+}
+```
+
+JS owns both numbers (`1.3844` and `1.2409`, written as custom properties); CSS owns
+whether the compensation is used. A baked-in `× 1.2409` would draw a plain circular
+arc **24% too large** wherever `corner-shape` is missing — a worse corner than not
+trying at all. Gated, compensation and the thing it compensates for can only appear
+together.
+
+The `@supports` condition tests `corner-shape: squircle`, a keyword, rather than the
+fitted `superellipse(1.3844)`. It is asking whether the feature exists, so it should
+not have to be edited when the fitted `k` changes.
+
+`debugSimulateNoCornerShape` pins the scale to 1 and drops the superellipse, which
+reproduces what those browsers render — verified as 28px unscaled against the
+supported path's 34.75px.
+
+Verified in Chrome:
+
+| story                       | `data-shape` |   radius | `corner-shape`         |
+| --------------------------- | ------------ | -------: | ---------------------- |
+| `CssMode`                   | `css`        | 34.745px | `superellipse(1.3844)` |
+| `CssModeWithoutCornerShape` | `baseline`   |     28px | `round`                |
+| `DebugBaseline`             | `baseline`   |     28px | `round`                |
+
+`path` mode is unaffected — it never depends on `corner-shape` at all, so it is
+exact in every browser.
+
 ### The pre-measurement baseline
 
 Before the box is measured — first paint, SSR — the shape is a plain `border-radius`

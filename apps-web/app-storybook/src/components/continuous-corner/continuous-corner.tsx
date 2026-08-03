@@ -88,6 +88,12 @@ export interface ContinuousCornerProps extends HTMLAttributes<HTMLElement> {
    * so the first frame can actually be looked at. Debug only.
    */
   debugForceCssBaseline?: boolean;
+  /**
+   * Render `css` mode as a browser without `corner-shape` would — Safari and
+   * Firefox today. The radius scale is pinned to 1 and the superellipse dropped, so
+   * the shape falls back onto the plain-`border-radius` baseline. Debug only.
+   */
+  debugSimulateNoCornerShape?: boolean;
   asChild?: boolean;
   children?: ReactNode;
 }
@@ -131,7 +137,11 @@ const useBorderBoxSize = (enabled: boolean): [RefObject<HTMLDivElement | null>, 
   return [ref, size];
 };
 
-type ShapeStyle = CSSProperties & { '--continuous-corner-shape'?: string };
+type ShapeStyle = CSSProperties & {
+  '--continuous-corner-shape'?: string;
+  '--continuous-corner-radius-compensation'?: number;
+  '--continuous-corner-radius-scale'?: number;
+};
 
 /**
  * The CSS-only shape, used both as the pre-measurement baseline and as `css` mode.
@@ -144,17 +154,33 @@ type ShapeStyle = CSSProperties & { '--continuous-corner-shape'?: string };
  * of the box to be safe. That is why the baseline does not use `corner-shape`, which
  * would be four times closer below the clamp and 12.5% wrong at it.
  *
- * Smoothed, it adds the fitted `superellipse` and scales the radius to match — the
- * `css` mode, for callers who know they are below the clamp.
+ * Smoothed, it adds the fitted `superellipse` and scales the radius to match.
+ *
+ * The scale is emitted as `calc()` against a custom property that only an
+ * `@supports (corner-shape: …)` rule sets, never as a plain multiplication. Without
+ * `corner-shape` — Safari and Firefox today — a baked-in scale would draw a plain
+ * circular arc **24% too large**, which is a worse corner than not trying. Gated,
+ * the same declaration degrades exactly onto the unsmoothed baseline instead: the
+ * radius that was asked for, 0.0138r from Apple. Compensation and the thing it
+ * compensates for can only appear together.
  */
-const cssShapeStyle = (radii: CornerRadii, smoothed: boolean): ShapeStyle => {
-  const scale = smoothed ? CSS_SHAPE_RADIUS_SCALE : 1;
-  const px = (value: number) => `${value * scale}px`;
+const cssShapeStyle = (radii: CornerRadii, smoothed: boolean, simulateNoCornerShape = false): ShapeStyle => {
+  const scaled = (value: number) =>
+    smoothed ? `calc(${value}px * var(--continuous-corner-radius-scale, 1))` : `${value}px`;
   return {
-    borderRadius: `${px(radii.topLeft)} ${px(radii.topRight)} ${px(radii.bottomRight)} ${px(radii.bottomLeft)}`,
-    // Set through a custom property because React will not write an unknown
-    // longhand like `corner-shape` from a style object.
-    ...(smoothed ? { '--continuous-corner-shape': `superellipse(${CSS_SHAPE_K})` } : {}),
+    borderRadius: [radii.topLeft, radii.topRight, radii.bottomRight, radii.bottomLeft].map(scaled).join(' '),
+    // Written through custom properties because React will not set an unknown
+    // longhand like `corner-shape` from a style object. JS owns both numbers; the
+    // `@supports` rule on the class list owns whether the compensation applies.
+    ...(smoothed && !simulateNoCornerShape
+      ? {
+          '--continuous-corner-shape': `superellipse(${CSS_SHAPE_K})`,
+          '--continuous-corner-radius-compensation': CSS_SHAPE_RADIUS_SCALE,
+        }
+      : {}),
+    // Inline beats the `@supports` class, so pinning the scale to 1 reproduces
+    // exactly what a browser without `corner-shape` renders.
+    ...(simulateNoCornerShape ? { '--continuous-corner-radius-scale': 1 } : {}),
   };
 };
 
@@ -251,6 +277,7 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
   clipContent = true,
   contentClassName,
   debugForceCssBaseline = false,
+  debugSimulateNoCornerShape = false,
   mode = 'path',
   radius = 0,
   size,
@@ -274,7 +301,9 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
   // shape is CSS. Both fall out of the same helper; only `smoothed` differs.
   const usingPath = Boolean(path);
   const smoothed = mode === 'css' && !debugForceCssBaseline;
-  const shape: ShapeStyle = usingPath ? { clipPath: `path("${path}")` } : cssShapeStyle(radii, smoothed);
+  const shape: ShapeStyle = usingPath
+    ? { clipPath: `path("${path}")` }
+    : cssShapeStyle(radii, smoothed, debugSimulateNoCornerShape);
 
   // A CSS shape carries its border as an `outline`, which follows `border-radius`
   // and `corner-shape` and costs no layout — so `css` mode needs no SVG at all, and
@@ -296,11 +325,12 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
         `
           relative isolate
           [corner-shape:var(--continuous-corner-shape)]
+          supports-[corner-shape:squircle]:[--continuous-corner-radius-scale:var(--continuous-corner-radius-compensation)]
         `,
         className
       )}
       data-slot="continuous-corner"
-      data-shape={usingPath ? 'path' : smoothed ? 'css' : 'baseline'}
+      data-shape={usingPath ? 'path' : smoothed && !debugSimulateNoCornerShape ? 'css' : 'baseline'}
       data-sizing={observed ? 'observed' : 'fixed'}
       // The root carries the radius only to give the outline something to follow;
       // it never clips, so the border can still paint outside the outline.
