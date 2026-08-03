@@ -93,7 +93,7 @@ export interface ContinuousCornerProps extends HTMLAttributes<HTMLElement> {
    * Firefox today. The radius scale is pinned to 1 and the superellipse dropped, so
    * the shape falls back onto the plain-`border-radius` baseline. Debug only.
    */
-  debugSimulateNoCornerShape?: boolean;
+  debugSimulateNoCornerShapeSupport?: boolean;
   asChild?: boolean;
   children?: ReactNode;
 }
@@ -277,7 +277,7 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
   clipContent = true,
   contentClassName,
   debugForceCssBaseline = false,
-  debugSimulateNoCornerShape = false,
+  debugSimulateNoCornerShapeSupport = false,
   mode = 'path',
   radius = 0,
   size,
@@ -303,7 +303,7 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
   const smoothed = mode === 'css' && !debugForceCssBaseline;
   const shape: ShapeStyle = usingPath
     ? { clipPath: `path("${path}")` }
-    : cssShapeStyle(radii, smoothed, debugSimulateNoCornerShape);
+    : cssShapeStyle(radii, smoothed, debugSimulateNoCornerShapeSupport);
 
   // A CSS shape carries its border as an `outline`, which follows `border-radius`
   // and `corner-shape` and costs no layout — so `css` mode needs no SVG at all, and
@@ -330,7 +330,7 @@ export const ContinuousCorner: FC<ContinuousCornerProps> = ({
         className
       )}
       data-slot="continuous-corner"
-      data-shape={usingPath ? 'path' : smoothed && !debugSimulateNoCornerShape ? 'css' : 'baseline'}
+      data-shape={usingPath ? 'path' : smoothed && !debugSimulateNoCornerShapeSupport ? 'css' : 'baseline'}
       data-sizing={observed ? 'observed' : 'fixed'}
       // The root carries the radius only to give the outline something to follow;
       // it never clips, so the border can still paint outside the outline.

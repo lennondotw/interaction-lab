@@ -223,3 +223,61 @@ describe('squirclePath', () => {
     expect(d).not.toMatch(/e[+-]/i);
   });
 });
+
+describe('squircleCorners — the shape at maximum radius', () => {
+  /** Radial distance from the box centre, folded into one quadrant. */
+  const radialProfile = (side: number, radius: number) => {
+    const centre = side / 2;
+    const corners = squircleCorners({ width: side, height: side, radii: resolveRadii(radius) });
+    const cubic = (
+      p0: readonly [number, number],
+      c1: readonly [number, number],
+      c2: readonly [number, number],
+      p3: readonly [number, number],
+      t: number
+    ) => {
+      const u = 1 - t;
+      const [a, b, c, d] = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+      return [a * p0[0] + b * c1[0] + c * c2[0] + d * p3[0], a * p0[1] + b * c1[1] + c * c2[1] + d * p3[1]] as const;
+    };
+
+    const byDegree = new Map<number, number[]>();
+    for (const corner of corners) {
+      let cursor = corner.from;
+      for (const segment of corner.segments) {
+        for (let i = 0; i <= 200; i++) {
+          const [x, y] = cubic(cursor, segment.c1, segment.c2, segment.to, i / 200);
+          const deg = Math.round(((((Math.atan2(y - centre, x - centre) * 180) / Math.PI) % 90) + 90) % 90);
+          const bucket = byDegree.get(deg) ?? [];
+          bucket.push(Math.hypot(x - centre, y - centre));
+          byDegree.set(deg, bucket);
+        }
+        cursor = segment.to;
+      }
+    }
+    return new Map([...byDegree].map(([deg, rs]) => [deg, rs.reduce((a, b) => a + b, 0) / rs.length]));
+  };
+
+  // Faithful to Apple rather than a defect — see SPEC.md. Pinned so that a change
+  // to the clamped interpolation cannot quietly alter the silhouette of every
+  // circle and pill in the app.
+  it('bulges toward the diagonals and pinches between them', () => {
+    const profile = radialProfile(400, 200);
+    const at = (deg: number) => profile.get(deg) ?? Number.NaN;
+
+    expect(at(0)).toBeCloseTo(200, 1);
+    expect(at(45)).toBeCloseTo(200.392, 2);
+    expect(at(21)).toBeCloseTo(199.158, 2);
+    // The diagonal is outside a true circle; the shoulder is inside it.
+    expect(at(45)).toBeGreaterThan(200);
+    expect(at(21)).toBeLessThan(200);
+  });
+
+  it('is the same shape however far past the clamp the radius goes', () => {
+    const clamped = radialProfile(400, 200);
+    const absurd = radialProfile(400, 10_000);
+    for (const deg of [0, 21, 45, 60, 89]) {
+      expect(absurd.get(deg)).toBeCloseTo(clamped.get(deg) ?? Number.NaN, 6);
+    }
+  });
+});

@@ -15,7 +15,7 @@ const meta: Meta<typeof ContinuousCorner> = {
     radius: { control: { type: 'range', min: 0, max: 120, step: 1 } },
     mode: { control: 'inline-radio', options: ['path', 'css'] },
     debugForceCssBaseline: { control: 'boolean' },
-    debugSimulateNoCornerShape: { control: 'boolean' },
+    debugSimulateNoCornerShapeSupport: { control: 'boolean' },
     clipContent: { control: 'boolean' },
     className: { control: 'text' },
     surfaceClassName: { control: 'text' },
@@ -24,7 +24,7 @@ const meta: Meta<typeof ContinuousCorner> = {
     radius: 28,
     mode: 'path',
     debugForceCssBaseline: false,
-    debugSimulateNoCornerShape: false,
+    debugSimulateNoCornerShapeSupport: false,
     clipContent: true,
     className: 'size-40',
     surfaceClassName: SURFACE,
@@ -175,7 +175,7 @@ export const DebugBaseline: Story = {
  * plain-`border-radius` baseline rather than drawing a circular arc 24% too large.
  */
 export const CssModeWithoutCornerShape: Story = {
-  args: { mode: 'css', debugSimulateNoCornerShape: true, className: 'h-40 w-72' },
+  args: { mode: 'css', debugSimulateNoCornerShapeSupport: true, className: 'h-40 w-72' },
   render: (args) => (
     <Stage>
       <ContinuousCorner {...args} />
@@ -427,6 +427,15 @@ export const BorderAlignments: Story = {
  * `data-testid="toggle"` drives it from a probe; `data-sizing` on each root says
  * which mode an instance is in.
  */
+/**
+ * The animation sweeps a width, so every box around it would re-centre each frame.
+ * Reserving the widest value up front is what stops the whole story shuddering while
+ * only the subject changes size — which is the thing being measured.
+ */
+const STRESS_MIN_WIDTH = 280;
+const STRESS_SWEEP = 160;
+const STRESS_MAX_WIDTH = STRESS_MIN_WIDTH + STRESS_SWEEP;
+
 export const ResizeStress: Story = {
   parameters: { controls: { disable: true } },
   render: () => {
@@ -441,7 +450,7 @@ export const ResizeStress: Story = {
         const tick = (now: number) => {
           if (origin.current === 0) origin.current = now;
           const seconds = (now - origin.current) / 1000;
-          setWidth(280 + Math.round(160 * (0.5 - 0.5 * Math.cos(seconds * 2))));
+          setWidth(STRESS_MIN_WIDTH + Math.round(STRESS_SWEEP * (0.5 - 0.5 * Math.cos(seconds * 2))));
           frame.current = requestAnimationFrame(tick);
         };
         frame.current = requestAnimationFrame(tick);
@@ -464,16 +473,17 @@ export const ResizeStress: Story = {
                 dark:bg-white dark:text-neutral-900
               `}
             >
-              {running ? 'stop' : 'start'}
+              {/* Reserved so swapping the label cannot shift the caption beside it. */}
+              <span className="inline-block w-8">{running ? 'stop' : 'start'}</span>
             </button>
             <Caption>
               width {width} · {count} observed + {count} fixed
             </Caption>
           </div>
 
-          <div className="flex flex-col gap-2" style={{ width }}>
+          <div className="flex flex-col gap-2" style={{ width: STRESS_MAX_WIDTH }}>
             <Caption>observed — ResizeObserver, path regenerated per frame</Caption>
-            <div className="flex flex-row flex-wrap gap-2" data-testid="observed-group">
+            <div className="flex flex-row flex-wrap gap-2" data-testid="observed-group" style={{ width }}>
               {Array.from({ length: count }, (_, index) => (
                 <ContinuousCorner
                   key={index}
@@ -486,9 +496,9 @@ export const ResizeStress: Story = {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2" style={{ width }}>
+          <div className="flex flex-col gap-2" style={{ width: STRESS_MAX_WIDTH }}>
             <Caption>fixed — size declared, no observer, path never rebuilt</Caption>
-            <div className="flex flex-row flex-wrap gap-2" data-testid="fixed-group">
+            <div className="flex flex-row flex-wrap gap-2" data-testid="fixed-group" style={{ width }}>
               {Array.from({ length: count }, (_, index) => (
                 <ContinuousCorner
                   key={index}

@@ -80,9 +80,9 @@ Three things about this are load-bearing:
   unclamped values to 3 × 10⁻⁴, so this is one continuous curve rather than two
   regimes stitched together.
 - **`0.96` and `0.82`** are the fully-saturated values, measured at `ρ = 1`. At that
-  point the curve is the circular arc for practical purposes — within 0.4% of a
-  true circle, which is the Bézier approximation error rather than a difference in
-  intent.
+  point the curve is a circular arc for practical purposes, though not exactly one —
+  it undulates 0.62% with a period of 90°, which is small but measurable and
+  visible. See below.
 
 ### Asymmetric corners are normal, not an edge case
 
@@ -92,6 +92,34 @@ axis and not the other. On a 400×200 box with `r = 80` the corner reaches
 edge (saturated, `H = 100`). The corner is genuinely not diagonal-symmetric, so the
 implementation cannot take the mirror shortcut. This is the regime every pill lands
 in.
+
+### At maximum radius the shape is not quite a circle
+
+This is faithful, not a defect, and it is visible if you look for it. At `r` = half
+the side on a square the outline undulates with a period of 90°, measured on a 400px
+box:
+
+| direction from the centre |  radius | vs a true circle |
+| ------------------------- | ------: | ---------------: |
+| 0° / 90° — edge midpoints | 200.001 |         +0.001px |
+| ~21° — the minimum        | 199.158 |     **−0.833px** |
+| 45° — the corner diagonal | 200.392 |     **+0.392px** |
+
+0.62% peak to peak, 1.234px. **It bulges toward the four diagonals and pinches
+between them**, which is exactly why a large one can read as very slightly squarish
+or diamond-like rather than round.
+
+It is Apple's shape, not an artefact of this port: at maximum radius every control
+point here is identical to `RoundedRectangle(.continuous)`'s own, which
+`__tests__/squircle-path.test.ts` asserts. So iOS draws the same undulation. That is
+also the real reason SwiftUI ships `Circle()` as a separate type — measured radially
+it is flat to 0.00%, where the max-radius rounded rect is not. The difference between
+them is therefore **not only** the layout one (`Circle()` insets to the largest
+inscribed circle instead of filling its frame); the curve differs slightly too.
+
+If a perfect circle matters more than matching iOS, the fully-clamped case is cheap
+to special-case — `border-radius: 50%` with no `corner-shape` is exactly round. This
+component does not, because matching iOS is the point.
 
 ### Overlap needs no separate negotiation
 
@@ -156,7 +184,7 @@ The `@supports` condition tests `corner-shape: squircle`, a keyword, rather than
 fitted `superellipse(1.3844)`. It is asking whether the feature exists, so it should
 not have to be edited when the fitted `k` changes.
 
-`debugSimulateNoCornerShape` pins the scale to 1 and drops the superellipse, which
+`debugSimulateNoCornerShapeSupport` pins the scale to 1 and drops the superellipse, which
 reproduces what those browsers render — verified as 28px unscaled against the
 supported path's 34.75px.
 
