@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface UseWizardStepsOptions {
   /** How many steps there are. The step is clamped into it, so shrinking is safe. */
@@ -6,10 +6,21 @@ export interface UseWizardStepsOptions {
   /**
    * Whether the wizard is on screen. Leave it out for a wizard that is always up.
    *
-   * The step is rewound when this goes **true**, never when it goes false — see the
-   * hook's own note for why the obvious side is the wrong one.
+   * The run is rewound once this has been false for `resetAfter` — see the hook's own
+   * note for why it is not the moment it goes false, and not the next time it goes true.
    */
   open?: boolean;
+  /**
+   * How long the wizard takes to leave, in ms. The rewind waits it out.
+   *
+   * The length of *your* exit — the fade, the scale, the slide off the bottom of the
+   * screen that the thing around this wizard plays. It is not knowable from here, and
+   * the default assumes the honest worst case for a caller who has not said: that the
+   * wizard vanishes at once and the rewind can happen immediately.
+   *
+   * @default 0
+   */
+  resetAfter?: number;
   /** Where a run starts, and where it is rewound to. @default 0 */
   initialStep?: number;
 }
@@ -26,44 +37,59 @@ export interface WizardStepsResult {
 /**
  * Which step of a wizard is showing, with the open/close discipline built in.
  *
- * # The rewind happens on the way in
+ * # The rewind waits for the exit, then happens at once
  *
- * Clearing the step when the wizard closes is the obvious choice and it is visible:
- * a surface that fades, scales or slides out is still on screen for the length of
- * that animation, so rewinding there plays the whole wizard backwards underneath
- * the exit — you watch it return to step one as it leaves. Rewinding on the way in
- * cannot race anything, because there is nothing on screen yet to race.
+ * Rewinding the instant the wizard closes is the obvious choice and it is visible: a
+ * surface that fades, scales or slides out is still on screen for the length of that
+ * animation, so the run plays backwards underneath the exit — you watch it return to
+ * step one as it leaves. So the rewind waits `resetAfter` out, and by then there is
+ * nothing on screen to see it: the step changes in one commit, with no transition to
+ * play, because a wizard nobody can see does not need to travel anywhere.
  *
- * The other half of it belongs to `Wizard`: the step that changes while the wizard
- * is closed must *arrive* rather than slide, so the surface restarts its step
- * transition on the same edge. Both halves are needed — this one alone still walks
- * backwards through the steps, just at the moment the wizard reappears.
+ * Deferring it to the *next opening* instead is the other tempting answer, and it has a
+ * worse problem: the rewind and the wizard becoming visible then land in the same
+ * commit, so every consumer of the step — the surface's height, the step transition,
+ * anything of the caller's keyed on it — has to be taught to suppress that one change
+ * or it plays the run backwards in front of the user at the worst possible moment. Doing
+ * it while closed means the wizard reopens with nothing to undo.
  *
- * Nothing else about a run is reset here, deliberately. Whatever a step *collected*
- * is the caller's state, and a caller that wants it dropped per run keys it on the
- * same `open` edge.
+ * Reopening *during* `resetAfter` cancels the rewind, and the run picks up where it was
+ * left. That is the right answer for a mis-tap — and it is the case `Wizard` still
+ * remounts its step host on the way in for: the step is unchanged but the run resumed,
+ * and resuming is not something to slide into.
+ *
+ * Nothing else about a run is reset here, deliberately. Whatever a step *collected* is
+ * the caller's state, and a caller that wants it dropped per run keys it on the same
+ * `open` edge.
  *
  * @example
  * ```tsx
- * const steps = useWizardSteps({ count: 3, open });
+ * const steps = useWizardSteps({ count: 3, open, resetAfter: 300 });
  *
  * <Wizard step={steps.step} open={open} height="fit">
  *   {STEPS[steps.step]}
  * </Wizard>
  * ```
  */
-export const useWizardSteps = ({ count, open = true, initialStep = 0 }: UseWizardStepsOptions): WizardStepsResult => {
+export const useWizardSteps = ({
+  count,
+  open = true,
+  resetAfter = 0,
+  initialStep = 0,
+}: UseWizardStepsOptions): WizardStepsResult => {
   const [step, setStep] = useState(initialStep);
-  const [lastOpen, setLastOpen] = useState(open);
 
-  // Derived during render rather than in an effect: an effect lands a commit later,
-  // so the first painted frame of a reopened wizard would be the step the last run
-  // ended on.
-  if (open !== lastOpen) {
-    setLastOpen(open);
+  useEffect(() => {
+    if (open || step === initialStep) return;
 
-    if (open && step !== initialStep) setStep(initialStep);
-  }
+    const timer = setTimeout(() => setStep(initialStep), resetAfter);
+
+    // Cleared on reopen, which is what makes the exit's length the whole of the grace
+    // period: a wizard that comes back before the timer lands keeps its step.
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [initialStep, open, resetAfter, step]);
 
   const lastIndex = Math.max(count - 1, 0);
   // Clamped on the way out rather than written back: a count that shrank under the

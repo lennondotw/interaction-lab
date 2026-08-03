@@ -1,6 +1,8 @@
 export {
   WIZARD_HEIGHT_CLASS,
   WIZARD_HEIGHT_VAR,
+  WIZARD_PAD_BOTTOM_VAR,
+  WIZARD_PAD_TOP_VAR,
   useWizardHeight,
   type UseWizardHeightOptions,
   type WizardHeight,

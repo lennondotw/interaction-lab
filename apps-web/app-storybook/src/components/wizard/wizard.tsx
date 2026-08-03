@@ -1,16 +1,35 @@
 import { STEP_FADE_DURATION, STEP_SLIDE_DURATION, StepTransition } from '#src/animations/step-transition/index.js';
 import { cn } from '@monorepo/utils';
 import { useState, type CSSProperties, type FC, type ReactNode } from 'react';
-import { useWizardHeight, WIZARD_HEIGHT_CLASS, WIZARD_HEIGHT_VAR, type WizardHeight } from './use-wizard-height.js';
+import {
+  useWizardHeight,
+  WIZARD_HEIGHT_CLASS,
+  WIZARD_HEIGHT_VAR,
+  WIZARD_PAD_BOTTOM_VAR,
+  WIZARD_PAD_TOP_VAR,
+  type WizardHeight,
+} from './use-wizard-height.js';
 
 /**
  * How one step gives way to the next.
  *
- * `'none'` is not "no animation available" — it is the hand-off. The step is swapped
- * with nothing wrapped around it, which is what a shared-element transition needs:
- * the outgoing element unmounts and the incoming one mounts in the same commit, so
- * Motion's `layoutId` (or a view transition) pairs them and morphs one into the
- * other. A slide would be a second opinion about the same movement.
+ * `'none'` is not "no animation available" — the step is swapped with nothing of ours
+ * wrapped around it, for a caller who is bringing their own transition, view transition
+ * included.
+ *
+ * A `layoutId` morph is the case it exists for, and it wants `'none'` for a reason: the
+ * other two modes wrap the step in a box they animate — `'fade'`'s is blurred on the way in
+ * and out — and a shared element inside a blurred, fading ancestor is not travelling
+ * cleanly. The morph should be the only thing moving.
+ *
+ * Two things then become the caller's, and neither is optional. **`AnimatePresence`**,
+ * because a shared element hands over on the *presence* edge: `NodeStack.promote` gives the
+ * incoming node the outgoing one's box by calling `prevLead.updateSnapshot()`, and with a
+ * bare swap that call lands *after* React has committed — so the box it records is the
+ * outgoing element measured in the layout that already changed, and the morph starts
+ * wherever the new step put it. And **`mode="popLayout"`**, because in `fit` mode this
+ * surface is as tall as what is in flow: a step on its way out that stays in the flow holds
+ * the surface open at the sum of both steps.
  */
 export type WizardTransition = 'slide' | 'fade' | 'none';
 
@@ -22,20 +41,35 @@ const DURATIONS: Record<WizardTransition, number> = {
   none: STEP_SLIDE_DURATION,
 };
 
+/**
+ * A chrome band: where one edge's chrome is put, and nothing about how it looks.
+ *
+ * Position and paint order only — pinned across the edge, over the step, `z-10` because the
+ * step host is the whole surface and is painted first. A fill, a blur, a hairline, a radius:
+ * all of that belongs to the node the caller passed, which is this box's only child and is
+ * as wide as it.
+ *
+ * A caller who frosts their chrome should know one thing about the arrangement: the surface's
+ * own hairline, if it has one, is *in* the backdrop a `backdrop-filter` samples, and a 1px
+ * line put through a 20px blur is gone. Draw the hairline above the bands instead — an
+ * `::after` ring at `z-20` on the surface is the whole fix.
+ */
+const BAND_CLASS = 'absolute inset-x-0 z-10';
+
 export interface WizardProps {
   /** Which step is showing. See `useWizardSteps` for the state that goes with it. */
   step: number;
   /** The showing step. Only ever one — the wizard does not hold the others. */
   children: ReactNode;
   /**
-   * Chrome above the steps, which does **not** transition.
+   * Chrome pinned to the top of the surface, over the step, which does **not** transition.
    *
    * That is the point of it rather than a limitation: a title and a step counter are
    * what make a sequence of steps read as one flow, and sliding them out with the
    * step they happen to sit above breaks exactly that.
    */
   header?: ReactNode;
-  /** Chrome below the steps. Does not transition, for the same reason. */
+  /** Chrome pinned to the bottom. Does not transition, for the same reason. */
   footer?: ReactNode;
   /** @default 'fit' */
   height?: WizardHeight;
@@ -76,11 +110,34 @@ export interface WizardProps {
  *
  * # What it deliberately does not own
  *
- * Which step is showing (`useWizardSteps`), what a step collected, and how the wizard
- * itself appears. A wizard is one surface inside a dialog, a popover, a page or a
- * story; owning its own entrance would make it wrong in three of those four.
+ * **How any of it looks.** Not a background, not a radius, not a hairline, not the glass
+ * behind the chrome — the four classes it sets are `relative isolate overflow-hidden` and the
+ * height, and every one of those is load-bearing rather than decorative. A caller's
+ * `className` is the whole appearance of the surface, and the header and footer nodes are the
+ * whole appearance of the chrome: this component renders them into a box that is pinned
+ * across an edge and painted above the step, and contributes nothing else to them. That is
+ * also why there is no default: a bordered card, a bare panel and a sheet with only a
+ * top-left radius are all *correct*, and a default would make two of them wrong.
  *
- * # Two things to know when filling it
+ * Which step is showing (`useWizardSteps`), what a step collected, and how the wizard itself
+ * appears on screen. A wizard is one surface inside a dialog, a popover, a page or a story;
+ * owning its own entrance would make it wrong in three of those four.
+ *
+ * # The chrome is over the step, not beside it
+ *
+ * The step host is the whole surface, and the header and footer are laid over it —
+ * anchored to the top and bottom edges, so the surface's height animation carries them
+ * with it and neither band needs an animation of its own. It also means a step slides
+ * across the full surface: were the host the band between the two pieces of chrome, a
+ * step would be cut off at that seam instead of at the visible edge.
+ *
+ * What the chrome costs is published as two lengths — `--wizard-pad-top` and
+ * `--wizard-pad-bottom`, the measured height of each band — for the step to reserve as
+ * its own padding: `pt-(--wizard-pad-top) pb-(--wizard-pad-bottom)`, on the scroller
+ * when there is one. The step decides, because only the step knows whether its content
+ * should stop at the chrome or pass under it.
+ *
+ * # Two more things to know when filling it
  *
  * The surface clips, so **a step's own insets belong to the step**, not to the
  * wizard. Padding out here would put the clip boundary that far inside the visual
@@ -89,7 +146,8 @@ export interface WizardProps {
  *
  * In fixed mode the step fills the surface, so a scroller is `size-full
  * overflow-y-auto` on the step's own root. In fit mode there is nothing to fill and
- * nothing to scroll — the step states its height by being that tall.
+ * nothing to scroll — the step states its height by being that tall, chrome included,
+ * because the bands it reserved are inside its own box.
  *
  * @example
  * ```tsx
@@ -119,7 +177,7 @@ export const Wizard: FC<WizardProps> = ({
   width,
 }) => {
   const duration = DURATIONS[transition];
-  const { declared, isFit, needsProbe, setColumn, setProbe, setSurface } = useWizardHeight({
+  const { declared, isFit, padBottom, padTop, setFooter, setHeader, setSurface } = useWizardHeight({
     duration,
     height,
     open,
@@ -129,12 +187,13 @@ export const Wizard: FC<WizardProps> = ({
   // Bumped every time the wizard opens, and used as the step host's key.
   //
   // This is the half of the open/close discipline that lives here. `useWizardSteps`
-  // rewinds the step on the way in, which lands the rewind and the wizard becoming
-  // visible in the same commit — and a step transition asked to travel there would
-  // play the whole run backwards in front of the user, at the worst possible moment.
-  // Remounting the host means the step it reopens on is its *first*, and a first step
-  // is not a transition. It also drops any exit still in flight from before the
-  // close, which would otherwise resume mid-slide.
+  // rewinds the step once the wizard is closed and out of sight, and a wizard reopened
+  // before that lands still has the last run's step to get rid of — either way the step
+  // the user is shown first must *arrive*, and a transition asked to travel there would
+  // play the run backwards in front of them at the worst possible moment. Remounting the
+  // host makes the step it reopens on its *first*, and a first step is not a transition.
+  // It also drops any exit still in flight from before the close, which would otherwise
+  // resume mid-slide.
   const [session, setSession] = useState(0);
   const [lastOpen, setLastOpen] = useState(open);
 
@@ -146,81 +205,56 @@ export const Wizard: FC<WizardProps> = ({
 
   return (
     <div
-      className={cn(
-        `
-          relative isolate overflow-hidden rounded-2xl bg-white outline-1 -outline-offset-1 outline-black/10
-          dark:bg-white/5 dark:outline-white/15
-        `,
-        WIZARD_HEIGHT_CLASS,
-        className
-      )}
+      className={cn('relative isolate overflow-hidden', WIZARD_HEIGHT_CLASS, className)}
       data-height-mode={isFit ? 'fit' : 'fixed'}
       data-open={open}
       data-slot="wizard"
       ref={setSurface}
-      style={{ width, [WIZARD_HEIGHT_VAR]: declared, ...style } as CSSProperties}
+      style={
+        {
+          width,
+          [WIZARD_HEIGHT_VAR]: declared,
+          [WIZARD_PAD_TOP_VAR]: padTop,
+          [WIZARD_PAD_BOTTOM_VAR]: padBottom,
+          ...style,
+        } as CSSProperties
+      }
     >
-      {/*
-        Not content: an empty box laid out at the declared height, so a length the
-        animation cannot read — `60vh`, a `min()` over one — has a number behind it.
-        Out of flow, zero-width and unpainted, so the only thing it contributes is the
-        answer to that one question. `invisible` and not `hidden`, because a
-        `display: none` box has no layout and would report nothing; and its height
-        must stay an expression that does not depend on its parent, since a `%` would
-        resolve against the box being animated and close the loop.
-      */}
-      {needsProbe && (
-        <div
-          aria-hidden
-          className="pointer-events-none invisible absolute top-0 left-0 w-0"
-          data-slot="wizard-height-probe"
-          ref={setProbe}
-          style={{ height: declared }}
-        />
+      {header != null && (
+        <div className={cn(BAND_CLASS, 'top-0')} data-slot="wizard-header" ref={setHeader}>
+          {header}
+        </div>
       )}
 
       {/*
-        The content column, and the reason the fit height needs no arithmetic: a
-        header and a footer are inside it, so they are already inside the measurement.
-
-        `h-auto` in fit mode is what makes that measurement mean anything — it is the
-        height the surface *should* be, independent of the height it currently is,
-        which is what keeps the animation from reading back its own output. `h-full`
-        in fixed mode hands the surface's height to the step instead, which is the
-        other direction of the same relationship.
+        The step host is the surface. In fixed mode it is pinned to all four edges; in
+        fit mode it is the one thing in flow, so the surface is as tall as it is — which
+        includes the two chrome bands, because the step reserved them as its own padding.
       */}
-      <div className={cn('flex flex-col', isFit ? 'h-auto' : 'h-full')} data-slot="wizard-column" ref={setColumn}>
-        {header != null && (
-          <div className="shrink-0" data-slot="wizard-header">
-            {header}
-          </div>
-        )}
-
-        <div className={cn('relative', isFit ? 'shrink-0' : 'min-h-0 flex-1')} data-slot="wizard-steps">
-          {transition === 'none' ? (
-            // No wrapper of our own around the step, and no key: pairing the old
-            // element with the new one is the caller's to do, and it needs both ends
-            // to be theirs. In fixed mode the step still has to be told to fill.
-            <div className={isFit ? undefined : 'absolute inset-0'}>{children}</div>
-          ) : (
-            <StepTransition
-              className={isFit ? 'w-full' : 'size-full'}
-              inFlow={isFit}
-              key={session}
-              mode={transition}
-              step={step}
-            >
-              {children}
-            </StepTransition>
-          )}
-        </div>
-
-        {footer != null && (
-          <div className="shrink-0" data-slot="wizard-footer">
-            {footer}
-          </div>
+      <div className={isFit ? 'relative' : 'absolute inset-0'} data-slot="wizard-steps">
+        {transition === 'none' ? (
+          // No wrapper of our own around the step, and no key: pairing the old
+          // element with the new one is the caller's to do, and it needs both ends
+          // to be theirs. In fixed mode the step still has to be told to fill.
+          <div className={isFit ? undefined : 'size-full'}>{children}</div>
+        ) : (
+          <StepTransition
+            className={isFit ? 'w-full' : 'size-full'}
+            inFlow={isFit}
+            key={session}
+            mode={transition}
+            step={step}
+          >
+            {children}
+          </StepTransition>
         )}
       </div>
+
+      {footer != null && (
+        <div className={cn(BAND_CLASS, 'bottom-0')} data-slot="wizard-footer" ref={setFooter}>
+          {footer}
+        </div>
+      )}
     </div>
   );
 };
