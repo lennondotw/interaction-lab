@@ -540,6 +540,101 @@ describe('quadtreeSafeView', () => {
   });
 });
 
+describe('the superellipse corner exponent', () => {
+  /** p-norm rounded box, written out independently of the tracer's copy. */
+  const sdSuper = (
+    px: number,
+    py: number,
+    cx: number,
+    cy: number,
+    hw: number,
+    hh: number,
+    r: number,
+    n: number
+  ): number => {
+    const qx = Math.abs(px - cx) - hw + r;
+    const qy = Math.abs(py - cy) - hh + r;
+    const ox = Math.max(qx, 0);
+    const oy = Math.max(qy, 0);
+    return Math.min(Math.max(qx, qy), 0) + (ox ** n + oy ** n) ** (1 / n) - r;
+  };
+
+  const BOX = { x: 256, y: 256, hw: 120, hh: 80, r: 40 };
+
+  it('is bit-identical to a circular corner at n = 2', () => {
+    // The generalisation must not perturb the shape every archived figure was taken on.
+    const tracer = makeTracer();
+    const plain = tracer.trace([BOX], config({ cell: 1 }));
+    const signature = `${plain.loopCount}/${plain.pointCount}/${plain.fieldEvals}`;
+    const explicit = tracer.trace([{ ...BOX, n: 2 }], config({ cell: 1 }));
+    expect(`${explicit.loopCount}/${explicit.pointCount}/${explicit.fieldEvals}`).toBe(signature);
+  });
+
+  it('leaves the straight edges exactly where they were at every exponent', () => {
+    // Off the corners one component of q is negative and every norm agrees on one axis, so
+    // an exponent that moved an edge would mean the corner term is leaking.
+    for (const n of [1, 1.5, 2, 2.611, 4, 8]) {
+      expect(sdSuper(BOX.x, BOX.y - BOX.hh, BOX.x, BOX.y, BOX.hw, BOX.hh, BOX.r, n)).toBeCloseTo(0, 10);
+      expect(sdSuper(BOX.x + BOX.hw, BOX.y, BOX.x, BOX.y, BOX.hw, BOX.hh, BOX.r, n)).toBeCloseTo(0, 10);
+    }
+  });
+
+  it('puts every traced vertex on the iso of an independent p-norm field', () => {
+    const tracer = makeTracer();
+    for (const n of [1.5, 2.611, 4]) {
+      const shape = { ...BOX, n };
+      tracer.trace([shape], config({ cell: 1 }));
+      const points = allPoints(tracer);
+      expect(points.length).toBeGreaterThan(100);
+      for (const point of points) {
+        expect(Math.abs(sdSuper(point.x, point.y, shape.x, shape.y, shape.hw, shape.hh, shape.r, n))).toBeLessThan(0.6);
+      }
+    }
+  });
+
+  it('agrees across traversals for every exponent, including below 2', () => {
+    // The one that catches a cull that is too aggressive: `sparse` dropping a node the
+    // surface passes through shows up as fewer loops or vertices than `dense`.
+    const tracer = makeTracer();
+    for (const n of [1, 1.2, 1.5, 2, 2.611, 4, 8]) {
+      for (const cell of CELLS) {
+        const shapes = [{ ...BOX, n }];
+        const dense = tracer.trace(shapes, config({ traversal: 'dense', cell }));
+        const reference = `${dense.loopCount}/${dense.pointCount}`;
+        for (const traversal of ['bounded', 'sparse'] as const) {
+          const stats = tracer.trace(shapes, config({ traversal, cell }));
+          expect(`${stats.loopCount}/${stats.pointCount}`, `n=${n} cell=${cell} ${traversal}`).toBe(reference);
+        }
+      }
+    }
+  });
+
+  it('pushes the corner out toward square as the exponent rises', () => {
+    // The property that makes the family useful, and a check that `n` is not merely
+    // accepted and ignored: the apex on the corner diagonal moves monotonically outward.
+    const apexDepth = (n: number): number => {
+      const vx = BOX.x + BOX.hw;
+      const vy = BOX.y + BOX.hh;
+      let lo = 0;
+      let hi = BOX.r * 2;
+      for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        const t = mid / Math.SQRT2;
+        if (sdSuper(vx - t, vy - t, BOX.x, BOX.y, BOX.hw, BOX.hh, BOX.r, n) < 0) hi = mid;
+        else lo = mid;
+      }
+      return (lo + hi) / 2;
+    };
+
+    const depths = [1, 1.5, 2, 2.611, 4, 8].map(apexDepth);
+    for (let i = 1; i < depths.length; i++) {
+      expect(depths[i] ?? 0).toBeLessThan(depths[i - 1] ?? 0);
+    }
+    // n = 2 is the circular arc, whose apex sits `r * (sqrt(2) - 1)` from the vertex.
+    expect(depths[2] ?? 0).toBeCloseTo(BOX.r * (Math.SQRT2 - 1), 2);
+  });
+});
+
 describe('overlay rects', () => {
   it('records the bounded box at its real aspect, not as a square', () => {
     const tracer = makeTracer();

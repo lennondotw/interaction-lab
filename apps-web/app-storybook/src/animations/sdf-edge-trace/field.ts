@@ -56,6 +56,23 @@ export interface FieldShape {
   hh?: number;
   /** Corner radius, clamped to `min(hw, hh)`. Falls back to `config.radius`. */
   r?: number;
+  /**
+   * Exponent of the corner curve, as the `n` in `|x|ⁿ + |y|ⁿ = rⁿ`. Defaults to 2, a
+   * circular arc.
+   *
+   * This is exactly CSS `corner-shape: superellipse(k)` with `n = 2ᵏ`, because that
+   * family is confined to the `r × r` corner box and so *is* the p-norm level set —
+   * see archive/2026-07-corner-shape-superellipse. So `n = 2` is `round`, `n = 4` is
+   * `squircle`, `n = 1` is `bevel`, and `n → ∞` approaches a square corner.
+   *
+   * Apple's continuous corner is **not** in this family — it is three cubic Béziers
+   * reaching `1.528665r` along each edge rather than staying inside the corner box, and
+   * no exponent reproduces it. It can be *approximated* to 0.003r at `n = 2.611`
+   * (`k = 1.3844`) with the radius scaled 1.2408, which is invisible — but only below
+   * its clamp, since a superellipse cannot degrade. See
+   * archive/2026-08-corner-shape-vs-apple.
+   */
+  n?: number;
 }
 
 /**
@@ -301,6 +318,12 @@ export class ContourTracer {
   /** `sigma * BAND_SIGMAS`; the only form of sigma the hot loop needs. */
   private band = 36;
   private collectCells = false;
+  /**
+   * Steepest `|∇|` any loaded shape's corner term reaches — 1 unless an exponent below 2
+   * is in play, where the p-norm steepens to `2^(1/n − 1/2)`, √2 at `n = 1`. Multiplies
+   * the quadtree's cull radius, or it would discard nodes that do contain the surface.
+   */
+  private gradientBound = 1;
 
   /**
    * Shapes flattened into parallel typed arrays once per `trace`, rather than read
@@ -318,6 +341,8 @@ export class ContourTracer {
   private readonly shapeHW: Float64Array;
   private readonly shapeHH: Float64Array;
   private readonly shapeR: Float64Array;
+  /** Corner exponent per shape; 2 is a circular arc. */
+  private readonly shapeN: Float64Array;
   /** `hw === hh === r`, i.e. the shape is a plain disc and can skip the box maths. */
   private readonly shapeIsDisc: Uint8Array;
 
@@ -393,6 +418,7 @@ export class ContourTracer {
     this.shapeHW = new Float64Array(MAX_SHAPES);
     this.shapeHH = new Float64Array(MAX_SHAPES);
     this.shapeR = new Float64Array(MAX_SHAPES);
+    this.shapeN = new Float64Array(MAX_SHAPES);
     this.shapeIsDisc = new Uint8Array(MAX_SHAPES);
     // Depth-first quadtree stack: (i, j, size) triples. It starts loaded with
     // every root of the forest (see `traverseSparse`), and each level descended
@@ -427,7 +453,21 @@ export class ContourTracer {
     const qy = Math.abs(y - (this.shapeY[i] ?? 0)) - (this.shapeHH[i] ?? 0) + r;
     const outsideX = Math.max(qx, 0);
     const outsideY = Math.max(qy, 0);
-    return Math.min(Math.max(qx, qy), 0) + Math.sqrt(outsideX * outsideX + outsideY * outsideY) - r;
+    // The corner term generalises from `length` to the p-norm, which turns the circular
+    // arc into the superellipse |x|^n + |y|^n = r^n — CSS's `corner-shape` family exactly,
+    // since it is confined to the same r x r corner box. `n === 2` makes the p-norm *be*
+    // `length`, so the circular case is the same code rather than a case of it, and keeps
+    // its sqrt because two `Math.pow` calls are far dearer.
+    //
+    // Only this term changes. Along a straight edge one component of `q` is negative,
+    // `max(q, 0)` zeroes it, and every norm agrees on a single axis — which is why the
+    // edges stay straight and exactly where they were at every exponent.
+    const n = this.shapeN[i] ?? 2;
+    const corner =
+      n === 2
+        ? Math.sqrt(outsideX * outsideX + outsideY * outsideY)
+        : Math.pow(Math.pow(outsideX, n) + Math.pow(outsideY, n), 1 / n);
+    return Math.min(Math.max(qx, qy), 0) + corner - r;
   }
 
   /** Sum of blurred shapes. Saturates at 1, so it is flat almost everywhere. */
@@ -572,6 +612,7 @@ export class ContourTracer {
    */
   private loadShapes(shapes: readonly FieldShape[]): void {
     const fallback = this.radius;
+    let steepest = 1;
     const count = Math.min(shapes.length, MAX_SHAPES);
     for (let i = 0; i < count; i++) {
       const shape = shapes[i];
@@ -579,14 +620,20 @@ export class ContourTracer {
       const hw = shape.hw ?? fallback;
       const hh = shape.hh ?? fallback;
       const r = Math.min(shape.r ?? fallback, hw, hh);
+      const n = shape.n ?? 2;
       this.shapeX[i] = shape.x;
       this.shapeY[i] = shape.y;
       this.shapeHW[i] = hw;
       this.shapeHH[i] = hh;
       this.shapeR[i] = r;
-      this.shapeIsDisc[i] = hw === r && hh === r ? 1 : 0;
+      this.shapeN[i] = n;
+      // A disc needs a circular corner as well as square half-extents; a superelliptical
+      // one is a different shape and must not take the sqrt fast path.
+      this.shapeIsDisc[i] = hw === r && hh === r && n === 2 ? 1 : 0;
+      if (n < 2) steepest = Math.max(steepest, Math.pow(2, 1 / n - 0.5));
     }
     this.shapeCount = count;
+    this.gradientBound = steepest;
   }
 
   /** Axis-aligned bounds of every shape, grown by `influence`. Empty when there are none. */
@@ -751,7 +798,10 @@ export class ContourTracer {
       // node has to clear *both* to be discarded — the reach that matters is the
       // nearest iso, not iso 0 — otherwise the cull punches holes in the inner
       // contour exactly where the outer one is far away.
-      const reach = sizePx * Math.SQRT1_2 * CULL_SAFETY;
+      // Widened by the steepest any loaded shape's corner term can be: the cull argues
+      // "no point in this node is nearer the surface than the half-diagonal", which only
+      // holds while the field changes by at most `gradientBound` per unit of distance.
+      const reach = sizePx * Math.SQRT1_2 * CULL_SAFETY * this.gradientBound;
       let nearest = Infinity;
       for (let level = 0; level < levels; level++) {
         const distance = Math.abs(d - (this.isoLevels[level] ?? 0));

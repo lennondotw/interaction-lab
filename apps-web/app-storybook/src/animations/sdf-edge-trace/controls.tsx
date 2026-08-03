@@ -52,10 +52,17 @@ interface SegmentedProps<T extends string | number> {
   options: readonly { value: T; label: string; disabled?: boolean; title?: string }[];
   value: T;
   onChange: (value: T) => void;
+  /**
+   * Handle for probes. Worth setting whenever a story has two of these on screen, because
+   * the labels are short and collide readily — a cell size of `1` and a `k` of `1` are the
+   * same string, so `button:has-text("1")` silently picks the wrong group.
+   */
+  testId?: string;
 }
 
-export const Segmented = <T extends string | number>({ options, value, onChange }: SegmentedProps<T>) => (
+export const Segmented = <T extends string | number>({ options, value, onChange, testId }: SegmentedProps<T>) => (
   <div
+    data-testid={testId}
     className={`
       flex w-fit flex-row rounded-lg border border-neutral-200 bg-neutral-100 p-0.5
       dark:border-neutral-700 dark:bg-neutral-800
@@ -91,20 +98,25 @@ export const Segmented = <T extends string | number>({ options, value, onChange 
   </div>
 );
 
-export const Toggle: FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void }> = ({
-  label,
-  checked,
-  onChange,
-}) => (
+export const Toggle: FC<{
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}> = ({ label, checked, onChange, disabled = false }) => (
   <label
-    className={`
-      flex cursor-pointer flex-row items-center gap-1.5 text-xs text-neutral-600 select-none
-      dark:text-neutral-400
-    `}
+    className={cn(
+      `
+        flex flex-row items-center gap-1.5 text-xs text-neutral-600 select-none
+        dark:text-neutral-400
+      `,
+      disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'
+    )}
   >
     <input
       type="checkbox"
       checked={checked}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.checked)}
       className="size-3.5 accent-indigo-500"
     />

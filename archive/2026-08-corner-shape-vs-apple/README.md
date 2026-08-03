@@ -62,6 +62,51 @@ The residual is not concentrated at the join — it peaks on the diagonal, at th
 corner's apex, and falls to zero along both edges. That is the best possible shape
 for an error to have: it is where the eye has no reference to compare against.
 
+## Where the fit actually breaks — added 2026-08-03
+
+The crossover at `ρ = 0.654166` is where Apple _starts_ flattening, and it was easy to
+read the conclusion below as "the fit is unusable above it". It is not: measured by a
+third instrument — the SDF tracer's `ContinuousCorner` story, whose contour is walked
+out of a p-norm field rather than evaluated in closed form — the fit holds for another
+fifth of the range and then falls off a cliff.
+
+On a 300 × 180 box, one-sided max deviation of the traced contour from
+`squircleCorners`' own geometry, over the nominal radius:
+
+|   `ρ` | deviation |                                                 |
+| ----: | --------: | ----------------------------------------------- |
+| 0.656 |   0.0031r | the crossover — indistinguishable from below it |
+| 0.722 |   0.0032r |                                                 |
+| 0.800 |   0.0039r | still a quarter-pixel at `r = 72`               |
+| 0.833 |   0.0166r | **4× worse, for a 0.03 step in `ρ`**            |
+| 0.867 |   0.0319r |                                                 |
+| 0.911 |   0.0504r |                                                 |
+| 0.956 |   0.0672r |                                                 |
+| 1.000 |   0.0826r | fully saturated                                 |
+
+So the band that genuinely needs the generated path is `ρ > 0.8`, not `ρ > 0.654`, and the
+crossover is a warning rather than a verdict. The knee sits between 0.80 and 0.83 and is
+sharp enough that there is no useful middle ground to interpolate through — which also
+means a caller cannot buy much by easing between the two modes.
+
+Two caveats on comparing these numbers with the ones above. This is a _one-sided_ distance
+from a traced polyline, where the fit used the symmetric Hausdorff distance between two
+closed forms, so the 0.0826r at saturation is not the same measurement as the 12.5% quoted
+below and the two should not be differenced.
+
+And the tracer contributes its own error, so it was bounded before the table was trusted —
+at `r = 36`, sweeping the cell size:
+
+| cell | deviation | vertices | field evals |
+| ---: | --------: | -------: | ----------: |
+|    1 |   0.0031r |      956 |       8,505 |
+|    2 |   0.0031r |      476 |       3,737 |
+|    4 |   0.0031r |      240 |       1,901 |
+|    8 |   0.0051r |      120 |         885 |
+
+Identical from 4 down to 1 — the residual is the family's, not the sampler's — and only
+`cell = 8` starts adding its own. Every row in the `ρ` table was taken at `cell = 1`.
+
 ## Cross-checked in Chrome, and a metric trap on the way
 
 Measured against the shipped generator's real `clip-path` by hit-testing rays from
