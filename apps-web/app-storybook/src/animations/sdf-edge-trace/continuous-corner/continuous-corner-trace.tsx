@@ -38,6 +38,7 @@ import { buildPath2D } from '../contour-path.js';
 import { Field, Segmented, Stat, Toggle } from '../controls.js';
 import { ContourTracer, type FieldShape } from '../field.js';
 import { CELL_SIZES, RollingMedian } from '../shape.js';
+import { drawCentreHandles, useShapeDrag } from '../use-shape-drag.js';
 import { FAMILIES, appleOutline, deviationFromApple, familyById, type FamilyId } from './corner-families.js';
 import { MEASURED_BOX, SCENES, VIEW, sceneById, type SceneId, type SceneShape } from './corner-scenes.js';
 
@@ -62,12 +63,15 @@ const BRIDGE_BLENDS = [0, 24, 48, 72] as const;
  * the stage — and every shape on it — resize when the scene changed.
  */
 const DISPLAY = 520;
+/** Grab radius around a shape's centre, in domain units. */
+const GRAB = 46;
 
 const COLORS = {
   fill: 'rgba(99, 102, 241, 0.16)',
   trace: '#818cf8',
   apple: 'rgba(244, 63, 94, 0.95)',
   box: 'rgba(148, 163, 184, 0.28)',
+  handle: 'rgba(129, 140, 248, 0.9)',
   label: 'rgba(148, 163, 184, 0.85)',
 };
 
@@ -95,6 +99,7 @@ const shared = (values: readonly number[]): number | null => {
 export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const applePathRef = useRef<SVGPathElement>(null);
+  const appleGroupRef = useRef<SVGGElement>(null);
 
   const tracer = useMemo(() => new ContourTracer(VIEW, OVERSCAN, 1, 1), []);
   const samples = useMemo(() => new RollingMedian(30), []);
@@ -129,11 +134,17 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
     return shifted;
   }, [scene.measured, radius]);
 
+  const layout: FieldShape[] = useMemo(() => members.map((member) => member.shape), [members]);
+  // Owned here rather than by the hook, so pointing it at the newest `draw` is a plain ref
+  // write instead of an assignment through a returned object.
+  const drawRef = useRef<() => void>(() => undefined);
+  const drag = useShapeDrag({ layout, view: VIEW, grab: GRAB, resetKey: sceneId, drawRef });
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const shapes: FieldShape[] = members.map((member) => member.shape);
+    const shapes: FieldShape[] = drag.placed();
 
     const dpr = window.devicePixelRatio || 1;
     const target = Math.round(VIEW * dpr);
@@ -162,6 +173,16 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
       for (let step = 0; step < loop.count; step++) {
         const index = tracer.ordered[loop.start + step] ?? 0;
         vertices.push(tracer.pointXY[index * 2] ?? 0, tracer.pointXY[index * 2 + 1] ?? 0);
+      }
+    }
+    // The reference outline is built around the domain's centre, so a dragged shape is
+    // compared by moving the *vertices* back by its delta rather than by rebuilding the
+    // outline — one subtraction per vertex instead of a fresh de Casteljau pass.
+    const [dragX, dragY] = drag.deltaOf(0);
+    if (scene.measured && (dragX !== 0 || dragY !== 0)) {
+      for (let i = 0; i < vertices.length; i += 2) {
+        vertices[i] = (vertices[i] ?? 0) - dragX;
+        vertices[i + 1] = (vertices[i + 1] ?? 0) - dragY;
       }
     }
     const deviation = scene.measured ? deviationFromApple(vertices, outline) : { maxPx: NaN, meanPx: NaN, samples: 0 };
@@ -193,8 +214,8 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
     ctx.strokeStyle = COLORS.box;
     ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1;
-    for (const member of members) {
-      const { x, y, hw = 0, hh = 0 } = member.shape;
+    for (const shape of shapes) {
+      const { x, y, hw = 0, hh = 0 } = shape;
       ctx.strokeRect(x - hw + 0.5, y - hh + 0.5, hw * 2 - 1, hh * 2 - 1);
     }
     ctx.setLineDash([]);
@@ -209,18 +230,30 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
     ctx.lineJoin = 'round';
     ctx.stroke(path);
 
+    drawCentreHandles(ctx, shapes, drag.activeRef.current, COLORS.handle);
+
     ctx.fillStyle = COLORS.label;
     ctx.font = '11px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    for (const member of members) {
-      if (member.label === undefined) continue;
-      ctx.fillText(member.label, member.shape.x, member.shape.y + (member.shape.hh ?? 0) + 22);
+    for (let index = 0; index < members.length; index++) {
+      const label = members[index]?.label;
+      const shape = shapes[index];
+      if (label === undefined || shape === undefined) continue;
+      ctx.fillText(label, shape.x, shape.y + (shape.hh ?? 0) + 22);
     }
+
+    // The reference outline lives in the SVG overlay, so a dragged shape has to take it
+    // along — set imperatively because a drag deliberately does not re-render.
+    appleGroupRef.current?.setAttribute(
+      'transform',
+      `translate(${(VIEW - MEASURED_BOX.width) / 2 + dragX} ${(VIEW - MEASURED_BOX.height) / 2 + dragY})`
+    );
     // `family` and `k` are absent on purpose: they reach the field only through `members`,
     // and the readouts are derived from the shapes rather than from the controls.
-  }, [blend, cell, members, outline, radius, samples, scene.measured, showFill, tracer]);
+  }, [blend, cell, drag, members, outline, radius, samples, scene.measured, showFill, tracer]);
 
   useEffect(() => {
+    drawRef.current = draw;
     draw();
     if (!scene.measured) return;
     // Apple's exact path is handed to SVG rather than drawn on the canvas, so it is
@@ -290,14 +323,25 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
               dark:bg-neutral-800/40
             `}
           >
-            <canvas ref={canvasRef} className="absolute inset-0 size-full" />
+            {/*
+              The canvas owns the gesture. The SVG overlay above it is
+              `pointer-events-none`, so a press lands here rather than being swallowed.
+            */}
+            <canvas
+              ref={canvasRef}
+              {...drag.handlers}
+              className={`
+                absolute inset-0 size-full cursor-grab touch-none
+                active:cursor-grabbing
+              `}
+            />
             <svg
               viewBox={`0 0 ${VIEW} ${VIEW}`}
               className="pointer-events-none absolute inset-0 size-full"
               aria-hidden="true"
               style={{ visibility: appleVisible ? 'visible' : 'hidden' }}
             >
-              <g transform={`translate(${(VIEW - MEASURED_BOX.width) / 2} ${(VIEW - MEASURED_BOX.height) / 2})`}>
+              <g ref={appleGroupRef}>
                 <path ref={applePathRef} fill="none" stroke={COLORS.apple} strokeWidth={1.25} strokeDasharray="6 4" />
               </g>
             </svg>
@@ -314,6 +358,7 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
               </span>
             )}
             <span>dashed grey = the nominal boxes</span>
+            <span>drag a centre dot to move a shape</span>
           </div>
         </div>
 

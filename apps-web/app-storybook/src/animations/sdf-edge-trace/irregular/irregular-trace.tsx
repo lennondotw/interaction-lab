@@ -39,9 +39,15 @@ import { buildPath2D } from '../contour-path.js';
 import { Field, Segmented, Stat, Toggle } from '../controls.js';
 import { ContourTracer, quadtreeSafeView, type FieldShape } from '../field.js';
 import { CELL_SIZES, RollingMedian } from '../shape.js';
+import { drawCentreHandles, useShapeDrag } from '../use-shape-drag.js';
 import { SHAPE_KINDS, vertexCount } from './irregular-shapes.js';
 
 const OVERSCAN = 128;
+/**
+ * Grab radius around a shape's centre. Generous, because the centre of a star or a cross is
+ * not where the ink is — the handle has to be catchable without aiming at a hairline.
+ */
+const GRAB = 46;
 /** Square sampling domain, padded so the quadtree keeps a large root. */
 const VIEW = quadtreeSafeView(620);
 /** CSS size of the stage; the domain stays at `VIEW` and the canvas scales down to it. */
@@ -55,6 +61,7 @@ const COLORS = {
   fill: 'rgba(16, 185, 129, 0.15)',
   trace: '#34d399',
   hull: 'rgba(148, 163, 184, 0.35)',
+  handle: 'rgba(52, 211, 153, 0.9)',
   label: 'rgba(148, 163, 184, 0.85)',
 };
 
@@ -131,10 +138,10 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
   const [verify, setVerify] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
 
-  const shapes: FieldShape[] = useMemo(() => {
-    const layout = sceneId === 'cluster' ? CLUSTER_LAYOUT : SPREAD_LAYOUT;
+  const layout: FieldShape[] = useMemo(() => {
+    const slots = sceneId === 'cluster' ? CLUSTER_LAYOUT : SPREAD_LAYOUT;
     return SHAPE_KINDS.map((kind, index) => {
-      const slot = layout[index] ?? layout[0];
+      const slot = slots[index] ?? slots[0];
       return {
         x: slot.x * VIEW,
         y: slot.y * VIEW,
@@ -146,9 +153,18 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
     });
   }, [sceneId, round, seed]);
 
+  // Owned here rather than by the hook, so pointing it at the newest `draw` is a plain ref
+  // write instead of an assignment through a returned object.
+  const drawRef = useRef<() => void>(() => undefined);
+  const drag = useShapeDrag({ layout, view: VIEW, grab: GRAB, resetKey: sceneId, drawRef });
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Positions come from the layout plus whatever each shape has been dragged by, so the
+    // trace, the polygon outlines, the labels and `verify` all read one set of coordinates.
+    const shapes = drag.placed();
 
     const dpr = window.devicePixelRatio || 1;
     const target = Math.round(VIEW * dpr);
@@ -236,6 +252,8 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
     ctx.lineJoin = 'round';
     ctx.stroke(path);
 
+    drawCentreHandles(ctx, shapes, drag.activeRef.current, COLORS.handle);
+
     // Named only where the names can be read: in `cluster` the shapes sit on top of each
     // other and the labels land inside the merged mass, where they are noise rather than help.
     if (sceneId !== 'spread') return;
@@ -251,9 +269,12 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
       for (let v = 0; v < points.length / 2; v++) lowest = Math.max(lowest, points[v * 2 + 1] ?? 0);
       ctx.fillText(kind.label, shape.x, shape.y + lowest + round + 16);
     }
-  }, [blend, cell, round, samples, sceneId, shapes, showFill, showHull, tracer, verify]);
+  }, [blend, cell, drag, round, samples, sceneId, showFill, showHull, tracer, verify]);
 
   useEffect(() => {
+    // The gesture redraws through this ref, so it stays stable while `draw` is rebuilt on
+    // every control change.
+    drawRef.current = draw;
     draw();
   }, [draw]);
 
@@ -305,7 +326,19 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
               dark:bg-neutral-800/40
             `}
           >
-            <canvas ref={canvasRef} className="absolute inset-0 size-full" />
+            {/*
+              The canvas owns the gesture; nothing sits on top of it here, so no
+              `pointer-events` juggling is needed. `touch-none` stops a touch drag from
+              scrolling the page out from under the shape being moved.
+            */}
+            <canvas
+              ref={canvasRef}
+              {...drag.handlers}
+              className={`
+                absolute inset-0 size-full cursor-grab touch-none
+                active:cursor-grabbing
+              `}
+            />
           </div>
           <div className="flex flex-row flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-400">
             <span className="flex flex-row items-center gap-1.5">
@@ -313,6 +346,7 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
               sdf trace
             </span>
             {showHull && <span>dashed grey = the polygon the offset was applied to</span>}
+            <span>drag a centre dot to move a shape</span>
           </div>
         </div>
 
