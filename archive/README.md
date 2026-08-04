@@ -34,11 +34,17 @@ probe wants Screen Recording permission, because the effect it measures is
 composited by the window server and an in-process render would miss it silently.
 
 Browser probes are the exception, and they say so: they need
-`pnpm exec playwright install chromium` and a running Storybook
+`pnpm exec playwright install chromium`. Most also want a running Storybook
 (`pnpm --filter @monorepo/app-storybook dev`, or `STORYBOOK_URL` for a
-non-default port). They drive the **real stories** rather than a copy of them, so
-they cannot quietly drift from what ships — which is also the one thing they ask
-of the app, a `data-testid` handle on the stage under test.
+non-default port), because they drive the **real stories** rather than a copy of
+them and so cannot quietly drift from what ships — which is also the one thing
+they ask of the app, a `data-testid` handle on the stage under test.
+
+A few ask for the browser and nothing else. When the question is about what the
+platform does rather than about what we drew — `2026-08-displacement-map-reuse`
+measuring which coordinate space `backdrop-filter` evaluates in, say — the probe
+builds its own page with `setContent`, because a story would put our code between
+the measurement and the thing being measured.
 
 Probes that produce images write them to `__screenshots__/`, committed through Git
 LFS — the browser probes a padded 2× shot of the stage, the glass probe its own
@@ -62,3 +68,4 @@ the probe regenerates them.
 | [2026-07-sdf-field-throughput](./2026-07-sdf-field-throughput/README.md)                         | How does the field scale with shape count, and what is left to squeeze?      | Quadratic — and smin not being commutative caps it. |
 | [2026-08-view-transition-overlay-stacking](./2026-08-view-transition-overlay-stacking/README.md) | What does a View Transition commit do to overlays it knows nothing about?    | Covers and freezes them — naming fixes only paint.  |
 | [2026-08-liquid-glass-internals](./2026-08-liquid-glass-internals/README.md)                     | How does Apple's Liquid Glass compute its refraction and its dispersion?     | Six overlapping taps — and it ships with them off.  |
+| [2026-08-displacement-map-reuse](./2026-08-displacement-map-reuse/README.md)                     | When can one displacement map be reused, and what does a merge cost?         | Transforms are free; a merge wants an SDF instead.  |
