@@ -12,7 +12,7 @@
  * - a **triangle** is the smallest polygon,
  * - a **star** is a polygon whose vertices alternate radius,
  * - an **irregular polygon** is one with arbitrary radii,
- * - a **blob** is one dense enough that a large offset leaves no straight edge.
+ * - a **blob** is one flattened finely enough that the flattening does not show.
  *
  * The `round` control is what makes the last of those work, and it means something different
  * from a box's corner radius: on a box, `r` is inscribed *into* the corner and the outline
@@ -302,8 +302,8 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
           <span className="font-mono text-xs">superellipse(k)</span> family once the corner became a p-norm. None of
           that reaches a <em>concave</em> vertex, so a star needed a second primitive rather than another parameter.
           These seven are all the same one: <span className="font-mono text-xs">points</span>, a polygon with an outward
-          offset. A star is a polygon with alternating radii, a blob is one dense enough that the offset leaves no
-          straight edge, and a triangle is the smallest there is.
+          offset. A star is a polygon with alternating radii, a blob is a smooth curve flattened until the flattening
+          stops showing — under 0.05px off it, turning at most 5° per segment — and a triangle is the smallest there is.
         </p>
       </header>
 

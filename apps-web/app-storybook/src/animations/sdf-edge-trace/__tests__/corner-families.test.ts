@@ -23,6 +23,7 @@ import {
   type FamilyId,
 } from '../continuous-corner/corner-families.js';
 import { SCENES, VIEW, sceneById, type SceneId } from '../continuous-corner/corner-scenes.js';
+import { blob } from '../irregular/irregular-shapes.js';
 
 /** Apple's own extent, from `SPEC.md`. The corner occupies this much of each edge. */
 const EXTENT = 1.528665;
@@ -180,6 +181,125 @@ describe('the scenes', () => {
           expect(r, `${scene.id} at r=${radius}`).toBeLessThanOrEqual(Math.min(hw, hh) + 1e-9);
         }
       }
+    }
+  });
+});
+
+/**
+ * The blob's flattening, which is the one shape in `irregular-shapes` that claims to be a
+ * *curve* rather than a polygon.
+ *
+ * It used to be a fixed 48-gon and it read as one. The failure was not mainly the 0.47px
+ * chord error — it was that the sharpest vertex turned 19.6°, because the wobble concentrates
+ * curvature into a few places and an evenly spaced sample is coarsest exactly there. Both are
+ * pinned here, since a fixed-count sampler passes the first and fails the second.
+ */
+describe('the blob is a curve, not a polygon', () => {
+  /** The flattening at a given tolerance, as points. */
+  const blobAt = (tolerance: number, maxTurn?: number): [number, number][] => {
+    const flat = maxTurn === undefined ? blob(62, 1, tolerance) : blob(62, 1, tolerance, maxTurn);
+    const out: [number, number][] = [];
+    for (let i = 0; i < flat.length; i += 2) out.push([flat[i] ?? 0, flat[i + 1] ?? 0]);
+    return out;
+  };
+  const distanceToPolyline = (p: readonly [number, number], poly: readonly [number, number][]): number => {
+    let best = Infinity;
+    for (let v = 0, j = poly.length - 1; v < poly.length; j = v++) {
+      const a = poly[j] ?? [0, 0];
+      const b = poly[v] ?? [0, 0];
+      const ex = b[0] - a[0];
+      const ey = b[1] - a[1];
+      const wx = p[0] - a[0];
+      const wy = p[1] - a[1];
+      const l2 = ex * ex + ey * ey;
+      const t = l2 > 0 ? Math.min(Math.max((wx * ex + wy * ey) / l2, 0), 1) : 0;
+      best = Math.min(best, Math.hypot(wx - ex * t, wy - ey * t));
+    }
+    return best;
+  };
+  const sharpestTurn = (poly: readonly [number, number][]): number => {
+    let worst = 0;
+    for (let v = 0; v < poly.length; v++) {
+      const a = poly[(v + poly.length - 1) % poly.length] ?? [0, 0];
+      const b = poly[v] ?? [0, 0];
+      const c = poly[(v + 1) % poly.length] ?? [0, 0];
+      const first = Math.atan2(b[1] - a[1], b[0] - a[0]);
+      const second = Math.atan2(c[1] - b[1], c[0] - b[0]);
+      let delta = Math.abs(second - first);
+      if (delta > Math.PI) delta = Math.PI * 2 - delta;
+      worst = Math.max(worst, (delta * 180) / Math.PI);
+    }
+    return worst;
+  };
+
+  it('stays within its tolerance of a far finer flattening of the same curve', () => {
+    const fine = blobAt(0.0005, 0.5);
+    for (const tolerance of [0.05, 0.15, 0.4]) {
+      const coarse = blobAt(tolerance, 90);
+      let worst = 0;
+      for (const point of fine) worst = Math.max(worst, distanceToPolyline(point, coarse));
+      // The bound is the tolerance plus the reference's own error, which is what makes this a
+      // real check rather than a restatement of the subdivision predicate. `maxTurn` is opened
+      // right up so this measures the chord criterion alone.
+      expect(worst, `tolerance ${tolerance}`).toBeLessThanOrEqual(tolerance + 0.01);
+    }
+  });
+
+  it('honours the turn limit at the junctions, not just inside a span', () => {
+    // 19.6° was the sharpest vertex on the fixed 48-gon this replaced, and the reason it read as
+    // a polygon however small the chord error was.
+    //
+    // The junction is the hard part and the reason a second pass exists. Subdividing on chord
+    // error alone leaves a long chord meeting a short one where two spans stopped at different
+    // depths, and neither span's own predicate ever looks at that angle — asking for 3° instead
+    // of 10° changed the measured worst turn by nothing at all (7.4° either way).
+    for (const limit of [3, 5, 8]) {
+      expect(sharpestTurn(blobAt(0.05, limit)), `limit ${limit}`).toBeLessThanOrEqual(limit + 0.05);
+    }
+    expect(sharpestTurn(blobAt(0.05))).toBeLessThan(19.6 / 3);
+  });
+
+  it('never emits a repeated vertex, which would be a zero-length edge', () => {
+    // Two neighbouring violations pick the span between them from opposite ends, so the same
+    // midpoint arrives twice unless the inserts are deduplicated. A repeated vertex has no
+    // direction — `atan2(0, 0)` — and made the turn metric report 137° on a sound curve.
+    for (const seed of [1, 2, 3, 4, 7]) {
+      for (const size of [30, 62, 150, 400]) {
+        const flat = blob(size, seed, 0.05, 3);
+        for (let i = 0; i < flat.length; i += 2) {
+          const j = (i + 2) % flat.length;
+          const step = Math.hypot((flat[j] ?? 0) - (flat[i] ?? 0), (flat[j + 1] ?? 0) - (flat[i + 1] ?? 0));
+          expect(step, `seed ${seed} size ${size} vertex ${i / 2}`).toBeGreaterThan(1e-9);
+        }
+      }
+    }
+  });
+
+  it('spends its vertices where the curve bends, not evenly', () => {
+    // Even spacing is the thing being avoided: if the edges were uniform this would be ~1.
+    const poly = blobAt(0.05);
+    const lengths = poly.map((point, index) => {
+      const next = poly[(index + 1) % poly.length] ?? [0, 0];
+      return Math.hypot(next[0] - point[0], next[1] - point[1]);
+    });
+    expect(Math.max(...lengths) / Math.min(...lengths)).toBeGreaterThan(1.5);
+  });
+
+  it('degrades uniformly when the tolerance is unreachable, rather than coarsely in places', () => {
+    // A running vertex budget is spent in traversal order, so the first spans refine fully and
+    // the last stay single chords: asking for a finer tolerance than the budget allowed produced
+    // 96px chords and 67° turns — a worse shape than a coarse tolerance. A depth limit caps every
+    // span equally, so the unreachable case lands on "uniformly as fine as allowed".
+    for (const [size, seed] of [
+      [62, 1],
+      [150, 7],
+      [400, 2],
+    ] as const) {
+      const flat = blob(size, seed, 1e-9, 1e-9);
+      expect(flat.length / 2, `${size}/${seed}`).toBeLessThanOrEqual(12 * 2 ** 5);
+      const poly: [number, number][] = [];
+      for (let i = 0; i < flat.length; i += 2) poly.push([flat[i] ?? 0, flat[i + 1] ?? 0]);
+      expect(sharpestTurn(poly), `${size}/${seed}`).toBeLessThan(4);
     }
   });
 });
