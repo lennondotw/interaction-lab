@@ -92,8 +92,20 @@ const evenRadii = (radius: number): CornerRadii => ({
  *
  * Flattened from the component's own `squircleCorners` rather than by parsing its `d`
  * string, so this measures against the geometry that ships instead of against a second
- * reading of it. De Casteljau at a fixed subdivision: the segments are short and gently
- * curved, so uniform sampling is well inside the tolerance this is used to judge.
+ * reading of it.
+ *
+ * Uniform subdivision, and the count is load-bearing because this is a *ruler*: its own
+ * flattening error is a floor under every deviation reported against it. Measured against a
+ * 400-step reading of the same cubics, `perSegment = 24` is **0.0057px** on the 300 × 180 box
+ * the story measures and 0.0095px on 400 × 300 — against signals of 0.113px for the fitted
+ * superellipse and 0.499px for a plain arc, so it sits at 5% of the smaller one and only
+ * touches the third decimal. Halving it to 10 would be 0.054px, a tenth of the arc's signal,
+ * which is too close to read a 0.003r result off.
+ *
+ * At a fully clamped radius adjacent corners meet exactly, so the shared point is emitted
+ * twice. Harmless for both consumers — a zero-length segment reduces to its endpoint in
+ * `deviationFromApple`, and the field's crossing test cannot count an edge with `iy === jy` —
+ * but it is why a vertex count here is not quite `4 · (1 + 3 · perSegment)`.
  */
 export const appleOutline = (width: number, height: number, radius: number, perSegment = 24): number[] => {
   const corners = squircleCorners({ width, height, radii: evenRadii(radius) });
