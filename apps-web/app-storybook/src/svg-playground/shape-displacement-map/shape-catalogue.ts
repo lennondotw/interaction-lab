@@ -15,8 +15,30 @@ import { blob, star, triangle } from '#src/animations/sdf-edge-trace/irregular/i
 import { squircleCorners, type CornerRadii } from '#src/components/continuous-corner/squircle-path.js';
 import { polygonSdf, roundedBoxSdf, type Sdf } from './shape-sdf.js';
 
+/**
+ * Every shape, as a tuple rather than inferred from `SHAPES`.
+ *
+ * Declared separately so `ShapeId` is a union of literals instead of `string`, which is what
+ * lets a Storybook `select` control offer the real options and a typo in a story's args fail
+ * the typecheck rather than silently render nothing.
+ */
+export const SHAPE_IDS = [
+  'circle',
+  'rounded-rect',
+  'superellipse',
+  'continuous-corner',
+  'continuous-mixed',
+  'continuous-capsule',
+  'continuous-max-square',
+  'triangle',
+  'star5',
+  'blob',
+] as const;
+
+export type ShapeId = (typeof SHAPE_IDS)[number];
+
 export interface ShapeEntry {
-  id: string;
+  id: ShapeId;
   label: string;
   /** Why this shape is in the list — what its map shows that the others' do not. */
   note: string;
@@ -240,3 +262,15 @@ export const SHAPES: readonly ShapeEntry[] = [
     path: (size) => polylinePath(fitToRadius(blob(size / 2 - PAD, 7), size / 2 - PAD), size / 2, size / 2),
   },
 ];
+
+/**
+ * The entry for an id, or a throw.
+ *
+ * Throws rather than falling back to the first shape: a story asking for a shape that is not
+ * there is a mistake in the story, and quietly rendering a circle instead would hide it.
+ */
+export const shapeById = (id: ShapeId): ShapeEntry => {
+  const found = SHAPES.find((entry) => entry.id === id);
+  if (found === undefined) throw new Error(`no shape "${id}" in the catalogue`);
+  return found;
+};
