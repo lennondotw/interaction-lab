@@ -55,6 +55,7 @@ words:
   - sqrtsd
   - squircle
   - stspr
+  - superellipse
   - tanstack
   - trpc
   - tsgo
