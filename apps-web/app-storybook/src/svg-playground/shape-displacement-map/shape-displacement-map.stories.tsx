@@ -7,10 +7,16 @@ import { ShapeGlass } from './shape-glass.js';
 
 type Story = StoryObj<typeof ShapeGlass>;
 
-/** Keeps a single card from stretching to the canvas width. */
+/**
+ * Keeps a single card from stretching to the canvas width.
+ *
+ * Wider for the filmstrip, because four equal cells at a size worth looking at need roughly four
+ * times the room — at the compact width they would each be 70px, which is smaller than the
+ * thumbnails the mode exists to replace.
+ */
 const StagedGlass: FC<ComponentProps<typeof ShapeGlass>> = (props) => (
   <div className="flex w-full items-center justify-center p-4">
-    <div className="w-[19rem]">
+    <div className={props.channelLayout === 'filmstrip' ? 'w-full max-w-[64rem]' : 'w-[19rem]'}>
       <ShapeGlass {...props} />
     </div>
   </div>
@@ -39,7 +45,7 @@ const meta: Meta<typeof ShapeGlass> = {
   title: 'SVG Playground/ShapeDisplacementMap',
   id: 'svg-playground-shape-displacement-map',
   component: ShapeGlass,
-  parameters: { layout: 'centered' },
+  parameters: { layout: 'fullscreen' },
   // Set once here so a single-shape story is nothing but its args and its reason for existing.
   render: (args) => <StagedGlass {...args} />,
   argTypes: {
@@ -50,7 +56,9 @@ const meta: Meta<typeof ShapeGlass> = {
     depth: { control: { type: 'range', min: 0, max: 240, step: 5 } },
     ior: { control: { type: 'range', min: 1, max: 2.4, step: 0.01 } },
     showOutline: { control: 'boolean' },
+    dimSurroundings: { control: 'boolean' },
     showChannels: { control: 'boolean' },
+    channelLayout: { control: 'inline-radio', options: ['thumbnails', 'filmstrip'] },
     showStats: { control: 'boolean' },
     showCaption: { control: 'boolean' },
   },
@@ -62,7 +70,9 @@ const meta: Meta<typeof ShapeGlass> = {
     depth: 70,
     ior: 1.5,
     showOutline: false,
+    dimSurroundings: true,
     showChannels: true,
+    channelLayout: 'filmstrip',
     showStats: true,
     showCaption: true,
   },
@@ -172,9 +182,26 @@ const GALLERY_LOOK: GlassLook = {
   depth: 70,
   ior: 1.5,
   showOutline: false,
+  dimSurroundings: true,
   showChannels: true,
+  // Compact here, whatever the single stories default to: a filmstrip inside a four-column grid
+  // would be sixteen cells of eighty pixels, which is worse than the thumbnails it replaces.
+  channelLayout: 'thumbnails',
   showStats: true,
   showCaption: true,
+};
+
+/**
+ * The compact layout: the result large, the three map views as thumbnails under it.
+ *
+ * Every other single story is a filmstrip, because a 56px thumbnail is enough to see *that* the R
+ * channel ramps left to right and not enough to line a particular bend in the result up against
+ * the pixels that caused it. This one is here because the compact form is still the right one when
+ * the maps are supporting evidence rather than the subject — and it is what the gallery uses, so
+ * it is worth being able to look at on its own.
+ */
+export const CompactLayout: Story = {
+  args: { channelLayout: 'thumbnails', size: 260 },
 };
 
 /**

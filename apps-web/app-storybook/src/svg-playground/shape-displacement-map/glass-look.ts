@@ -22,8 +22,27 @@ export interface GlassLook {
   ior: number;
   /** Stroke the shape's stated outline over the result, to check the field against it. */
   showOutline: boolean;
-  /** Show the map and its two channels as thumbnails. */
+  /**
+   * Dim everything outside the shape, so the glass reads as the subject.
+   *
+   * On by default because it is what makes the effect legible at a glance. Worth turning off
+   * before believing anything about how much the rim darkens what is behind it: with the
+   * surroundings taken to 42% there is no honest reference left to compare the interior against,
+   * and the refraction reads as stronger than it is.
+   */
+  dimSurroundings: boolean;
+  /** Show the map and its two channels alongside the result. */
   showChannels: boolean;
+  /**
+   * How the result and the three map views are arranged.
+   *
+   * `thumbnails` keeps the result large with the maps small underneath, which is right when the
+   * question is "what does this shape look like" and the maps are supporting evidence.
+   * `filmstrip` gives all four the same size in a row, which is right when the question is "where
+   * did that displacement come from" — a 56px thumbnail cannot show which pixels of the R channel
+   * correspond to a bend in the result, and the two are only comparable at the same scale.
+   */
+  channelLayout: 'thumbnails' | 'filmstrip';
   /** Show the peak / scale / step / build readout. */
   showStats: boolean;
   /** Show the label, the id and the note. */
