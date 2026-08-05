@@ -402,7 +402,7 @@ export const BubblePicker: FC<BubblePickerProps> = ({
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const start = downRef.current;
-    if (!start || start.pointerId !== event.pointerId) return;
+    if (start?.pointerId !== event.pointerId) return;
     const dx = event.clientX - start.x;
     const dy = event.clientY - start.y;
     if (dx * dx + dy * dy > TOUCH_SLOP_PX * TOUCH_SLOP_PX) {
@@ -414,7 +414,7 @@ export const BubblePicker: FC<BubblePickerProps> = ({
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const start = downRef.current;
     downRef.current = null;
-    if (!start || start.pointerId !== event.pointerId) return;
+    if (start?.pointerId !== event.pointerId) return;
 
     const container = containerRef.current;
     const state = stateRef.current;

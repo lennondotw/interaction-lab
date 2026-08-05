@@ -80,9 +80,9 @@ export const useBorderBoxSize = (enabled: boolean): [RefObject<HTMLDivElement | 
         : { width: element.offsetWidth, height: element.offsetHeight };
       // A no-op write would still re-render every observation, and resize fires
       // per frame while a drag is in flight.
-      setSize((current) =>
-        current && current.width === next.width && current.height === next.height ? current : next
-      );
+      // `?.` then `.`: the first comparison narrows `current` to non-null, so a
+      // second optional chain would be flagged as unnecessary.
+      setSize((current) => (current?.width === next.width && current.height === next.height ? current : next));
     };
 
     read();

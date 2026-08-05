@@ -27,6 +27,10 @@ export interface ShapeRect {
   radius: number;
 }
 
+/** Field-by-field, because a rect is remeasured into a fresh object every time. */
+const isSameRect = (a: ShapeRect, b: ShapeRect): boolean =>
+  a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height && a.radius === b.radius;
+
 /**
  * A rect in the tracer's terms: centre plus half-extents of the whole box.
  *
@@ -86,14 +90,7 @@ export class ShapeRegistry {
 
   set(id: string, rect: ShapeRect): void {
     const previous = this.rects.get(id);
-    if (
-      previous !== undefined &&
-      previous.x === rect.x &&
-      previous.y === rect.y &&
-      previous.width === rect.width &&
-      previous.height === rect.height &&
-      previous.radius === rect.radius
-    ) {
+    if (previous !== undefined && isSameRect(previous, rect)) {
       // The cascade is deliberately over-eager — a window scroll fires every
       // participant's `measure` whether it moved or not. Dropping the no-ops here is
       // what keeps a scroll from queueing a redraw per frame per item.

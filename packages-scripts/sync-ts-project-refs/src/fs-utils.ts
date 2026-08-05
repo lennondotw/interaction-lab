@@ -47,11 +47,10 @@ export async function writeTsConfig(
   isSolutionStyle = false,
   simulate = false
 ): Promise<boolean> {
-  // Read existing content to preserve comments and formatting
-  let existingContent = '';
-
   try {
-    existingContent = await fs.readFile(tsconfigPath, 'utf-8');
+    // Read existing content to preserve comments and formatting. Scoped to the
+    // try: the catch path builds a file from scratch and never reads it.
+    const existingContent = await fs.readFile(tsconfigPath, 'utf-8');
 
     // Parse existing config to check what needs to be updated
     const existingConfig = jsonc.parse(existingContent) as TsConfig;

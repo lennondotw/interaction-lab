@@ -1,3 +1,11 @@
+/*
+ * The single-letter tokens below are deliberately not Tailwind classes. These
+ * cases pin down cn()'s merge semantics — falsy filtering, array and object
+ * inputs, output order — and meaningless names keep them from reading as
+ * assertions about Tailwind. The one test that *is* about Tailwind conflict
+ * resolution uses real classes and is unaffected by this.
+ */
+/* eslint-disable better-tailwindcss/no-unknown-classes */
 import { cn } from '#src/cn.js';
 import { describe, expect, it } from 'vitest';
 

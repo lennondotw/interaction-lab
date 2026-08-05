@@ -45,6 +45,9 @@ const eslintConfig = [
   // node_modules and eslint.config.mjs. ESLint 10 resolves config from the
   // linted file's directory, so leaving them in loads a second copy of every
   // plugin against a different eslint major.
+  // `next-env.d.ts` is written by Next on every build, is gitignored, and says
+  // so itself ("This file should not be edited") — its relative reference into
+  // .next/ trips no-cross-package-relative-import and cannot be fixed in place.
   {
     ignores: [
       '**/node_modules/',
@@ -53,6 +56,7 @@ const eslintConfig = [
       '**/storybook-static/',
       '**/.next/',
       '**/__fixtures__/',
+      '**/next-env.d.ts',
       'archive/',
       '.claude/',
     ],
@@ -104,8 +108,8 @@ const eslintConfig = [
       ...reactPlugin.configs['jsx-runtime'].rules,
       ...reactHooksPlugin.configs['recommended-latest'].rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
-      ...eslintPluginBetterTailwindcss.configs['recommended-warn']?.rules,
-      ...eslintPluginBetterTailwindcss.configs['recommended-error']?.rules,
+      ...eslintPluginBetterTailwindcss.configs['recommended-warn'].rules,
+      ...eslintPluginBetterTailwindcss.configs['recommended-error'].rules,
       'no-cross-package-relative-import/no-cross-package-relative-import': 'error',
     },
     settings: {

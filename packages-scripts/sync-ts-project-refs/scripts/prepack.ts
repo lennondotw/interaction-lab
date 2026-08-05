@@ -230,7 +230,6 @@ async function copyDistToDistNpm(): Promise<void> {
   });
 
   let copiedCount = 0;
-  let skippedCount = 0;
 
   for (const file of files) {
     const src = path.join(DIST_DIR, file);
@@ -247,7 +246,7 @@ async function copyDistToDistNpm(): Promise<void> {
 
   // Count what was skipped
   const allFiles = await globby('**/*', { cwd: DIST_DIR, dot: true });
-  skippedCount = allFiles.filter((f) =>
+  const skippedCount = allFiles.filter((f) =>
     DIST_IGNORE_PATTERNS.some((pattern) => {
       const regex = new RegExp(pattern.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*'));
       return regex.test(f);
