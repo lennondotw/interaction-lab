@@ -34,7 +34,6 @@ export const LiquidSquare: FC<{ className?: string }> = ({ className }) => {
             width={baseWidth}
             height={baseHeight}
             viewBox={`0 0 ${baseWidth} ${baseHeight}`}
-            role="none"
             aria-hidden="true"
             className={cn('absolute inset-0 block')}
           >

@@ -957,8 +957,13 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
 
       <div
         data-demo-divider
+        // A draggable splitter, which is what role="separator" means once it
+        // takes pointer input — WAI-ARIA's window-splitter pattern. prefer-tag-over-role
+        // suggests <hr>, but that is a thematic break and cannot be dragged.
+        // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="separator"
         aria-orientation="vertical"
+        aria-label="Resize the split"
         onPointerDown={handleDividerPointerDown}
         className={cn(
           `

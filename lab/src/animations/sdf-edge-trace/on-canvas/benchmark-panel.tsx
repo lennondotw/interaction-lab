@@ -182,7 +182,9 @@ export const BenchmarkPanel: FC<BenchmarkPanelProps> = ({
                         </span>
                       )}
                     </td>
-                    <td className="py-1">
+                    {/* A bar redrawing the counts from the cell before it, so it
+                        carries no information of its own. */}
+                    <td aria-hidden="true" className="py-1">
                       <div
                         className={`
                           h-2 w-full overflow-hidden rounded-sm bg-neutral-100

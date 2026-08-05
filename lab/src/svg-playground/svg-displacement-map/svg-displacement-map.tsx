@@ -187,6 +187,8 @@ export const SvgDisplacementMap: FC = () => {
           >
             <img
               src={displacementMap?.dataUrl}
+              // The map itself, shown as a diagnostic — nothing a reader needs.
+              alt=""
               draggable={false}
               className="size-full rounded-full object-cover opacity-60"
             />

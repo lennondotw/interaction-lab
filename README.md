@@ -42,7 +42,12 @@ oxlint replaced eslint and oxfmt replaced prettier. The format side is a clean s
 
 The `eslint-disable` comments for rules in that list are inert now. They are kept because they explain _why_ a dependency array is deliberately incomplete, or a ref is read where it is — worth knowing regardless of which linter is running.
 
-`jsx-a11y` and `vitest` are available and switched off. eslint was not running them either, so turning them on belongs in its own change. They currently report two missing `alt` attributes, two click handlers with no keyboard equivalent, six tests with no assertions, and four `expect` calls taking an extra argument.
+`jsx-a11y` and `vitest` are on. Turning them on surfaced 31 findings that eslint had never looked for; roughly half were real and are fixed, the rest were the rules mismatching this code and carry a reason at the site:
+
+- The three split-panel dividers are draggable splitters. `role="separator"` is right for that (WAI-ARIA's window-splitter pattern) and `<hr>` cannot be dragged, so `prefer-tag-over-role` is suppressed there — but `control-has-associated-label` had a point, and they now have accessible names.
+- `vitest/valid-expect` reports every `expect(actual, message)` call. vitest's `expect` extends Chai's, which takes a message second argument; the rule applies jest's single-argument constraint.
+- `vitest/expect-expect` did not recognise a local `expectPoint()` helper. Configured via `assertFunctionNames` rather than suppressed.
+- Two clickable divs became keyboard-operable. Neither could become a `<button>` — one holds a `<style>` element and nested divs, which are not valid button content; the other is a demo _of_ box-model behaviour, so a button's own display and intrinsic sizing would be the thing under test.
 
 ### Why TypeScript is on 6.x
 
