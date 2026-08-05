@@ -1,5 +1,6 @@
 {
   "**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}": ["oxfmt --write", "oxlint --fix --max-warnings=0"],
-  "**/*.{md,mdx,json,jsonc,yaml,yml,css,html}": "oxfmt --write",
+  "!(package).json": "oxfmt --write",
+  "**/*.{md,mdx,jsonc,yaml,yml,css,html}": "oxfmt --write",
   "**/package.json": "sort-package-json"
 }

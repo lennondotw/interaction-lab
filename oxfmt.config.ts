@@ -23,6 +23,10 @@ export default defineConfig({
   // nobody wrote.
   ignorePatterns: [
     'pnpm-lock.yaml',
+    // sort-package-json owns package.json, and the two disagree: it puts
+    // packageManager before engines, oxfmt puts it after, so running both
+    // oscillates and whichever check runs second fails.
+    '**/package.json',
     'node_modules/',
     'dist/',
     'dist-*/',
