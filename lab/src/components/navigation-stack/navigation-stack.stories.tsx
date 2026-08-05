@@ -2,6 +2,7 @@ import { en, Faker } from '@faker-js/faker';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ChevronRight } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
+
 import { NavigationStack, useNavigation, type NavigationView } from './index.js';
 
 // ---------------------------------------------------------------------------

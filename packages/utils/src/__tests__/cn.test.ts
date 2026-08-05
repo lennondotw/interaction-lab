@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 /*
  * The single-letter tokens below are deliberately not Tailwind classes. These
  * cases pin down cn()'s merge semantics — falsy filtering, array and object
@@ -7,7 +9,6 @@
  */
 /* eslint-disable better-tailwindcss/no-unknown-classes */
 import { cn } from '#src/cn.js';
-import { describe, expect, it } from 'vitest';
 
 describe('cn', () => {
   it('merges classes correctly', () => {

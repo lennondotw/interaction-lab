@@ -1,5 +1,6 @@
 import { motionValue } from 'motion/react';
 import { describe, expect, it, vi } from 'vitest';
+
 import { BeaconStore } from '../store.js';
 import type { BeaconEntry, BeaconPriority } from '../types.js';
 

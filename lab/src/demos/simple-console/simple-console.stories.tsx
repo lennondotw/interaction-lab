@@ -1,7 +1,9 @@
-import { buttonVariants } from '#src/components/button/index.js';
 import { faker } from '@faker-js/faker';
 import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
+import { buttonVariants } from '#src/components/button/index.js';
+
 import { useSimpleConsoleLogger } from './simple-console-logger.js';
 import { SimpleConsoleRender } from './simple-console.js';
 

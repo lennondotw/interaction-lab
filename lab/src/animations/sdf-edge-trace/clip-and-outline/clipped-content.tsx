@@ -1,5 +1,6 @@
 import { Faker, en } from '@faker-js/faker';
 import { FC } from 'react';
+
 import { ContentKind } from './content-kind.js';
 
 /**

@@ -34,6 +34,7 @@
 
 import { AnimatePresence, motion, type MotionStyle, type MotionValue } from 'motion/react';
 import { useContext, useEffect, useState, type CSSProperties, type FC, type ReactNode } from 'react';
+
 import { BeaconContainerContext } from './context.js';
 import { useActiveBeacon, type BeaconInitialRect } from './use-active-beacon.js';
 

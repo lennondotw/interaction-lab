@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
+
 import { useNavigation } from './navigation-context.js';
 
 export interface NavBackButtonProps {

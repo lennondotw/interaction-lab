@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useCallback, useEffect, useMemo, useState, type FC } from 'react';
+
 import { StepTransition, type StepTransitionMode } from './step-transition.js';
 
 const TOTAL = 5;

@@ -9,10 +9,12 @@
  * elsewhere and takes no pointer events, an item keeps its own hit area too.
  */
 
-import { useRegisteredRect } from '#src/animations/sdf-edge-trace/rect-registry.js';
 import { cn } from '@monorepo/utils';
 import { Slot } from 'radix-ui';
 import { useContext, useRef, type HTMLAttributes } from 'react';
+
+import { useRegisteredRect } from '#src/animations/sdf-edge-trace/rect-registry.js';
+
 import { MetaSurfaceContainerContext, MetaSurfaceRegistryContext } from './context.js';
 
 export interface MetaSurfaceItemProps extends HTMLAttributes<HTMLElement> {

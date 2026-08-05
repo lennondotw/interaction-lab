@@ -1,6 +1,7 @@
-import { buttonVariants } from '#src/components/button/index.js';
 import { cn } from '@monorepo/utils';
 import { ComponentProps, FC, useRef, useState } from 'react';
+
+import { buttonVariants } from '#src/components/button/index.js';
 
 export const RenderCounterDemo: FC = () => {
   const [_, setCount] = useState(0);

@@ -1,4 +1,5 @@
 import { FC } from 'react';
+
 import { ContinuousCorner } from './continuous-corner.js';
 import { ContinuousShapeCommonProps } from './shape-css.js';
 

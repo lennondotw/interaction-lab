@@ -32,6 +32,7 @@
 
 import { useMotionValue } from 'motion/react';
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, type RefObject } from 'react';
+
 import { BeaconContainerContext, BeaconStoreContext } from './context.js';
 import { layoutOffsetRelativeTo } from './layout-offset.js';
 import type { BeaconDescriptor, BeaconEntry, BeaconHandle, BeaconPriority } from './types.js';

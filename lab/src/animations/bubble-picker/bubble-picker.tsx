@@ -1,5 +1,6 @@
 import { cn } from '@monorepo/utils';
 import { useEffect, useLayoutEffect, useRef, type FC, type PointerEvent as ReactPointerEvent } from 'react';
+
 import bubbleIdleUrl from './assets/bubble-idle.png';
 import bubbleSelectedUrl from './assets/bubble-selected.png';
 import { DEFAULT_MAX_SELECT, DT_CLAMP, SELECTED_SCALE, TOUCH_SLOP_PX } from './constants.js';

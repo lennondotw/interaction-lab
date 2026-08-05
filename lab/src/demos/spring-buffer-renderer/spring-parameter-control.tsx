@@ -2,6 +2,7 @@ import { cn } from '@monorepo/utils';
 import * as Label from '@radix-ui/react-label';
 import * as Slider from '@radix-ui/react-slider';
 import { FC } from 'react';
+
 import { SPRING_PARAMS } from './constants.js';
 
 /**

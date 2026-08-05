@@ -22,6 +22,7 @@
 
 import { useMotionValue, useReducedMotion, useSpring, type MotionValue } from 'motion/react';
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+
 import { BeaconStoreContext } from './context.js';
 
 const POSITION_SPRING = { stiffness: 380, damping: 30, mass: 0.9 } as const;

@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, useAnimationFrame, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useEffect, useState, type FC } from 'react';
+
 import { formatElapsed, TICK_INTERVAL_MS, type TimerPrecision } from './precision.js';
 
 export interface ElapsedTimerProps {

@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // JSONC rather than oxlint.config.ts: with a .ts config, oxlint 1.77 loads
+  // plugins and rules but type-aware rules never fire, even with
+  // options.typeAware set and --type-aware passed. Verified against a
+  // floating-promise canary in webapp-factory. Worth retrying when that closes.
+  "options": {
+    "typeAware": true
+  },
+  // `plugins` REPLACES the default set rather than extending it. Omitting
+  // "typescript" silently disables every typescript/* and @typescript-eslint/*
+  // rule below — they stay in the file and never run, with no warning.
+  // jsx-a11y and vitest are deliberately absent. eslint was not running either,
+  // so enabling them here would fold 29 brand-new findings into a toolchain
+  // swap that is otherwise coverage-neutral. They are worth turning on —
+  // jsx-a11y reports two missing `alt` attributes and two click handlers with no
+  // keyboard equivalent, vitest reports six tests with no assertions and four
+  // `expect` calls taking an extra argument — but as their own change.
+  "plugins": ["typescript", "react", "import", "promise"],
+  "jsPlugins": ["eslint-plugin-better-tailwindcss"],
+  "settings": {
+    "better-tailwindcss": {
+      "entryPoint": "packages/tailwindcss/tailwindcss.css"
+    }
+  },
+  // Neither oxlint nor oxfmt honours .gitignore, unlike the prettier setup this
+  // replaces, which was invoked with --ignore-path .gitignore.
+  "ignorePatterns": [
+    "**/node_modules/",
+    "**/dist/",
+    "**/dist-*/",
+    "**/storybook-static/",
+    "**/__fixtures__/",
+    // Frozen investigation probes: standalone scripts, outside every tsconfig,
+    // kept runnable rather than kept current. See archive/README.md.
+    "archive/",
+    // Agent worktrees — full stale checkouts with their own node_modules.
+    ".claude/"
+  ],
+  "rules": {
+    "no-undef": "off",
+
+    // Enabled explicitly — oxlint leaves it off by default. It is NOT equivalent
+    // to eslint's: with this on and the eleven `react-hooks/exhaustive-deps`
+    // suppressions in this repo removed, oxlint reports nothing at any of them.
+    // Kept because it costs nothing and may catch cases elsewhere.
+    "react/exhaustive-deps": "error",
+
+    "@typescript-eslint/restrict-template-expressions": ["error", { "allowNumber": true }],
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "@typescript-eslint/no-confusing-void-expression": "off",
+
+    // Type-aware rules, the reason --type-aware is on. These are the ones
+    // typescript-eslint's strictTypeChecked tier contributed that oxlint does
+    // not enable by default.
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+
+    "better-tailwindcss/no-conflicting-classes": "error",
+    "better-tailwindcss/no-duplicate-classes": "error",
+    "better-tailwindcss/no-unnecessary-whitespace": "error",
+    "better-tailwindcss/no-unknown-classes": "error"
+  }
+}

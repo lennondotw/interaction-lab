@@ -1,8 +1,10 @@
-import { STEP_SLIDE_TRANSITION } from '#src/animations/step-transition/index.js';
 import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useCallback, useEffect, useState, type CSSProperties, type FC, type ReactNode } from 'react';
+
+import { STEP_SLIDE_TRANSITION } from '#src/animations/step-transition/index.js';
+
 import type { WizardHeight } from './use-wizard-height.js';
 import { useWizardSteps, type WizardStepsResult } from './use-wizard-steps.js';
 import { Wizard } from './wizard.js';

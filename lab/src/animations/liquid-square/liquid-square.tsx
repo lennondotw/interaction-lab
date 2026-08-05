@@ -2,6 +2,7 @@ import { cn } from '@monorepo/utils';
 import { getSvgPath, type FigmaSquircleParams } from 'figma-squircle';
 import { motion } from 'motion/react';
 import { FC, useMemo } from 'react';
+
 import { LiquidDiv } from './liquid-div.js';
 
 const baseWidth = 150;

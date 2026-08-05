@@ -1,6 +1,7 @@
 import { animate, ValueTransition } from 'motion';
 import { useMotionValue, useTransform, useVelocity } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { SPRING_PARAMS } from './constants.js';
 import { segmentGraphemes } from './segmenter.js';
 import { SpringBufferContextValue } from './spring-buffer-provider-interface.js';

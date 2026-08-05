@@ -10,8 +10,9 @@
  * piece from its own context keeps every input identity-stable.
  */
 
-import type { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
 import { createContext, type RefObject } from 'react';
+
+import type { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
 
 export const MetaSurfaceRegistryContext = createContext<ShapeRegistry | null>(null);
 

@@ -1,6 +1,8 @@
-import { Stat } from '#src/animations/sdf-edge-trace/controls.js';
 import { cn } from '@monorepo/utils';
 import { useId, useMemo, type FC } from 'react';
+
+import { Stat } from '#src/animations/sdf-edge-trace/controls.js';
+
 import { drawBackdrop } from './backdrop.js';
 import type { GlassLook } from './glass-look.js';
 import { drawRefractionMap } from './refraction-map.js';

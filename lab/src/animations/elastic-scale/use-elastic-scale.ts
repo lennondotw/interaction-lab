@@ -38,6 +38,7 @@
 
 import { animate, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useCallback, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+
 import {
   calculateScale,
   DEFAULT_MAX_SCALE,

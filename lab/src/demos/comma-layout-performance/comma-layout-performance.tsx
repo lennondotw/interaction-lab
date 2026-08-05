@@ -1,7 +1,8 @@
-import { Button } from '#src/components/button/button.js';
-import { FpsIndicator } from '#src/components/fps-indicator/fps-indicator.js';
 import { useMeasure } from '@react-hookz/web';
 import { FC, useCallback, useState } from 'react';
+
+import { Button } from '#src/components/button/button.js';
+import { FpsIndicator } from '#src/components/fps-indicator/fps-indicator.js';
 
 const COMMA = '，';
 const HASH = '#';

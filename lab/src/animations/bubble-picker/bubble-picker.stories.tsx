@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import { fn } from 'storybook/test';
+
 import { BubblePicker, type BubblePickerDebugOptions, type BubblePickerItem } from './bubble-picker.js';
 import { BUBBLE_COUNT } from './constants.js';
 import { buildBubbleItems, buildBubbleLabels } from './demo-items.js';

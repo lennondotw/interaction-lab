@@ -12,9 +12,11 @@
  * exercises that copy and no other.
  */
 
+import { useCallback, useEffect, useId, type RefObject } from 'react';
+
 import { layoutOffsetRelativeTo } from '#src/components/beacon/layout-offset.js';
 import { useLayoutObservation } from '#src/components/beacon/use-layout-observation.js';
-import { useCallback, useEffect, useId, type RefObject } from 'react';
+
 import type { FieldShape } from './field.js';
 
 export interface ShapeRect {

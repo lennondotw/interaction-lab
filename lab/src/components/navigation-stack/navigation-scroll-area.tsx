@@ -1,5 +1,6 @@
 import { cn } from '@monorepo/utils';
 import type { CSSProperties, FC, ReactNode } from 'react';
+
 import { useContainerLayout } from './container-context.js';
 
 export interface NavigationScrollAreaProps {

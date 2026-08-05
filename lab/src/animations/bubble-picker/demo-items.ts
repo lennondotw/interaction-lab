@@ -1,4 +1,5 @@
 import { en, Faker } from '@faker-js/faker';
+
 import type { BubblePickerItem } from './bubble-picker.js';
 
 /**

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { OrbitTrack, OrbitTrackScrollScene } from './orbit-track.js';
 
 const meta: Meta<typeof OrbitTrack> = {

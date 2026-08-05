@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, type Transition } from 'motion/react';
 import { useState, type FC, type ReactNode } from 'react';
+
 import { useNavigation } from './navigation-context.js';
 import { useNavigationFocus } from './use-navigation-focus.js';
 import type { NavigationView } from './use-navigation-stack.js';

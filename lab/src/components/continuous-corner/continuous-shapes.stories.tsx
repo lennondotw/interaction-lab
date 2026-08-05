@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FC, ReactNode } from 'react';
+
 import { ContinuousCapsule, ContinuousCircle, ContinuousCorner } from './index.js';
 
 const HAIRLINE = { width: 1, color: 'rgb(0 0 0 / 0.14)', align: 'inner' } as const;

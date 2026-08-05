@@ -16,6 +16,7 @@
  */
 
 import { useMemo, type FC, type ReactNode, type RefObject } from 'react';
+
 import { BeaconContainerContext, BeaconStoreContext } from './context.js';
 import { BeaconFollower, type BeaconFollowerProps } from './follower.js';
 import { BeaconStore } from './store.js';

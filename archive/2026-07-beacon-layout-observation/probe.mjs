@@ -34,6 +34,7 @@
  *   node archive/2026-07-beacon-layout-observation/probe.mjs
  */
 import { mkdir } from 'node:fs/promises';
+
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6010';

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ComponentProps, FC } from 'react';
+
 import type { GlassLook } from './glass-look.js';
 import { SHAPE_IDS, shapeById, type ShapeId } from './shape-catalogue.js';
 import { ShapeGallery } from './shape-gallery.js';

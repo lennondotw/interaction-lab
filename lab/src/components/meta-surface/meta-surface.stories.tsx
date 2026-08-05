@@ -2,6 +2,7 @@ import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Eraser, Pencil, Square, Type } from 'lucide-react';
 import { useState } from 'react';
+
 import { MetaSurface } from './meta-surface.js';
 import { OverflowContent } from './overflow-content.js';
 import { OVERFLOW_KINDS, OVERFLOW_LABELS, type OverflowKind } from './overflow-kind.js';

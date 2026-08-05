@@ -13,6 +13,8 @@
  * something, because the buffers are sized from the domain at construction.
  */
 
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { buildPathData } from '#src/animations/sdf-edge-trace/contour-path.js';
 import {
   ContourTracer,
@@ -21,7 +23,6 @@ import {
   type TraceConfig,
 } from '#src/animations/sdf-edge-trace/field.js';
 import type { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** Margin sampled past the region, and half the quadtree tile. */
 export const SURFACE_OVERSCAN = 128;

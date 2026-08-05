@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+
 import type { ColorScheme } from './render/palette.js';
 
 /**

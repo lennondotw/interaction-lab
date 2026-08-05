@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { SdfContinuousCorner } from './continuous-corner-trace.js';
 
 /**

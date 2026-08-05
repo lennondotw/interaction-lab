@@ -39,6 +39,7 @@
  *   node archive/2026-08-view-transition-overlay-stacking/probe.mjs
  */
 import { mkdir } from 'node:fs/promises';
+
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';

@@ -18,6 +18,7 @@
  */
 
 import { PointerEvent as ReactPointerEvent, RefObject, useCallback, useRef } from 'react';
+
 import { Ball } from './field.js';
 
 export interface BallDragHandlers {

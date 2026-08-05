@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Fragment, useState, type FC, type ReactNode } from 'react';
+
 import { ElapsedTimer, type TimerPrecision } from './index.js';
 
 const PRECISIONS: TimerPrecision[] = ['minutes', 'seconds', 'tenths', 'hundredths', 'milliseconds'];

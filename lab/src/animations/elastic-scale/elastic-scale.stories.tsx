@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { DebugElasticScale } from './debug-elastic-scale.js';
 
 const meta = {

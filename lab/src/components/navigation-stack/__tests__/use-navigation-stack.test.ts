@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+
 import { navigationStackReducer, type NavigationStackState, type NavigationView } from '../use-navigation-stack.js';
 
 const root: NavigationView = { id: 'root', title: 'Root' };

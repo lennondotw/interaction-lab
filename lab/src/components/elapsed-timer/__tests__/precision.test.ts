@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+
 import {
   formatElapsed,
   MS_PER_DAY,

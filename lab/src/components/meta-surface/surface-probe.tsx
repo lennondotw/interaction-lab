@@ -21,6 +21,9 @@
  * reporting gaps.
  */
 
+import { cn } from '@monorepo/utils';
+import { useCallback, useRef, useState, useSyncExternalStore, type FC } from 'react';
+
 import { Button } from '#src/components/button/button.js';
 import {
   fmt,
@@ -33,8 +36,7 @@ import {
   type TraceEntry,
   type TraceKind,
 } from '#src/utils/observation-trace.js';
-import { cn } from '@monorepo/utils';
-import { useCallback, useRef, useState, useSyncExternalStore, type FC } from 'react';
+
 import { MetaSurface } from './meta-surface.js';
 import { createSurfaceErrorReader, type MeasuredRect } from './surface-error.js';
 import type { SurfaceTraceResult } from './use-surface-trace.js';

@@ -1,4 +1,5 @@
 import { CSSProperties, HTMLAttributes, ReactNode, RefObject, useLayoutEffect, useRef, useState } from 'react';
+
 import { CornerRadii } from './squircle-path.js';
 
 /**
