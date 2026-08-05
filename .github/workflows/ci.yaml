@@ -3,13 +3,15 @@
 name: Lint, typecheck, and test
 
 on:
+  # `'*'` does not match branch names containing a slash, so every `chore/…`
+  # branch was relying on the pull_request trigger instead — and that one only
+  # fired for PRs based on main. A stacked PR sits on the branch below it, so it
+  # got no run at all until the stack merged far enough to re-target it. `'**'`
+  # matches slashes; the unfiltered pull_request matches any base.
   push:
     branches:
-      - '*'
+      - '**'
   pull_request:
-    branches:
-      - 'main'
-      - 'dev'
 
 jobs:
   lint:
