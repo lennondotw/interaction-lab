@@ -131,6 +131,15 @@ export function useActiveBeacon(
   const hasBeenActiveRef = useRef(false);
   const lastActivePreserveOnEmptyRef = useRef(true);
   const initialRectRef = useRef(initialRect);
+  // Tracks `initialRect` until the first activation, so a caller that measures
+  // it asynchronously still seeds the springs from the real rect. Writing it in
+  // render is safe *because the only read is in an effect* (the `hasBeenActive`
+  // branch below): effects run after commit, so whatever an abandoned render
+  // wrote has already been overwritten by the committed one. Moving the write
+  // into an effect would trade that for a silent ordering dependency — it would
+  // have to be declared above the effect that reads it. Revisit if this ref ever
+  // gains a render-phase reader.
+  // eslint-disable-next-line react-hooks/refs
   initialRectRef.current = initialRect;
 
   useEffect(() => {
