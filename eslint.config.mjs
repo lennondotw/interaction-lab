@@ -41,6 +41,10 @@ const eslintConfig = [
   // config for all
   // `archive/` holds frozen investigation probes: standalone scripts, outside
   // every tsconfig, kept runnable rather than kept current. See archive/README.md.
+  // `.claude/` holds agent worktrees: full stale checkouts with their own
+  // node_modules and eslint.config.mjs. ESLint 10 resolves config from the
+  // linted file's directory, so leaving them in loads a second copy of every
+  // plugin against a different eslint major.
   {
     ignores: [
       '**/node_modules/',
@@ -50,6 +54,7 @@ const eslintConfig = [
       '**/.next/',
       '**/__fixtures__/',
       'archive/',
+      '.claude/',
     ],
   },
   { linterOptions: { reportUnusedDisableDirectives: true } },

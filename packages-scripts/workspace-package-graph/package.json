@@ -29,6 +29,7 @@
   "devDependencies": {
     "@monorepo/tsconfig": "workspace:^",
     "@pnpm/lockfile.fs": "catalog:",
+    "@pnpm/logger": "catalog:",
     "@pnpm/types": "catalog:",
     "@pnpm/workspace.pkgs-graph": "catalog:",
     "@typescript/native-preview": "catalog:",

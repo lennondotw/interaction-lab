@@ -21,8 +21,8 @@
     "tsc:build:watch": "tsgo --build tsconfig.json --watch"
   },
   "dependencies": {
-    "@dicebear/collection": "catalog:",
     "@dicebear/core": "catalog:",
+    "@dicebear/styles": "catalog:",
     "@faker-js/faker": "catalog:",
     "@monorepo/tailwindcss": "workspace:^",
     "@monorepo/utils": "workspace:^",
