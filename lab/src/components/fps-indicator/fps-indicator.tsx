@@ -29,7 +29,20 @@ export const FpsIndicator: FC<{ className?: string; defaultShowAnimation?: boole
         `,
         className
       )}
+      // A toggle, so it needs to be reachable and operable without a pointer.
+      // Not a <button>: the panel holds a <style> element and nested divs, which
+      // are not valid button content.
+      // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
+      role="button"
+      tabIndex={0}
+      aria-pressed={showAnimation}
       onClick={() => setShowAnimation((v) => !v)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setShowAnimation((v) => !v);
+        }
+      }}
     >
       {showAnimation && (
         <div className="flex flex-col gap-2">

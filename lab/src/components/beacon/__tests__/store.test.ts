@@ -97,7 +97,7 @@ describe('BeaconStore', () => {
     it('pop of missing id is a no-op and does not notify listeners', () => {
       const store = new BeaconStore();
       store.push(makeEntry('a'));
-      const listener = vi.fn();
+      const listener = vi.fn<() => void>();
       store.subscribe(listener);
       store.pop('ghost');
       expect(listener).not.toHaveBeenCalled();
@@ -133,7 +133,7 @@ describe('BeaconStore', () => {
     it('is a no-op when priority is unchanged', () => {
       const store = new BeaconStore();
       store.push(makeEntry('a', 'normal'));
-      const listener = vi.fn();
+      const listener = vi.fn<() => void>();
       store.subscribe(listener);
       store.replacePriority('a', 'normal');
       expect(listener).not.toHaveBeenCalled();
@@ -141,7 +141,7 @@ describe('BeaconStore', () => {
 
     it('is a no-op when id is missing', () => {
       const store = new BeaconStore();
-      const listener = vi.fn();
+      const listener = vi.fn<() => void>();
       store.subscribe(listener);
       store.replacePriority('ghost', 'high');
       expect(listener).not.toHaveBeenCalled();
@@ -151,7 +151,7 @@ describe('BeaconStore', () => {
   describe('subscribe', () => {
     it('notifies on push and pop, not on MotionValue changes', () => {
       const store = new BeaconStore();
-      const listener = vi.fn();
+      const listener = vi.fn<() => void>();
       const unsub = store.subscribe(listener);
       store.push(makeEntry('a'));
       expect(listener).toHaveBeenCalledTimes(1);
@@ -164,7 +164,7 @@ describe('BeaconStore', () => {
 
     it('does not notify a listener after it unsubscribes', () => {
       const store = new BeaconStore();
-      const listener = vi.fn();
+      const listener = vi.fn<() => void>();
       store.subscribe(listener)();
       store.push(makeEntry('a'));
       expect(listener).not.toHaveBeenCalled();

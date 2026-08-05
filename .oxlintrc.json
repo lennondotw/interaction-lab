@@ -10,13 +10,7 @@
   // `plugins` REPLACES the default set rather than extending it. Omitting
   // "typescript" silently disables every typescript/* and @typescript-eslint/*
   // rule below — they stay in the file and never run, with no warning.
-  // jsx-a11y and vitest are deliberately absent. eslint was not running either,
-  // so enabling them here would fold 29 brand-new findings into a toolchain
-  // swap that is otherwise coverage-neutral. They are worth turning on —
-  // jsx-a11y reports two missing `alt` attributes and two click handlers with no
-  // keyboard equivalent, vitest reports six tests with no assertions and four
-  // `expect` calls taking an extra argument — but as their own change.
-  "plugins": ["typescript", "react", "import", "promise"],
+  "plugins": ["typescript", "react", "import", "promise", "jsx-a11y", "vitest"],
   "jsPlugins": ["eslint-plugin-better-tailwindcss"],
   "settings": {
     "better-tailwindcss": {
@@ -58,6 +52,8 @@
     "typescript/await-thenable": "error",
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-unnecessary-type-assertion": "error",
+
+    "vitest/expect-expect": ["error", { "assertFunctionNames": ["expect", "expectPoint"] }],
 
     "better-tailwindcss/no-conflicting-classes": "error",
     "better-tailwindcss/no-duplicate-classes": "error",

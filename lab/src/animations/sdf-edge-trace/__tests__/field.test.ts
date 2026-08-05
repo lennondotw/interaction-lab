@@ -188,6 +188,8 @@ describe('traversals agree with balls on the frame', () => {
   };
 
   for (const { label, balls } of EDGE_CASES) {
+    // A parameterised case, so the title is necessarily an identifier.
+    // eslint-disable-next-line vitest/valid-title
     it(label, () => {
       const tracer = makeTracer();
       for (const cell of CELLS) {

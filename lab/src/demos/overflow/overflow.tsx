@@ -12,7 +12,19 @@ export const Overflow: FC<{ demoId?: string }> = ({ demoId }) => {
     >
       <div className="bg-amber-500/20 p-[1em] outline-1 -outline-offset-1 outline-amber-500">
         <div
+          // Kept a div rather than promoted to a button: this demo is about the
+          // box model of an overflowing child, and a button's own display and
+          // intrinsic sizing would be the thing under test.
+          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
+          role="button"
+          tabIndex={0}
           onClick={() => setContent(faker.lorem.sentence({ min: 1, max: 3 }))}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setContent(faker.lorem.sentence({ min: 1, max: 3 }));
+            }
+          }}
           className="mr-[-3em] bg-amber-500/20 px-[4em] py-[1em] outline-1 -outline-offset-1 outline-amber-500"
         >
           {content}

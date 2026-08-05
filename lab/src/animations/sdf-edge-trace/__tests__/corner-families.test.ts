@@ -13,6 +13,12 @@
  * drift, this fails rather than agreeing with itself.
  */
 
+/*
+ * vitest's expect extends Chai's, which takes a message as its second argument —
+ * used below to say which scene failed. vitest/valid-expect applies jest's
+ * single-argument rule and reports every one of them.
+ */
+/* eslint-disable vitest/valid-expect */
 import { describe, expect, it } from 'vitest';
 
 import {

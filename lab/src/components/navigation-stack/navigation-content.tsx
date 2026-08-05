@@ -129,6 +129,10 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
             // focus just landed in.
             tabIndex={-1}
             inert={!isTop}
+            // A labelled grouping with no native equivalent that fits — the rule
+            // proposes address/details/fieldset/hgroup/optgroup, none of which is
+            // a navigation view container.
+            // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
             role="group"
             aria-label={view.title}
             data-testid={`navigation-view-${view.id}`}
