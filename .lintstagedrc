@@ -1,6 +1,9 @@
 {
   "**/__fixtures__/": "prettier --ignore-path .gitignore --ignore-path .prettierignore --write",
-  "**/*.{md,ndx,json,jsonc,yaml,yml,css,html}": "prettier --ignore-path .gitignore --ignore-path .prettierignore --write",
-  "**/*.{js,cjs,mjs,cjsx,mjsx,ts,cts,mts,tsx,ctsx,mtsx}": "prettier --ignore-path .gitignore --ignore-path .prettierignore --write",
+  "**/*.{md,mdx,json,jsonc,yaml,yml,css,html}": "prettier --ignore-path .gitignore --ignore-path .prettierignore --write",
+  "**/*.{js,cjs,mjs,cjsx,mjsx,ts,cts,mts,tsx,ctsx,mtsx}": [
+    "prettier --ignore-path .gitignore --ignore-path .prettierignore --write",
+    "eslint --fix --max-warnings 0 --report-unused-disable-directives --no-warn-ignored"
+  ],
   "**/package.json": "sort-package-json"
 }
