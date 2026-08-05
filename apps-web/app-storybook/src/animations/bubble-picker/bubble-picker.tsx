@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import { useEffect, useRef, type FC, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, type FC, type PointerEvent as ReactPointerEvent } from 'react';
 import bubbleIdleUrl from './assets/bubble-idle.png';
 import bubbleSelectedUrl from './assets/bubble-selected.png';
 import { DEFAULT_MAX_SELECT, DT_CLAMP, SELECTED_SCALE, TOUCH_SLOP_PX } from './constants.js';
@@ -142,16 +142,34 @@ export const BubblePicker: FC<BubblePickerProps> = ({
   // a theme flip repaints on the very next frame with no re-mount.
   const palette: BubblePalette = BUBBLE_PALETTES[useColorScheme(theme)];
   // Latest props snapshot for the rAF loop and pointer handlers — avoids
-  // stale closures without restarting the loop on every render.
+  // stale closures without restarting the loop on every render. The
+  // initialiser matters: the mount effect reads `paused` off this ref, and
+  // runs before the first mirror below has a chance to.
   const propsRef = useRef({ items, onToggle, maxSelected, idleSrc, selectedSrc, palette, paused, debug });
-  propsRef.current = { items, onToggle, maxSelected, idleSrc, selectedSrc, palette, paused, debug };
 
-  // Sync the selection Set during render. Not an effect — this is a pure
-  // ref mutation that mirrors the prop. The rAF loop reads `.has(id)`
-  // against this Set every frame.
-  if (stateRef.current) {
-    stateRef.current.selectedIdsRef.current = new Set(selectedIds);
-  }
+  // Mirror props and the selection Set onto the refs the rAF loop reads.
+  // Nothing reads either one during render — every consumer is the loop, a
+  // pointer handler, or an effect — so this belongs outside render, and it has
+  // to be a layout effect specifically:
+  //
+  //   * Writing in render publishes values from renders React may go on to
+  //     abandon, and the loop runs outside React's control, so it would
+  //     already be painting props that never committed.
+  //   * Writing in useEffect lands after paint, so a theme flip or selection
+  //     change would show one frame of the previous palette — exactly the
+  //     next-frame repaint this ref exists to guarantee.
+  //
+  // Layout effects run after DOM mutation but before paint, and all of them
+  // run before any passive effect, so the mount effect below still sees a
+  // current snapshot regardless of declaration order.
+  useLayoutEffect(() => {
+    propsRef.current = { items, onToggle, maxSelected, idleSrc, selectedSrc, palette, paused, debug };
+    // Skipped on the first commit, where stateRef is still null — the mount
+    // effect seeds selectedIdsRef itself. Same as the old render-phase guard.
+    if (stateRef.current) {
+      stateRef.current.selectedIdsRef.current = new Set(selectedIds);
+    }
+  });
 
   // Mount: build the InternalState shell, attach observers, kick the rAF
   // loop. Settle waits for the first frame where the container has
