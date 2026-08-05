@@ -12,7 +12,7 @@
       "path": "./tsconfig.tests.json"
     },
     {
-      "path": "../../packages/utils/tsconfig.json"
+      "path": "../packages/utils/tsconfig.json"
     }
   ]
 }
