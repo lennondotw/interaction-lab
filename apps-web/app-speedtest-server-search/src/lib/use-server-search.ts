@@ -1,7 +1,7 @@
 import type { SpeedtestServer } from '#src/lib/schemas';
 import { throttle } from 'es-toolkit';
 import { ofetch } from 'ofetch';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 async function fetchServers(search: string): Promise<SpeedtestServer[]> {
   return ofetch<SpeedtestServer[]>('/api/servers', { query: { search } });
@@ -22,6 +22,65 @@ interface CacheEntry {
   data: SpeedtestServer[];
   arrivedAt: number;
   sentAt: number;
+}
+
+/**
+ * Pending requests kept outside React, exposed through useSyncExternalStore.
+ *
+ * They need to be readable and writable imperatively — deciding whether to
+ * start a fetch or bump an existing one is a read-modify-write that cannot live
+ * in a state updater, since updaters must stay pure and run twice under
+ * StrictMode. But render also has to see them, and a ref cannot serve that:
+ * mutating a ref does not re-render, and it gives useMemo nothing to compare,
+ * so anything derived from it silently goes stale.
+ *
+ * Every mutation therefore swaps the Map rather than editing it in place. The
+ * new identity is what notifies subscribers and what lets useMemo tell that its
+ * input changed.
+ */
+/**
+ * Shared empty snapshot. getServerSnapshot has to return a stable reference or
+ * React re-renders forever, and starting the client store from the same object
+ * means the first client snapshot is identical to the server one.
+ */
+const NO_PENDING_REQUESTS: ReadonlyMap<string, PendingRequest> = new Map();
+
+function createPendingRequestStore() {
+  let snapshot: ReadonlyMap<string, PendingRequest> = NO_PENDING_REQUESTS;
+  const listeners = new Set<() => void>();
+
+  const commit = (next: Map<string, PendingRequest>) => {
+    snapshot = next;
+    for (const listener of listeners) listener();
+  };
+
+  // Arrow properties throughout: `subscribe` and `getSnapshot` are handed to
+  // useSyncExternalStore as bare references, so they must not depend on `this`.
+  return {
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => snapshot,
+    /** Nothing is ever in flight during SSR, so the server always sees empty. */
+    getServerSnapshot: () => NO_PENDING_REQUESTS,
+    peek: (query: string) => snapshot.get(query),
+    start: (query: string, request: PendingRequest) => {
+      commit(new Map(snapshot).set(query, request));
+    },
+    /** Re-stamp an in-flight request so isRevalidating can tell it is newer. */
+    restamp: (query: string, sentAt: number) => {
+      const existing = snapshot.get(query);
+      if (!existing) return;
+      commit(new Map(snapshot).set(query, { ...existing, sentAt }));
+    },
+    settle: (query: string) => {
+      if (!snapshot.has(query)) return;
+      const next = new Map(snapshot);
+      next.delete(query);
+      commit(next);
+    },
+  };
 }
 
 export interface UseServerSearchResult {
@@ -47,17 +106,17 @@ export function useServerSearch(): UseServerSearchResult {
   // Error state
   const [error, setError] = useState<Error | null>(null);
 
-  // Pending requests - track sentAt and promise for each query
-  const pendingRequestsRef = useRef(new Map<string, PendingRequest>());
-
-  // Force re-render when pending requests change
-  const [, forceUpdate] = useState({});
+  // Pending requests - track sentAt and promise for each query. useState rather
+  // than useMemo so the store is built exactly once.
+  const [pendingStore] = useState(createPendingRequestStore);
+  const pendingRequests = useSyncExternalStore(
+    pendingStore.subscribe,
+    pendingStore.getSnapshot,
+    pendingStore.getServerSnapshot
+  );
 
   // Current query is the last item in history
   const currentQuery = queryHistory.at(-1) ?? '';
-
-  // Check if a query is currently being fetched
-  const isQueryPending = useCallback((query: string) => pendingRequestsRef.current.has(query), []);
 
   // Find the best data to display: longest prefix match from cache
   const displayState = useMemo(() => {
@@ -86,7 +145,7 @@ export function useServerSearch(): UseServerSearchResult {
       // If ENABLE_REVALIDATE is false, exact match is always considered fresh
       let isRevalidating = false;
       if (ENABLE_REVALIDATE) {
-        const pendingRequest = pendingRequestsRef.current.get(currentQuery);
+        const pendingRequest = pendingRequests.get(currentQuery);
         if (pendingRequest) {
           if (isPartialMatch) {
             // Partial match + pending request = always revalidating
@@ -114,7 +173,7 @@ export function useServerSearch(): UseServerSearchResult {
 
     console.log('[displayState] currentQuery: %o | no match | isStale: false\ncache keys: %o', currentQuery, cacheKeys);
     return { data: [] as SpeedtestServer[], query: '', isPartialMatch: false, isRevalidating: false, isStale: false };
-  }, [cache, currentQuery]);
+  }, [cache, currentQuery, pendingRequests]);
 
   const { data: displayData, query: displayQuery, isStale } = displayState;
 
@@ -136,60 +195,65 @@ export function useServerSearch(): UseServerSearchResult {
   }, []);
 
   // Fetch data with request tracking
-  const fetchData = useCallback((query: string) => {
-    if (!query) return;
+  const fetchData = useCallback(
+    (query: string) => {
+      if (!query) return;
 
-    const now = Date.now();
-    const existingRequest = pendingRequestsRef.current.get(query);
+      const now = Date.now();
+      const existingRequest = pendingStore.peek(query);
 
-    if (existingRequest) {
-      // Already fetching this query, just update sentAt
-      console.log('[fetchData] updating sentAt for pending request: %o', query);
-      existingRequest.sentAt = now;
-      forceUpdate({});
-      return;
-    }
+      if (existingRequest) {
+        // Already fetching this query, just update sentAt
+        console.log('[fetchData] updating sentAt for pending request: %o', query);
+        pendingStore.restamp(query, now);
+        return;
+      }
 
-    // Create new request
-    const sentAt = now;
-    console.log('[fetchData] starting new request: %o at %o', query, sentAt);
+      // Create new request
+      const sentAt = now;
+      console.log('[fetchData] starting new request: %o at %o', query, sentAt);
 
-    const promise = fetchServers(query);
+      const promise = fetchServers(query);
 
-    pendingRequestsRef.current.set(query, { sentAt, promise });
-    forceUpdate({});
+      pendingStore.start(query, { sentAt, promise });
 
-    promise
-      .then((result) => {
-        const arrivedAt = Date.now();
-        const request = pendingRequestsRef.current.get(query);
-        const requestSentAt = request?.sentAt ?? sentAt;
+      promise
+        .then((result) => {
+          const arrivedAt = Date.now();
+          const request = pendingStore.peek(query);
+          const requestSentAt = request?.sentAt ?? sentAt;
 
-        console.log('[fetchData] request completed: %o | sentAt: %o | arrivedAt: %o', query, requestSentAt, arrivedAt);
+          console.log(
+            '[fetchData] request completed: %o | sentAt: %o | arrivedAt: %o',
+            query,
+            requestSentAt,
+            arrivedAt
+          );
 
-        // Always write to cache (keep max 1000 entries, remove oldest first)
-        setCache((prev) => {
-          const next = new Map(prev);
-          next.set(query, { data: result, arrivedAt, sentAt: requestSentAt });
-          if (next.size > MAX_CACHE_SIZE) {
-            // Map maintains insertion order, delete the first (oldest) entry
-            const firstKey = next.keys().next().value;
-            if (firstKey !== undefined) {
-              next.delete(firstKey);
+          // Always write to cache (keep max 1000 entries, remove oldest first)
+          setCache((prev) => {
+            const next = new Map(prev);
+            next.set(query, { data: result, arrivedAt, sentAt: requestSentAt });
+            if (next.size > MAX_CACHE_SIZE) {
+              // Map maintains insertion order, delete the first (oldest) entry
+              const firstKey = next.keys().next().value;
+              if (firstKey !== undefined) {
+                next.delete(firstKey);
+              }
             }
-          }
-          return next;
+            return next;
+          });
+        })
+        .catch((err: unknown) => {
+          console.log('[fetchData] request failed: %o | error: %o', query, err);
+          setError(err instanceof Error ? err : new Error('Failed to fetch'));
+        })
+        .finally(() => {
+          pendingStore.settle(query);
         });
-      })
-      .catch((err: unknown) => {
-        console.log('[fetchData] request failed: %o | error: %o', query, err);
-        setError(err instanceof Error ? err : new Error('Failed to fetch'));
-      })
-      .finally(() => {
-        pendingRequestsRef.current.delete(query);
-        forceUpdate({});
-      });
-  }, []);
+    },
+    [pendingStore]
+  );
 
   // Handle throttled search - decides whether to fetch
   const handleThrottledSearch = useCallback(
@@ -242,7 +306,7 @@ export function useServerSearch(): UseServerSearchResult {
     !cache.has(currentQuery) &&
     displayData.length === 0 &&
     !error &&
-    isQueryPending(currentQuery);
+    pendingRequests.has(currentQuery);
 
   return {
     inputValue,
