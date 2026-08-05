@@ -1,5 +1,0 @@
-graph:
-  includeIndirectDeps: false
-
-rootSolution:
-  tsconfigPath: ./configs/tsconfig.solution.json

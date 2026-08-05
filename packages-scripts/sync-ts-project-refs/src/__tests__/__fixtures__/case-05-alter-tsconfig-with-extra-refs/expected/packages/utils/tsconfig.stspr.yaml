@@ -1,4 +1,0 @@
-references:
-  add:
-    - { path: '../app/tsconfig.json' }
-  skip: []

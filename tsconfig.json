@@ -17,19 +17,7 @@
       "path": "./apps-web/app-template-vite/tsconfig.json"
     },
     {
-      "path": "./packages-scripts/sync-ts-project-refs/tsconfig.json"
-    },
-    {
-      "path": "./packages-scripts/tsserver-benchmark/tsconfig.json"
-    },
-    {
-      "path": "./packages-scripts/workspace-package-graph/tsconfig.json"
-    },
-    {
       "path": "./packages/utils/tsconfig.json"
-    },
-    {
-      "path": "./eslint-rules/no-cross-package-relative-import/tsconfig.json"
     }
   ]
 }
