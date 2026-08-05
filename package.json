@@ -20,7 +20,6 @@
     "@eslint/css": "catalog:",
     "@eslint/js": "catalog:",
     "@mdx-js/language-service": "catalog:",
-    "@monorepo/eslint-plugin-no-cross-package-relative-import": "workspace:^",
     "@monorepo/tsconfig": "workspace:^",
     "@next/eslint-plugin-next": "catalog:",
     "@types/eslint": "catalog:",

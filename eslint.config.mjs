@@ -1,5 +1,4 @@
 import eslintJsPlugin from '@eslint/js';
-import noCrossPackageRelativeImport from '@monorepo/eslint-plugin-no-cross-package-relative-import';
 import next from '@next/eslint-plugin-next';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import eslintPluginBetterTailwindcss from 'eslint-plugin-better-tailwindcss';
@@ -101,7 +100,6 @@ const eslintConfig = [
       'react-refresh': reactRefreshPlugin,
       react: reactPlugin,
       'better-tailwindcss': eslintPluginBetterTailwindcss,
-      'no-cross-package-relative-import': noCrossPackageRelativeImport,
     },
     rules: {
       ...reactPlugin.configs.recommended.rules,
@@ -110,7 +108,6 @@ const eslintConfig = [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       ...eslintPluginBetterTailwindcss.configs['recommended-warn'].rules,
       ...eslintPluginBetterTailwindcss.configs['recommended-error'].rules,
-      'no-cross-package-relative-import/no-cross-package-relative-import': 'error',
     },
     settings: {
       react: { version: '19.1.0' },

@@ -1,6 +1,0 @@
-rootSolution:
-  references:
-    add:
-      - { path: './configs/tsconfig.shared.json' }
-    skip:
-      - { path: './packages/utils/tsconfig.json' }

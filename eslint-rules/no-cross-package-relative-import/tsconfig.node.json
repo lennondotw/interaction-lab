@@ -1,8 +1,0 @@
-{
-  "extends": "@monorepo/tsconfig/tsconfig.node.json",
-  "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.cache/tsc/tsconfig.node.tsbuildinfo",
-    "noEmit": true
-  },
-  "include": ["./*.ts"]
-}
