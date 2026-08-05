@@ -2,5 +2,53 @@ liquid glass:
 - [ ] support pill / circle / rounded rectangle shape (with squircle)
 - [ ] support custom / adaptive size, just like a simple div (with resize observer)
 - [ ] support gooey effect
+      once two glasses merge they are one glass with one rim, so they cannot be
+      computed separately and composited. archive/2026-08-displacement-map-reuse
+      says this route wants an SDF texture per group + refraction in a shader,
+      not a cached displacement map: an SDF composes under smin, a displacement
+      field does not, and one 400px map is 12-65ms against an 8.3ms frame.
 - [ ] add local highlight effect, moving with finger
 - [ ] add dispersion effect for glass material
+      apple does six taps along one direction spaced 1/3 apart, integrated per
+      channel with overlapping triangular weights and normalised by
+      (0.5, 1/3, 0.5), alpha by 1/7 — not three RGB point samples, which is what
+      every web reimplementation copies. read it off the shader in
+      archive/2026-08-liquid-glass-internals before writing any of it.
+
+open questions, in the order they are worth answering:
+- [ ] how wide is the smin blend band for a concave pair, or for three shapes
+      meeting? archive/2026-08-displacement-map-reuse measured two discs only
+      (7.8% of the rim at k=20 when touching, 0% past a ~30px gap) and bounds
+      nothing beyond that. decides whether "SVG + fixed encoding scale + partial
+      update" is still alive or whether to go straight to shader + SDF.
+- [ ] cost of a partial re-rasterisation plus compositing into an existing
+      texture. the locality is established; whether the bookkeeping beats just
+      redrawing the rim is not. prerequisite: refraction-map.ts normalises the
+      encoding scale globally at 2x the peak, so it has to be fixed up front
+      from bevel/thickness/depth/ior first — the peak is shape-independent, so
+      that is possible.
+- [ ] does NSGlassDiffusionSetting control the frosting, and what is its value
+      domain? an app cannot override it (argument-domain writes measured as
+      no-ops), so answering needs a real write to NSGlobalDomain — i.e. a change
+      to the machine's own settings. this box has non-stock values already
+      (NSGlassTintAmount = 1, NSGlassEverEditedInBuddy = 1), which is the leading
+      suspect for ".clear does not look clear".
+- [ ] where is apple's dispersion actually enabled? measured off on macOS 27 for
+      a plain NSGlassEffectView in either style — zero pixels above chroma 0.008
+      over the whole glass. point demos/bitmap-handoff-cost's rig at a Slider.
+- [ ] apple's actual values for face_cm*, the blur ramp and the refraction
+      thresholds. the runtime probe recovered the CAFilter catalogue but not the
+      configured numbers; needs the SwiftUI / CABackdropLayer route rather than
+      the AppKit view's own layer.
+- [ ] displacement_mat's semantics. inferred from a field name and a float4 type
+      as the hook for transforming a cached displacement field; unverified.
+
+notes that keep biting:
+- feDisplacementMap gathers, its range is +/-scale/2, it needs
+  color-interpolation-filters="sRGB", and its map must be opaque everywhere —
+  alpha 0 reads as channel 0, which is the most negative offset, not zero.
+- an object URL in feImage is fetched asynchronously and never lands at frame
+  rate. for a per-frame filter map a data URL is the only handoff that arrives,
+  base64 tax and all. fine for an <img> at any rate.
+- rAF intervals are quantised to the refresh rate, so "frame" is a pass/fail
+  signal. read the busy % for headroom.
