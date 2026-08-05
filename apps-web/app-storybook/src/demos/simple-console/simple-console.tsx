@@ -1,6 +1,6 @@
 import { cn } from '@monorepo/utils';
-import { throttle } from 'es-toolkit';
-import { FC, useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { throttle, type ThrottledFunction } from 'es-toolkit';
+import { FC, useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { SimpleConsoleLogger } from './simple-console-logger.js';
 
 export const SimpleConsoleRender: FC<{ console: SimpleConsoleLogger; className?: string }> = ({
@@ -34,19 +34,28 @@ export const SimpleConsoleRender: FC<{ console: SimpleConsoleLogger; className?:
     }
   }, [logs, updateAtBottom]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleScroll = useCallback(
-    throttle<React.UIEventHandler<HTMLDivElement>>(
-      () => {
-        if (containerRef.current) {
-          updateAtBottom(containerRef.current);
-        }
-      },
-      100,
-      { edges: ['leading', 'trailing'] }
-    ),
-    [updateAtBottom]
-  );
+  // Build the throttle in an effect rather than in render. It was previously
+  // an argument to useCallback, which meant a fresh throttle — timer state and
+  // all — on every render for useCallback to keep the first and drop the rest.
+  // An effect also keeps creation and cancellation in one place, so the timer
+  // cannot outlive the mount, and it keeps `updateAtBottom` (which writes
+  // atBottom.current) out of the render phase.
+  const throttledUpdateRef = useRef<ThrottledFunction<typeof updateAtBottom> | null>(null);
+  useEffect(() => {
+    const throttled = throttle(updateAtBottom, 100, { edges: ['leading', 'trailing'] });
+    throttledUpdateRef.current = throttled;
+    return () => {
+      throttled.cancel();
+      throttledUpdateRef.current = null;
+    };
+  }, [updateAtBottom]);
+
+  // Take the element off the event instead of off containerRef. `currentTarget`
+  // is only valid while the event dispatches, so it has to be captured here and
+  // handed to the trailing call as an argument.
+  const handleScroll: React.UIEventHandler<HTMLDivElement> = (event) => {
+    throttledUpdateRef.current?.(event.currentTarget);
+  };
 
   return (
     <div
