@@ -181,6 +181,25 @@ export const StepTransition: FC<StepTransitionProps> = ({
   const duration = DURATIONS[mode];
   const stepStyle = inFlow ? inFlowStyle : fillStyle;
 
+  // Suppress the mount animation from the child, not with `initial={false}` on
+  // AnimatePresence — which is the shape the docs show, and which breaks this.
+  //
+  // Both stop the first step animating in on load. But the AnimatePresence form
+  // reaches the child as presence context, and Motion latches that into a
+  // `blockInitialAnimation` flag on the child's visual element at construction
+  // time, for life. It then reuses the same flag to veto the re-entry animation
+  // when an exited child is revived, so the first step comes back parked on its
+  // `enter` keyframe — invisible, off to one side, and never recovering. Nothing
+  // else on screen is affected, because no other step mounts on the render that
+  // hands presence context `initial: false`.
+  //
+  // Measured in archive/2026-08-step-transition-revive.
+  //
+  // `directions` is empty until the first navigation, which is exactly the
+  // render the first step mounts on. Every later mount — and every revival —
+  // reads a stamped map, and so gets the real `enter` keyframe.
+  const initial = Object.keys(directions).length === 0 ? false : 'enter';
+
   return (
     <div className={className} style={{ position: 'relative', ...style }}>
       {prev != null && (
@@ -199,12 +218,12 @@ export const StepTransition: FC<StepTransitionProps> = ({
           {children}
         </div>
       ) : (
-        <AnimatePresence mode="popLayout" custom={directions} initial={false}>
+        <AnimatePresence mode="popLayout" custom={directions}>
           <motion.div
             key={step}
             custom={directions}
             variants={variants}
-            initial="enter"
+            initial={initial}
             animate="center"
             exit="exit"
             transition={{ duration, ease: STEP_TRANSITION_EASE }}
