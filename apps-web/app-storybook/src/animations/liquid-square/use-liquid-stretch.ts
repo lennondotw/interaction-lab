@@ -1,7 +1,6 @@
 import { MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { useCallback } from 'react';
 import { expDecayGaussian } from './decay.js';
-import { toTranslateThenScale } from './transform-utils.js';
 
 export interface UseLiquidStretchConfig {
   maxMoveX?: number;
@@ -29,9 +28,15 @@ export interface UseLiquidStretchResult {
  * 1. First apply `translate` (translateX, translateY)
  * 2. Then apply `scale` (scaleX, scaleY)
  *
- * Internally, the calculations are based on the assumption that scale is applied first,
- * then translate. However, the returned values are converted to work with the
- * translate-first, scale-second transform order.
+ * That is the order Motion serialises — `translateX(…) scaleX(…)` — and CSS composes
+ * a transform list as `T · S`, so a point maps to `s * x + t`: the translate is *not*
+ * multiplied by the scale. `t` is therefore already in unscaled units and is returned
+ * as-is. Measured: `translateX(10%) scaleX(2)` on a 200px box moves the centre 20px,
+ * not 40px.
+ *
+ * So do **not** run these values through `./transform-utils.js` on the way out. That
+ * module converts between the two parameterisations correctly, but the conversion is not
+ * wanted here — see its module docblock for which CSS orderings do need it.
  */
 export const useLiquidStretch = (config: UseLiquidStretchConfig = {}): UseLiquidStretchResult => {
   const { maxStretchX = 0.25, maxStretchY = 0.25, maxMoveX = 0.15, maxMoveY = 0.15 } = config;
@@ -126,29 +131,27 @@ export const useLiquidStretch = (config: UseLiquidStretchConfig = {}): UseLiquid
     return maxMoveY * animatedDecayedOffsetY.get();
   });
 
-  const correctedTranslateX = useTransform(() => {
-    return toTranslateThenScale({ scale: scaleX.get(), translate: translateX.get() + extraTranslateX.get() })
-      .preTranslate;
+  const totalTranslateX = useTransform(() => {
+    return translateX.get() + extraTranslateX.get();
   });
-  const correctedTranslateY = useTransform(() => {
-    return toTranslateThenScale({ scale: scaleY.get(), translate: translateY.get() + extraTranslateY.get() })
-      .preTranslate;
+  const totalTranslateY = useTransform(() => {
+    return translateY.get() + extraTranslateY.get();
   });
 
-  const correctedTranslateXPercent = useTransform(() => {
-    return `${correctedTranslateX.get() * 100}%`;
+  const totalTranslateXPercent = useTransform(() => {
+    return `${totalTranslateX.get() * 100}%`;
   });
-  const correctedTranslateYPercent = useTransform(() => {
-    return `${correctedTranslateY.get() * 100}%`;
+  const totalTranslateYPercent = useTransform(() => {
+    return `${totalTranslateY.get() * 100}%`;
   });
 
   return {
     scaleX,
     scaleY,
-    normalizedTranslateX: correctedTranslateX,
-    normalizedTranslateY: correctedTranslateY,
-    translateX: correctedTranslateXPercent,
-    translateY: correctedTranslateYPercent,
+    normalizedTranslateX: totalTranslateX,
+    normalizedTranslateY: totalTranslateY,
+    translateX: totalTranslateXPercent,
+    translateY: totalTranslateYPercent,
     updateNormalizedPanOffset: updatePanOffset,
     release,
   };
