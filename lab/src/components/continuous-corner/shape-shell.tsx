@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { Slot } from 'radix-ui';
 import { CSSProperties, FC, Ref, useId } from 'react';
+
 import { ContinuousShapeBorder, ContinuousShapeCommonProps, OUTLINE_OFFSET, ResolvedShape, Size } from './shape-css.js';
 
 const Edge: FC<{ size: Size; path: string; border: ContinuousShapeBorder }> = ({ size, path, border }) => {

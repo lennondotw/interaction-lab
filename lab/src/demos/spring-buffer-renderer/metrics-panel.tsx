@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, useTransform } from 'motion/react';
 import { FC } from 'react';
+
 import { useSpringBufferContext } from './spring-buffer-provider.js';
 
 export const MetricsPanel: FC<{ className?: string }> = ({ className }) => {

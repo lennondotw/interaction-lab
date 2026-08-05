@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, useMotionValue, useTransform } from 'motion/react';
 import { FC } from 'react';
+
 import { useAnimationControlsContext } from './animation-controls-provider.js';
 import { segmentGraphemes } from './segmenter.js';
 import { useSpringBufferContext } from './spring-buffer-provider.js';

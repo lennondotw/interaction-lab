@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+
 import type { NavigationStackResult } from './use-navigation-stack.js';
 
 // Context + hook live apart from the provider component so each .tsx in

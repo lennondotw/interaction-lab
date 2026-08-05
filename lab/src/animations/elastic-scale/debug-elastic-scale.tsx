@@ -8,6 +8,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, useTransform, type MotionValue } from 'motion/react';
 import { useEffect, useState, type FC } from 'react';
+
 import { calculateScale, DEFAULT_MAX_SCALE, DEFAULT_SIGMA } from './elastic-scale.js';
 import {
   NO_HOVERED_ITEM,

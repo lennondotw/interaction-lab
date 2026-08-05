@@ -22,11 +22,13 @@
  *   and `root` when it is on. See archive/2026-07-metasurface-dom-field.
  */
 
-import { Button } from '#src/components/button/button.js';
 import { cn } from '@monorepo/utils';
 import { useIntervalEffect, useMeasure } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
+
+import { Button } from '#src/components/button/button.js';
+
 import { timeBatched } from '../bench-timing.js';
 import { Field, Segmented, Stat, Toggle } from '../controls.js';
 import { ContourTracer, quadtreeSafeView, type FieldShape, type TraceConfig, type Traversal } from '../field.js';

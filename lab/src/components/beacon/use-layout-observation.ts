@@ -21,6 +21,7 @@
  */
 
 import { useEffect, type RefObject } from 'react';
+
 import { observeLayoutShift } from './layout-shift.js';
 
 export interface LayoutObservationOptions {

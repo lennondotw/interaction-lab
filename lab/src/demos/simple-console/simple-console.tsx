@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { throttle, type ThrottledFunction } from 'es-toolkit';
 import { FC, useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+
 import { SimpleConsoleLogger } from './simple-console-logger.js';
 
 export const SimpleConsoleRender: FC<{ console: SimpleConsoleLogger; className?: string }> = ({

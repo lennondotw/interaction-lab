@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, MotionValue, useTransform } from 'motion/react';
 import { FC } from 'react';
+
 import './pane.js';
 
 interface DebugPanelProps {

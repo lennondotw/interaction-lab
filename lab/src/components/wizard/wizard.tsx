@@ -1,6 +1,8 @@
-import { STEP_FADE_DURATION, STEP_SLIDE_DURATION, StepTransition } from '#src/animations/step-transition/index.js';
 import { cn } from '@monorepo/utils';
 import { useState, type CSSProperties, type FC, type ReactNode } from 'react';
+
+import { STEP_FADE_DURATION, STEP_SLIDE_DURATION, StepTransition } from '#src/animations/step-transition/index.js';
+
 import {
   useWizardHeight,
   WIZARD_HEIGHT_CLASS,

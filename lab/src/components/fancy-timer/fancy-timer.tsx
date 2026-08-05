@@ -1,5 +1,6 @@
 import { useAnimationFrame } from 'motion/react';
 import { ComponentProps, forwardRef, Ref, useCallback, useImperativeHandle, useRef } from 'react';
+
 import { formatTime } from './timer-utils.js';
 
 type FancyTimerProps = Omit<ComponentProps<'div'>, 'children' | 'ref'> & {

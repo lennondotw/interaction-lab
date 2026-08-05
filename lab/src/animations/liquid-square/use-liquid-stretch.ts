@@ -1,5 +1,6 @@
 import { MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { useCallback } from 'react';
+
 import { expDecayGaussian } from './decay.js';
 
 export interface UseLiquidStretchConfig {

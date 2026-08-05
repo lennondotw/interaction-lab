@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { ExitBatchingScenario, type ScenarioSpec, type SlideSpec } from './animate-presence-exit-batching.js';
 import { sleep } from './exit-trace.js';
 

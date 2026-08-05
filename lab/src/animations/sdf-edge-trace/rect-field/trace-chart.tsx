@@ -19,9 +19,11 @@
  * `traces/s`) the moment a rate reached two digits.
  */
 
-import { LiveScope } from '#src/components/live-scope/live-scope.js';
 import { cn } from '@monorepo/utils';
 import { useCallback, type FC } from 'react';
+
+import { LiveScope } from '#src/components/live-scope/live-scope.js';
+
 import { IDLE_AFTER_MS, statusOf, type TraceHistory, type TraceLog } from './trace-log.js';
 
 /** Window plotted, in ms. */

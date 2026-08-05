@@ -1,4 +1,5 @@
 import { createContext, type RefObject } from 'react';
+
 import type { BeaconStore } from './store.js';
 
 // Exported so tests can render the provider with a custom store instance.

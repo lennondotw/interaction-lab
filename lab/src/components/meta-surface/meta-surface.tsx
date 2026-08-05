@@ -29,9 +29,11 @@
  * See `useSurfaceTrace`.
  */
 
-import { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
 import { cn } from '@monorepo/utils';
 import { Children, isValidElement, useCallback, useId, useMemo, useRef, type FC, type ReactNode } from 'react';
+
+import { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
+
 import { MetaSurfaceClipContext, MetaSurfaceContainerContext, MetaSurfaceRegistryContext } from './context.js';
 import { MetaSurfaceItem } from './meta-surface-item.js';
 import { useRegionSize, useSurfaceTrace, type SurfaceTraceResult } from './use-surface-trace.js';

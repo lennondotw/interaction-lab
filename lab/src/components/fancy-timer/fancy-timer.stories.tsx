@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useRef } from 'react';
+
 import { FancyTimer, FancyTimerRef } from './fancy-timer.js';
 
 const meta: Meta = {

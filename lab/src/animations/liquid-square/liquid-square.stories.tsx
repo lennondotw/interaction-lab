@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Search } from 'lucide-react';
+
 import { ImageWithState } from '../eager-layout/image-with-state.js';
 import memojiAvatarUrl from './assets/memoji-avatar.webp';
 import { LiquidDebugger } from './liquid-debugger.js';

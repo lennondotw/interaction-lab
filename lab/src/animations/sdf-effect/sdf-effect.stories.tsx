@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { SdfEffect } from './sdf-effect.js';
 
 const meta: Meta = {

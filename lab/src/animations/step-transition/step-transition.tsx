@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'motion/react';
 import { useState, type CSSProperties, type FC, type ReactNode } from 'react';
+
 import { STEP_FADE_DURATION, STEP_SLIDE_DURATION, STEP_TRANSITION_EASE } from './timing.js';
 
 export type StepTransitionMode = 'slide' | 'fade';

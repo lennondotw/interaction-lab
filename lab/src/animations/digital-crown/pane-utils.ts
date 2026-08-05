@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BindingParams, Pane } from 'tweakpane';
+
 import { pane } from './pane.js';
 
 export const usePaneBinding = <O extends Record<string, unknown>>(

@@ -22,6 +22,7 @@
  *   node archive/2026-07-animate-presence-exit-batching/probe.mjs
  */
 import { mkdir } from 'node:fs/promises';
+
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';

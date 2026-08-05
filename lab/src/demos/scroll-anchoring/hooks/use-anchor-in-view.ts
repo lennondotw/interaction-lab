@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import { useEventCallback } from 'usehooks-ts';
+
 import { deduplicate } from '../utils/deduplicate.js';
 
 export type AnchoringMode = 'top' | 'bottom';

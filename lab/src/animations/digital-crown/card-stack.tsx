@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, MotionValue } from 'motion/react';
 import { FC, RefObject } from 'react';
+
 import { CARD_COUNT, CARD_GAP_SVH, CARD_HEIGHT_SVH, getCardGradient } from './constants.js';
 
 interface CardStackProps {

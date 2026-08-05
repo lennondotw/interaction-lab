@@ -13,6 +13,7 @@
 
 import { blob, star, triangle } from '#src/animations/sdf-edge-trace/irregular/irregular-shapes.js';
 import { squircleCorners, type CornerRadii } from '#src/components/continuous-corner/squircle-path.js';
+
 import { polygonSdf, roundedBoxSdf, type Sdf } from './shape-sdf.js';
 
 /**

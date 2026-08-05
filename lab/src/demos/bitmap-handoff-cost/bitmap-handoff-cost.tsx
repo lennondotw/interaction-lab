@@ -1,8 +1,10 @@
+import { cn } from '@monorepo/utils';
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { Field, Segmented, Stat } from '#src/animations/sdf-edge-trace/controls.js';
 import { Button } from '#src/components/button/button.js';
 import { LiveScope } from '#src/components/live-scope/live-scope.js';
-import { cn } from '@monorepo/utils';
-import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
 import { EncodeWorkerClient } from './encode-worker-client.js';
 import { FrameLog } from './frame-log.js';
 import { CONSUMERS, PRODUCERS, type ConsumerId } from './producers.js';

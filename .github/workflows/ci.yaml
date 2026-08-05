@@ -34,21 +34,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # `:packages` fans out over the workspace; `:root` covers the files that
-      # belong to no package — eslint.config.mjs, .prettierrc.mjs, and the rest
-      # of tsconfig.node.json. Without both, root-level config is never checked.
+      # belong to no package — oxfmt.config.ts and the rest of
+      # tsconfig.node.json. Without both, root-level config is never typechecked.
       - name: Build & typecheck (packages)
         run: pnpm -w --no-bail run tsc:build:packages
 
       - name: Build & typecheck (root)
         run: pnpm -w --no-bail run tsc:build:root
 
-      - name: Run ESLint (packages)
-        run: pnpm -w --no-bail run lint:eslint:packages
+      # oxlint scans the whole repo in one pass, so there is no per-package
+      # variant to run. Type-aware is a superset of plain `lint`, so only this
+      # one is worth CI time.
+      - name: Lint (type-aware)
+        run: pnpm -w --no-bail run lint:type-aware
 
-      - name: Run ESLint (root)
-        run: pnpm -w --no-bail run lint:eslint:root
-
-      - name: Run Prettier
+      - name: Check formatting
         run: pnpm -w --no-bail run format:check
 
       - name: Check package.json field order

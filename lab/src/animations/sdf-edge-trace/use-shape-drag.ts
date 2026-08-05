@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
+
 import type { FieldShape } from './field.js';
 import { useBallDrag, type BallDragHandlers } from './use-ball-drag.js';
 

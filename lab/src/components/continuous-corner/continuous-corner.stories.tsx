@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FC, ReactNode, useEffect, useRef, useState } from 'react';
+
 import { ContinuousCorner } from './index.js';
 
 type Story = StoryObj<typeof ContinuousCorner>;

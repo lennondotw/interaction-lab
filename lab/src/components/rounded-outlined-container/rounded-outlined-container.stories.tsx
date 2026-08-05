@@ -1,6 +1,7 @@
 import { Faker, en } from '@faker-js/faker';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { FC, ReactNode } from 'react';
+
 import { RoundedOutlinedContainer } from './index.js';
 
 type Story = StoryObj<typeof RoundedOutlinedContainer>;

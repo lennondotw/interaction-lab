@@ -9,7 +9,6 @@
   "scripts": {
     "build": "pnpm run tsc:build && storybook build",
     "dev": "storybook dev --no-open --port 6009",
-    "lint:eslint": "eslint . --cache --cache-strategy content --cache-location ./node_modules/.cache/eslint/eslintcache.json --max-warnings 0 --report-unused-disable-directives",
     "preview": "vite preview --outDir storybook-static",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

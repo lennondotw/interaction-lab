@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, PanInfo } from 'motion/react';
 import { FC, useCallback, useState } from 'react';
+
 import { useBodyCursor } from './use-body-cursor.js';
 import { useLiquidStretch } from './use-liquid-stretch.js';
 

@@ -1,3 +1,6 @@
+import { cn } from '@monorepo/utils';
+import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type FC } from 'react';
+
 import {
   fmt,
   framesText,
@@ -10,8 +13,7 @@ import {
   type TraceKind,
   type Tracer,
 } from '#src/utils/observation-trace.js';
-import { cn } from '@monorepo/utils';
-import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type FC } from 'react';
+
 import { BeaconStoreContext } from './context.js';
 import { BeaconFollower } from './follower.js';
 import {

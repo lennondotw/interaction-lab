@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import tickSoundUrl from '../assets/clock-ticker-single.wav';
 
 export function useTickSound() {

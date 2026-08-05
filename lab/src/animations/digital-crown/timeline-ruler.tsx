@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { motion, MotionValue, useTransform } from 'motion/react';
 import { FC } from 'react';
+
 import { CARD_COUNT, TRIGGER_COUNT, TRIGGER_ZONE_HIGH, TRIGGER_ZONE_LOW } from './constants.js';
 
 interface TimelineRulerProps {

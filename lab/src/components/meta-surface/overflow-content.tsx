@@ -14,6 +14,7 @@
 
 import { Faker, en } from '@faker-js/faker';
 import type { FC } from 'react';
+
 import type { OverflowKind } from './overflow-kind.js';
 
 /**

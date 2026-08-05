@@ -13,8 +13,9 @@
  * matters most about this design — that the gaps are where the work is not being done.
  */
 
-import type { LiveScopeSample } from '#src/components/live-scope/live-scope.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+import type { LiveScopeSample } from '#src/components/live-scope/live-scope.js';
 
 /**
  * No trace for this long and the surface is considered settled.

@@ -30,10 +30,12 @@
  *   outline to be measured against.
  */
 
-import { squirclePath } from '#src/components/continuous-corner/squircle-path.js';
 import { cn } from '@monorepo/utils';
 import { useIntervalEffect } from '@react-hookz/web';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FC } from 'react';
+
+import { squirclePath } from '#src/components/continuous-corner/squircle-path.js';
+
 import { buildPath2D } from '../contour-path.js';
 import { Field, Segmented, Stat, Toggle } from '../controls.js';
 import { ContourTracer, type FieldShape } from '../field.js';

@@ -1,5 +1,6 @@
 import { cn } from '@monorepo/utils';
 import { FC, PropsWithChildren } from 'react';
+
 import { AnimationControlsProvider } from './animation-controls-provider.js';
 import { ContentControlsPanel } from './content-controls-panel.js';
 import { MetricsPanel } from './metrics-panel.js';

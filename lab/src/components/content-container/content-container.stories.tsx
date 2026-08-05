@@ -1,6 +1,7 @@
 import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { FC, ReactNode } from 'react';
+
 import { ContentContainer } from './index.js';
 
 /**

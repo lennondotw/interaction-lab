@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useRef, useState, type FC, type ReactNode } from 'react';
+
 import type { BeaconEmptyBehavior } from './follower.js';
 import { BeaconProvider } from './provider.js';
 import type { BeaconPriority } from './types.js';

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+
 import { SdfClipAndOutline } from './clip-and-outline.js';
 
 /**

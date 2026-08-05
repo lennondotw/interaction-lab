@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+
 import { CELL_LEAF, ContourTracer, QUADTREE_TILE, TraceConfig, Traversal, quadtreeSafeView } from '../field.js';
 
 const VIEW = 512;

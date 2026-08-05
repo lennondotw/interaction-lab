@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { MIN_GAP, SELECTED_SCALE, VERTICAL_PAD } from '../constants.js';
 import { buildBubbleItems, buildBubbleLabels } from '../demo-items.js';
 import { hitTest } from '../hit-test.js';

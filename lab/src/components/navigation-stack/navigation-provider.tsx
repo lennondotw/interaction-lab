@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from 'react';
+
 import { NavigationContext } from './navigation-context.js';
 import type { NavigationStackResult } from './use-navigation-stack.js';
 
