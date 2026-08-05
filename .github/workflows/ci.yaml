@@ -104,17 +104,17 @@ jobs:
 
       - name: Build workspace dependencies
         run: pnpm run tsc:build:upstream
-        working-directory: apps-web/app-storybook
+        working-directory: lab
 
       - name: Build storybook
         run: pnpm run build
-        working-directory: apps-web/app-storybook
+        working-directory: lab
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: storybook-static
           path: |
-            apps-web/app-storybook/storybook-static/
+            lab/storybook-static/
           if-no-files-found: error
           include-hidden-files: true

@@ -135,7 +135,7 @@ phase at `animating` indefinitely.
 ## What we do about it
 
 Nothing. The demo is an experiment and says so; the note lives in
-[its README](../../apps-web/app-storybook/src/demos/buffered-split-layout/view-transition-commit/README.md).
+[its README](../../lab/src/demos/buffered-split-layout/view-transition-commit/README.md).
 
 The demo's own debug overlays are C3 — named, with a hand-assigned group
 `z-index`. They get away with the half that stays broken only because they are

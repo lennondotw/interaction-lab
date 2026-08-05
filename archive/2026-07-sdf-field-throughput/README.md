@@ -176,11 +176,11 @@ lags its own layout.
 ## Reproducing
 
 ```bash
-cd apps-web/app-storybook
-npx vite-node ../../archive/2026-07-sdf-field-throughput/probe.mjs
+cd lab
+npx vite-node ../archive/2026-07-sdf-field-throughput/probe.mjs
 ```
 
-Run from the storybook package so the TypeScript sources resolve. Part 2 of the probe
+Run from the lab package so the TypeScript sources resolve. Part 2 of the probe
 measures the shipped configuration; the early-out-disabled column was taken by raising
 `SKIP_MIN_SHAPES` in `field.ts` out of reach and re-running. Absolute times track the
 machine; the ratios and the `ns/eval` trend are what the decisions rest on.

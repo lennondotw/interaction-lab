@@ -8,7 +8,7 @@
       "path": "./tsconfig.node.json"
     },
     {
-      "path": "./apps-web/app-storybook/tsconfig.json"
+      "path": "./lab/tsconfig.json"
     },
     {
       "path": "./packages/utils/tsconfig.json"

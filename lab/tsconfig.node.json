@@ -23,7 +23,7 @@
   "exclude": [],
   "references": [
     {
-      "path": "../../packages/utils/tsconfig.json"
+      "path": "../packages/utils/tsconfig.json"
     }
   ]
 }

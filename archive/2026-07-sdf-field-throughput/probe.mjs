@@ -26,11 +26,10 @@
  *
  * Run from the storybook package so the TypeScript sources resolve:
  *
- *   cd apps-web/app-storybook && npx vite-node ../../archive/2026-07-sdf-field-throughput/probe.mjs
+ *   cd lab && npx vite-node ../archive/2026-07-sdf-field-throughput/probe.mjs
  */
-const { ContourTracer, quadtreeSafeView } =
-  await import('../../apps-web/app-storybook/src/animations/sdf-edge-trace/field.ts');
-const { buildPathData } = await import('../../apps-web/app-storybook/src/animations/sdf-edge-trace/contour-path.ts');
+const { ContourTracer, quadtreeSafeView } = await import('../../lab/src/animations/sdf-edge-trace/field.ts');
+const { buildPathData } = await import('../../lab/src/animations/sdf-edge-trace/contour-path.ts');
 
 const OVERSCAN = 128;
 const BLEND = 26;

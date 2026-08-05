@@ -13,7 +13,7 @@
   "exclude": ["**/node_modules/"],
   "references": [
     {
-      "path": "../../packages/utils/tsconfig.json"
+      "path": "../packages/utils/tsconfig.json"
     },
     {
       "path": "./tsconfig.stories.json"

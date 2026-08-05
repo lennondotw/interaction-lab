@@ -15,11 +15,11 @@ element moves are all indirect:
 - the viewport resizes
 
 `useBeaconAnchor` answers this with five primitives wired to one `measure()`
-([`use-beacon.ts:289-338`](../../apps-web/app-storybook/src/components/beacon/use-beacon.ts)):
+([`use-beacon.ts:289-338`](../../lab/src/components/beacon/use-beacon.ts)):
 a self `ResizeObserver`, an ancestor RO cascade walking `parentElement` up to and
 including the container, a capture-phase `scroll` listener on `window`, a
 `resize` listener on `window`, and the `IntersectionObserver` layout-shift trick
-([`layout-shift.ts`](../../apps-web/app-storybook/src/components/beacon/layout-shift.ts)).
+([`layout-shift.ts`](../../lab/src/components/beacon/layout-shift.ts)).
 No polling, no rAF loop.
 
 The question this investigation asks is not "does it work" — with all five on it
@@ -146,7 +146,7 @@ were already measured in. One word:
 io = new IntersectionObserver(handler, { ...options, root: el.ownerDocument });
 ```
 
-([`layout-shift.ts:144`](../../apps-web/app-storybook/src/components/beacon/layout-shift.ts).
+([`layout-shift.ts:144`](../../lab/src/components/beacon/layout-shift.ts).
 With the fix, the wrapper logs `rootBounds.height = 48` at rest against a 48px
 target — the frame fits the element exactly, as designed.)
 
@@ -170,7 +170,7 @@ truth = {x: 280, y: -123}    ← getBoundingClientRect differencing
 ```
 
 Fixed by including the `offsetParent` in the subtraction walk
-([`layout-offset.ts:89-95`](../../apps-web/app-storybook/src/components/beacon/layout-offset.ts)).
+([`layout-offset.ts:89-95`](../../lab/src/components/beacon/layout-offset.ts)).
 The container is the one deliberate exception, and it stops the walk: the
 follower is positioned inside the container, so it already scrolls with the
 container's content, and subtracting that scroll would double-count it.
@@ -204,7 +204,7 @@ Upstream Floating UI passes `refresh(false, 1e-7)` there — `skip = false`, it
 notifies. The 1000ms throttle is the loop guard; staying silent adds nothing but
 a permanently stranded beacon, for any anchor that gets clipped out by scrolling,
 a collapsing panel, or an accordion. Dropping the flag
-([`layout-shift.ts:115`](../../apps-web/app-storybook/src/components/beacon/layout-shift.ts))
+([`layout-shift.ts:115`](../../lab/src/components/beacon/layout-shift.ts))
 turns "never recovers" into "recovers ≈1.07s later — the retry timer", which the table below records
 rather than hides.
 
@@ -302,10 +302,10 @@ To see the failing side, check out the pre-fix files and let Vite hot-reload:
 
 ```bash
 git checkout HEAD~1 -- apps-web/app-storybook/src/components/beacon/layout-shift.ts \
-                       apps-web/app-storybook/src/components/beacon/layout-offset.ts
+                       lab/src/components/beacon/layout-offset.ts
 node archive/2026-07-beacon-layout-observation/probe.mjs
 git checkout HEAD -- apps-web/app-storybook/src/components/beacon/layout-shift.ts \
-                     apps-web/app-storybook/src/components/beacon/layout-offset.ts
+                     lab/src/components/beacon/layout-offset.ts
 ```
 
 Absolute latencies track the machine. The pattern of which cells are red does

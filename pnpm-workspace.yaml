@@ -1,6 +1,6 @@
 packages:
   - packages/*
-  - apps-web/*
+  - lab
 
 allowBuilds:
   '@parcel/watcher': true

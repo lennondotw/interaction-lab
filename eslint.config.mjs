@@ -25,7 +25,7 @@ const STORYBOOK_FILES = ['**/{,.}*.stories.{,c,m}{j,t}s{,x}'];
 /** @type {string[]} */
 const STORYBOOK_MAIN_FILES = ['**/.storybook/main.{,c,m}{j,t}s'];
 
-const storybookAppPath = new URL('./apps-web/app-storybook/', import.meta.url);
+const labAppPath = new URL('./lab/', import.meta.url);
 const tailwindCssStylesheetPath = new URL('./packages/tailwindcss/tailwindcss.css', import.meta.url);
 
 /**
@@ -129,7 +129,7 @@ const eslintConfig = [
       ...storybook.configs['flat/recommended'][2]?.rules,
       'storybook/no-uninstalled-addons': [
         'error',
-        { packageJsonLocation: fileURLToPath(new URL('package.json', storybookAppPath)) },
+        { packageJsonLocation: fileURLToPath(new URL('package.json', labAppPath)) },
       ],
     },
     ignores: MDX_VIRTUAL_TS_FILES,
