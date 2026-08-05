@@ -278,7 +278,7 @@ export const InsetBenchmarkPanel: FC<InsetBenchmarkPanelProps> = ({
       )}
 
       {rows.length > 0 && !running && (
-        <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-xs/relaxed text-neutral-500">
           The <span className="font-mono">evals ×</span> column is the claim and its limit in one place: exactly{' '}
           <span className="font-mono">1.000</span> for the grid walks, because a fixed grid visits the same cells either
           way and the second level only redoes the per-edge interpolation — and above that for{' '}

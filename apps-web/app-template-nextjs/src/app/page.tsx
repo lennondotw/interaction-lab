@@ -5,7 +5,7 @@ export default function Home() {
     <div
       className={`
         grid min-h-screen grid-rows-[20px_1fr_20px] items-center justify-items-center gap-16 p-8 pb-20
-        font-[family-name:var(--font-geist-sans)]
+        font-(family-name:--font-geist-sans)
         sm:p-20
       `}
     >
@@ -18,9 +18,7 @@ export default function Home() {
         <Image className="dark:invert" src="/next.svg" alt="Next.js logo" width={180} height={38} priority />
         <ol
           className={`
-            list-inside list-decimal text-center
-            font-[family-name:var(--font-geist-mono)]
-            text-sm/6
+            list-inside list-decimal text-center font-(family-name:--font-geist-mono) text-sm/6
             sm:text-left
           `}
         >
@@ -28,10 +26,8 @@ export default function Home() {
             Get started by editing{' '}
             <code
               className={`
-                rounded bg-black/[.05] px-1 py-0.5
-                font-[family-name:var(--font-geist-mono)]
-                font-semibold
-                dark:bg-white/[.06]
+                rounded-sm bg-black/5 px-1 py-0.5 font-(family-name:--font-geist-mono) font-semibold
+                dark:bg-white/6
               `}
             >
               src/app/page.tsx
@@ -64,12 +60,13 @@ export default function Home() {
           </a>
           <a
             className={`
-              flex h-10 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-4
-              text-sm font-medium transition-colors
+              flex h-10 w-full items-center justify-center rounded-full border border-solid border-black/8 px-4 text-sm
+              font-medium transition-colors
               hover:border-transparent hover:bg-[#f2f2f2]
               sm:h-12 sm:w-auto sm:px-5 sm:text-base
               md:w-[158px]
-              dark:border-white/[.145] dark:hover:bg-[#1a1a1a]
+              dark:border-white/[.145]
+              dark:hover:bg-[#1a1a1a]
             `}
             href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
             target="_blank"

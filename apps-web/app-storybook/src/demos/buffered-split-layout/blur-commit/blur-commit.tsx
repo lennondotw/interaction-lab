@@ -656,8 +656,7 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
         data-demo-left-live
         style={leftLiveStyle}
         className={`
-          absolute inset-y-4 left-3 z-10 outline-[1px] -outline-offset-1 outline-slate-300
-          [contain:layout]
+          absolute inset-y-4 left-3 z-10 outline-[1px] -outline-offset-1 outline-slate-300 contain-[layout]
           dark:outline-neutral-700
         `}
       >
@@ -668,11 +667,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
               <div
                 data-demo-left-content-layer
                 className={`
-                  absolute top-7 bottom-7 left-1/2
-                  [width:max(0px,calc(100%-40px))]
-                  -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300
-                  [contain:layout]
-                  outline-dashed
+                  absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2 outline-[1px]
+                  -outline-offset-1 outline-sky-300 contain-[layout] outline-dashed
                   dark:outline-sky-400/60
                 `}
               >
@@ -681,9 +677,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
                   <div
                     data-demo-left-content
                     className={`
-                      relative left-1/2 my-7 min-h-[calc(100%-56px)]
-                      [width:max(0px,calc(100%-40px))]
-                      max-w-[640px] -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300 outline-dashed
+                      relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
+                      -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300 outline-dashed
                       dark:outline-sky-400/60
                     `}
                   >
@@ -716,8 +711,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
         <div
           data-demo-left-metrics
           className={`
-            pointer-events-none absolute right-4 bottom-4 left-4 z-30 bg-white/90 p-2 text-left text-[11px]/4
-            text-slate-600 outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
+            pointer-events-none absolute inset-x-4 bottom-4 z-30 bg-white/90 p-2 text-left text-[11px]/4 text-slate-600
+            outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
             dark:bg-neutral-950/90 dark:text-neutral-300 dark:outline-neutral-700
           `}
         >
@@ -730,8 +725,7 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
         style={rightLiveStyle}
         className={cn(
           `
-            absolute inset-y-4 z-10 outline-[1px] -outline-offset-1 outline-slate-300
-            [contain:layout]
+            absolute inset-y-4 z-10 outline-[1px] -outline-offset-1 outline-slate-300 contain-[layout]
             dark:outline-neutral-700
           `,
           !trailingOpen && `pointer-events-none`
@@ -744,10 +738,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
               <div
                 data-demo-right-content-layer
                 className={`
-                  absolute top-7 bottom-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2 outline-[1px]
-                  -outline-offset-1 outline-emerald-300
-                  [contain:layout]
-                  outline-dashed
+                  absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2 outline-[1px]
+                  -outline-offset-1 outline-emerald-300 contain-[layout] outline-dashed
                   dark:outline-emerald-400/60
                 `}
               >
@@ -756,9 +748,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
                   <div
                     data-demo-right-content
                     className={`
-                      relative left-1/2 my-7 min-h-[calc(100%-56px)]
-                      [width:max(0px,calc(100%-40px))]
-                      max-w-[640px] -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300 outline-dashed
+                      relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
+                      -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300 outline-dashed
                       dark:outline-emerald-400/60
                     `}
                   >
@@ -785,8 +776,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
         <div
           data-demo-right-metrics
           className={`
-            pointer-events-none absolute right-4 bottom-4 left-4 z-30 bg-white/90 p-2 text-left text-[11px]/4
-            text-slate-600 outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
+            pointer-events-none absolute inset-x-4 bottom-4 z-30 bg-white/90 p-2 text-left text-[11px]/4 text-slate-600
+            outline-[1px] -outline-offset-1 outline-slate-300 outline-dashed
             dark:bg-neutral-950/90 dark:text-neutral-300 dark:outline-neutral-700
           `}
         >
@@ -801,10 +792,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
         onPointerDown={handleDividerPointerDown}
         className={cn(
           `
-            absolute inset-y-6
-            [left:var(--split-divider-x)]
-            z-20 w-px -translate-x-1/2 cursor-col-resize bg-slate-500
-            before:absolute before:inset-y-0 before:-right-3 before:-left-3 before:content-[""]
+            absolute inset-y-6 left-(--split-divider-x) z-20 w-px -translate-x-1/2 cursor-col-resize bg-slate-500
+            before:absolute before:-inset-x-3 before:inset-y-0 before:content-[""]
             dark:bg-neutral-500
           `,
           !trailingOpen && `pointer-events-none opacity-0`

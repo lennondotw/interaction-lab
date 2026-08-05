@@ -329,7 +329,7 @@ export const BitmapHandoffCost: FC = () => {
               value={liveProducerId}
               onChange={(event) => setLiveProducerId(event.target.value)}
               className={`
-                rounded border border-neutral-300 bg-transparent px-1.5 py-1 text-xs
+                rounded-sm border border-neutral-300 bg-transparent px-1.5 py-1 text-xs
                 dark:border-neutral-700
               `}
             >
@@ -392,8 +392,8 @@ export const BitmapHandoffCost: FC = () => {
             {consumer === 'none' && (
               <div
                 className={`
-                  flex items-center justify-center rounded border border-dashed border-neutral-300 font-mono text-[9px]
-                  text-neutral-400
+                  flex items-center justify-center rounded-sm border border-dashed border-neutral-300 font-mono
+                  text-[9px] text-neutral-400
                   dark:border-neutral-700
                 `}
                 style={{ width: TILE_PX, height: TILE_PX }}
@@ -414,7 +414,7 @@ export const BitmapHandoffCost: FC = () => {
                     alt=""
                     width={TILE_PX}
                     height={TILE_PX}
-                    className="rounded bg-neutral-900"
+                    className="rounded-sm bg-neutral-900"
                     style={{ width: TILE_PX, height: TILE_PX }}
                   />
                 ) : (
@@ -432,7 +432,7 @@ export const BitmapHandoffCost: FC = () => {
                     width={TILE_PX}
                     height={TILE_PX}
                     viewBox={`0 0 ${size} ${size}`}
-                    className="rounded bg-neutral-900"
+                    className="rounded-sm bg-neutral-900"
                   >
                     <defs>
                       <filter
@@ -501,7 +501,7 @@ export const BitmapHandoffCost: FC = () => {
 
       {rows.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[60rem] border-collapse text-left text-xs">
+          <table className="w-full min-w-240 border-collapse text-left text-xs">
             <thead
               className={`
                 border-b border-neutral-200 text-[10px] tracking-wide text-neutral-500 uppercase

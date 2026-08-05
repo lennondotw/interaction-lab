@@ -297,7 +297,7 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
         >
           Irregular shapes
         </h1>
-        <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-sm/relaxed text-neutral-500">
           Every earlier story here traced a rounded box — a circular corner, then the whole{' '}
           <span className="font-mono text-xs">superellipse(k)</span> family once the corner became a p-norm. None of
           that reaches a <em>concave</em> vertex, so a star needed a second primitive rather than another parameter.
@@ -435,7 +435,7 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
           </div>
 
           {verify && (
-            <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+            <p className="max-w-prose text-xs/relaxed text-neutral-500">
               <span className="font-mono">max |field|</span> is every traced vertex measured against a second,
               independent reading of the same field — polygon distance plus the same fold, in plain JS. Under one cell
               means the contour really is on the iso, which is what says the concave sign test and the quadtree&apos;s
@@ -443,7 +443,7 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
             </p>
           )}
 
-          <details className="max-w-prose text-xs leading-relaxed text-neutral-500">
+          <details className="max-w-prose text-xs/relaxed text-neutral-500">
             <summary className="cursor-pointer text-neutral-400">what each one is for</summary>
             <dl className="mt-2 flex flex-col gap-1.5">
               {SHAPE_KINDS.map((kind) => (
@@ -455,7 +455,7 @@ export const SdfIrregularShapes: FC<{ className?: string }> = ({ className }) =>
             </dl>
           </details>
 
-          <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+          <p className="max-w-prose text-xs/relaxed text-neutral-500">
             <span className="font-mono">round</span> is an outward <em>offset</em>, not a box&apos;s inscribed corner
             radius: the shape grows and every corner is filleted, reflex ones included. Take it to 32 and watch the
             star&apos;s notches and the cross&apos;s waist fill in — the 7-pointed star becomes a cog, and a disc if

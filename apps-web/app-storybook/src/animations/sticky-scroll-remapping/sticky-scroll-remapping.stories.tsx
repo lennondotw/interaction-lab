@@ -29,12 +29,8 @@ const renderSpecimen = (progress: MotionValue<number>) => (
 const renderColoredSpecimen = (progress: MotionValue<number>) => (
   <div
     className={`
-      text-[var(--progressive-text-inactive)]
-      [--progressive-text-active-1:#0ea5e9]
-      [--progressive-text-active-2:#10b981]
-      [--progressive-text-active-3:#8b5cf6]
-      [--progressive-text-active-4:#f43f5e]
-      [--progressive-text-inactive:#171717]
+      text-(--progressive-text-inactive) [--progressive-text-active-1:#0ea5e9] [--progressive-text-active-2:#10b981]
+      [--progressive-text-active-3:#8b5cf6] [--progressive-text-active-4:#f43f5e] [--progressive-text-inactive:#171717]
       dark:[--progressive-text-active-1:#7dd3fc] dark:[--progressive-text-active-2:#6ee7b7]
       dark:[--progressive-text-active-3:#c4b5fd] dark:[--progressive-text-active-4:#fda4af]
       dark:[--progressive-text-inactive:#e5e5e5]

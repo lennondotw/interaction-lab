@@ -75,7 +75,7 @@ export const FancyTimer = forwardRef<FancyTimerRef, FancyTimerProps>(function Ti
   return (
     <div ref={contentRef} {...props}>
       {/* should be 0 at initial render */}
-      {/* eslint-disable-next-line react-hooks/refs */}
+      {}
       {formatTime(getCurrentElapsed() / 1000)}
     </div>
   );

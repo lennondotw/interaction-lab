@@ -128,7 +128,7 @@ export const Default: StoryObj = {
             same column line. Each label spans both columns of this grid rather than
             nesting a row of its own, which keeps the label wrapping its input.
           */}
-          <div className="grid grid-cols-[auto_auto] items-center gap-x-2 gap-y-2">
+          <div className="grid grid-cols-[auto_auto] items-center gap-2">
             <Knob label="gap" value={gap} max={140} onChange={setGap} />
             <Knob label="blend" value={blend} max={90} onChange={setBlend} />
             <Knob label="outline" value={outline} max={24} onChange={setOutline} />
@@ -182,7 +182,7 @@ export const Consumer: StoryObj = {
         <div className="grid grid-cols-[auto_auto] items-center gap-x-3 font-mono text-xs text-neutral-400">
           <Knob label="gap" value={gap} max={40} onChange={setGap} testId="toolbar-gap" />
         </div>
-        <p className="max-w-sm text-center text-xs leading-relaxed text-neutral-500">
+        <p className="max-w-sm text-center text-xs/relaxed text-neutral-500">
           Selected: <span className="font-mono">{active ?? 'none'}</span>. Tab through the buttons at any gap — the
           focus ring follows each button&apos;s own box, merged or not.
         </p>
@@ -228,8 +228,8 @@ export const ClippedOverflow: StoryObj = {
             <OverflowContent kind={kind} />
           </MetaSurface.Backdrop>
           <div className="flex flex-row items-center" style={{ gap }}>
-            <MetaSurface.Item className="size-28 shrink-0 rounded-[2rem]" />
-            <MetaSurface.Item className="h-20 w-20 shrink-0 rounded-full" />
+            <MetaSurface.Item className="size-28 shrink-0 rounded-4xl" />
+            <MetaSurface.Item className="size-20 shrink-0 rounded-full" />
             <MetaSurface.Item className="h-24 w-36 shrink-0 rounded-3xl" />
           </div>
         </MetaSurface>
@@ -253,7 +253,7 @@ export const ClippedOverflow: StoryObj = {
                 type="button"
                 onClick={() => setKind(option)}
                 className={cn(
-                  'rounded px-2 py-0.5',
+                  'rounded-sm px-2 py-0.5',
                   option === kind
                     ? 'bg-indigo-500 text-white'
                     : `

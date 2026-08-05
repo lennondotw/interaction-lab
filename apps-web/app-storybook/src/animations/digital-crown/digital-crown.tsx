@@ -64,7 +64,7 @@ export const DigitalCrown: FC = () => {
 
       <div
         className={cn(`
-          fixed top-4 right-0 left-0 hidden
+          fixed inset-x-0 top-4 hidden
           lg:flex lg:flex-col lg:items-center
         `)}
       >

@@ -48,10 +48,10 @@ export const LiquidRoundButton: StoryObj = {
     layout: 'centered',
   },
   render: () => (
-    <LiquidDiv className="h-12 w-12">
+    <LiquidDiv className="size-12">
       <div
         className={`
-          flex h-full w-full flex-col items-center justify-center rounded-full bg-neutral-500/20 outline-[0.5px]
+          flex size-full flex-col items-center justify-center rounded-full bg-neutral-500/20 outline-[0.5px]
           outline-offset-[-0.25px] outline-neutral-500/30 transition-all ease-out
           active:scale-110 active:bg-neutral-400/40
         `}
@@ -70,12 +70,12 @@ export const LiquidMemoji: StoryObj = {
     return (
       <LiquidDiv
         liquidConfig={{ hoverCursorShape: 'pointer', activeAndOutsideCursorShape: 'pointer' }}
-        className="group h-12 w-12"
+        className="group size-12"
       >
-        <SpringTap className="relative h-full w-full overflow-clip rounded-full select-none">
+        <SpringTap className="relative size-full overflow-clip rounded-full select-none">
           <ImageWithState
             draggable={false}
-            className="h-full w-full scale-105 object-cover"
+            className="size-full scale-105 object-cover"
             src={memojiAvatarUrl}
             alt="Memoji"
           />

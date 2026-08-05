@@ -368,12 +368,10 @@ export const OrbitTrack: FC<OrbitTrackProps> = ({
       ref={containerRef}
       className={cn(
         `
-          relative w-full overflow-visible
-          [--orbit-item-outline:rgb(0_0_0_/_0.45)]
-          [--orbit-placeholder-outline:rgb(0_0_0_/_0.3)]
-          [--orbit-surface-outline:rgb(0_0_0_/_0.25)]
-          dark:[--orbit-item-outline:rgb(255_255_255_/_0.45)] dark:[--orbit-placeholder-outline:rgb(255_255_255_/_0.3)]
-          dark:[--orbit-surface-outline:rgb(255_255_255_/_0.25)]
+          relative w-full overflow-visible [--orbit-item-outline:rgb(0_0_0/0.45)]
+          [--orbit-placeholder-outline:rgb(0_0_0/0.3)] [--orbit-surface-outline:rgb(0_0_0/0.25)]
+          dark:[--orbit-item-outline:rgb(255_255_255/0.45)] dark:[--orbit-placeholder-outline:rgb(255_255_255/0.3)]
+          dark:[--orbit-surface-outline:rgb(255_255_255/0.25)]
         `,
         className
       )}
@@ -576,8 +574,8 @@ export const OrbitTrackScrollScene: FC<Omit<OrbitTrackProps, 'scrollLinked'>> = 
       dark:bg-neutral-950 dark:text-neutral-50
     `}
   >
-    <NativeScrollRuler className="absolute inset-y-0 left-0 z-[100] w-[34px]" side="left" />
-    <NativeScrollRuler className="absolute inset-y-0 right-0 z-[100] w-[34px]" side="right" />
+    <NativeScrollRuler className="absolute inset-y-0 left-0 z-100 w-[34px]" side="left" />
+    <NativeScrollRuler className="absolute inset-y-0 right-0 z-100 w-[34px]" side="right" />
 
     <div className="mx-20 flex min-h-[calc(100vh-160px)] flex-col items-center justify-center">
       <ScrollPlaceholder label="Top placeholder" />

@@ -88,13 +88,13 @@ const Harness: FC<{ mode: Mode }> = ({ mode }) => {
   }, [mode, series]);
 
   return (
-    <div className="flex w-[36rem] flex-col gap-2">
+    <div className="flex w-xl flex-col gap-2">
       <div className="flex flex-row items-baseline justify-between font-mono text-[10px] text-neutral-400">
         <span>{mode}</span>
         <span>{retained} samples retained</span>
       </div>
       <LiveScope read={read} minScale={0.5} threshold={16.7} className={CHROME} />
-      <p className="max-w-prose text-xs leading-relaxed text-neutral-500">{NOTES[mode]}</p>
+      <p className="max-w-prose text-xs/relaxed text-neutral-500">{NOTES[mode]}</p>
     </div>
   );
 };

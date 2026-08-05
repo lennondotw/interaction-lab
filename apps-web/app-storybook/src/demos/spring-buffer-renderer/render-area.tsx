@@ -51,7 +51,7 @@ export const RenderArea: FC = () => {
         {/* layer 3: cursor */}
         <div className="pointer-events-none absolute inset-0 min-h-lh">
           <motion.span className="opacity-0 select-none">{renderedValueSpringMV}</motion.span>
-          <div className="relative inline-block h-0 w-0 align-bottom">
+          <div className="relative inline-block size-0 align-bottom">
             <div className="absolute bottom-0 left-0 h-lh w-[2px] bg-emerald-500/80"></div>
           </div>
           <motion.span className="opacity-0 select-none">{transformedBufferValueSpringMV}</motion.span>

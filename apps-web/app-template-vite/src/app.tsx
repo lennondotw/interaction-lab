@@ -13,7 +13,7 @@ export const App: FC = () => {
           href="https://vitejs.dev"
           target="_blank"
           rel="noreferrer"
-          className="flex h-36 w-36 items-center justify-center"
+          className="flex size-36 items-center justify-center"
         >
           <img
             src={viteLogo}
@@ -30,7 +30,7 @@ export const App: FC = () => {
           href="https://react.dev"
           target="_blank"
           rel="noreferrer"
-          className="flex h-36 w-36 items-center justify-center"
+          className="flex size-36 items-center justify-center"
         >
           <img
             src={reactLogo}

@@ -31,7 +31,7 @@ export const SpringParameterControl: FC<SpringParameterControlProps> = ({
           <button
             onClick={onReset}
             className={`
-              cursor-pointer rounded bg-neutral-700 px-2 py-1 text-xs text-white transition-colors
+              cursor-pointer rounded-sm bg-neutral-700 px-2 py-1 text-xs text-white transition-colors
               hover:bg-neutral-600
             `}
           >
@@ -59,7 +59,7 @@ export const SpringParameterControl: FC<SpringParameterControlProps> = ({
             <Slider.Range className="absolute h-full rounded-full bg-emerald-500/80" />
           </Slider.Track>
           <Slider.Thumb
-            className="block h-4 w-4 rounded-full border border-emerald-300 bg-gray-800 shadow outline-none"
+            className="block size-4 rounded-full border border-emerald-300 bg-gray-800 shadow-sm outline-none"
             aria-label={SPRING_PARAMS.VISUAL_DURATION.LABEL}
           />
         </Slider.Root>

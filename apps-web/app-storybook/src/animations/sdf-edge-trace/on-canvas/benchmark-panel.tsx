@@ -210,7 +210,7 @@ export const BenchmarkPanel: FC<BenchmarkPanelProps> = ({
       )}
 
       {rows.length > 0 && !running && (
-        <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-xs/relaxed text-neutral-500">
           Read the <span className="font-mono">evals</span> column down each traversal:{' '}
           <span className="font-mono">dense</span> and <span className="font-mono">bounded</span> quadruple when the
           cell size halves (O(area)), while <span className="font-mono">sparse</span> only doubles (O(perimeter)). That

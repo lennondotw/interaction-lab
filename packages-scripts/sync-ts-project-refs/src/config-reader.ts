@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import yaml from 'yaml';
 import { z } from 'zod';
 
-import type { PackageConfig, Ref, RootConfig, TsconfigConfig, WorkspaceConfig } from './types.js';
+import type { PackageConfig, RootConfig, TsconfigConfig, WorkspaceConfig } from './types.js';
 
 // Zod schemas for configuration validation
 const WorkspaceConfigSchema = z.object({
@@ -140,8 +140,8 @@ export async function readPackageConfig(packageDir: string): Promise<PackageConf
         },
       },
       references: {
-        add: config.references.add as Ref[],
-        skip: config.references.skip as Ref[],
+        add: config.references.add,
+        skip: config.references.skip,
       },
     };
   } catch {
@@ -166,8 +166,8 @@ export async function readPackageConfig(packageDir: string): Promise<PackageConf
         },
       },
       references: {
-        add: defaultConfig.references.add as Ref[],
-        skip: defaultConfig.references.skip as Ref[],
+        add: defaultConfig.references.add,
+        skip: defaultConfig.references.skip,
       },
     };
   }
@@ -193,8 +193,8 @@ export async function readRootConfig(monorepoRoot: string): Promise<RootConfig> 
         tsconfigPath: config.rootSolution.tsconfigPath,
         includeSiblings: config.rootSolution.includeSiblings,
         references: {
-          add: config.rootSolution.references.add as Ref[],
-          skip: config.rootSolution.references.skip as Ref[],
+          add: config.rootSolution.references.add,
+          skip: config.rootSolution.references.skip,
         },
       },
     };
@@ -210,8 +210,8 @@ export async function readRootConfig(monorepoRoot: string): Promise<RootConfig> 
         tsconfigPath: defaultConfig.rootSolution.tsconfigPath,
         includeSiblings: defaultConfig.rootSolution.includeSiblings,
         references: {
-          add: defaultConfig.rootSolution.references.add as Ref[],
-          skip: defaultConfig.rootSolution.references.skip as Ref[],
+          add: defaultConfig.rootSolution.references.add,
+          skip: defaultConfig.rootSolution.references.skip,
         },
       },
     };
@@ -235,8 +235,8 @@ export async function readTsconfigConfig(tsconfigPath: string): Promise<Tsconfig
       exclude: config.exclude,
       includeWorkspaceDeps: config.includeWorkspaceDeps,
       references: {
-        add: config.references.add as Ref[],
-        skip: config.references.skip as Ref[],
+        add: config.references.add,
+        skip: config.references.skip,
       },
     };
   } catch {
@@ -246,8 +246,8 @@ export async function readTsconfigConfig(tsconfigPath: string): Promise<Tsconfig
       exclude: defaultConfig.exclude,
       includeWorkspaceDeps: defaultConfig.includeWorkspaceDeps,
       references: {
-        add: defaultConfig.references.add as Ref[],
-        skip: defaultConfig.references.skip as Ref[],
+        add: defaultConfig.references.add,
+        skip: defaultConfig.references.skip,
       },
     };
   }

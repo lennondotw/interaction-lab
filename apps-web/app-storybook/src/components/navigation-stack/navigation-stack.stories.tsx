@@ -65,7 +65,8 @@ const ListItem: FC<{ label: string; onPress: () => void }> = ({ label, onPress }
     className={`
       flex h-10 w-full cursor-pointer items-center justify-between border-b border-black/10 px-4 text-left text-sm
       hover:bg-black/5
-      dark:border-white/10 dark:hover:bg-white/5
+      dark:border-white/10
+      dark:hover:bg-white/5
     `}
   >
     <span>{label}</span>

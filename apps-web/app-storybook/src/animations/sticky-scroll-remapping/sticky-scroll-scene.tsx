@@ -95,15 +95,15 @@ export const StickyScrollScene: FC<StickyScrollSceneProps> = ({
         className
       )}
     >
-      <NativeScrollRuler className="absolute inset-y-0 left-0 z-[100] w-[34px]" side="left" />
-      <NativeScrollRuler className="absolute inset-y-0 right-0 z-[100] w-[34px]" side="right" />
+      <NativeScrollRuler className="absolute inset-y-0 left-0 z-100 w-[34px]" side="left" />
+      <NativeScrollRuler className="absolute inset-y-0 right-0 z-100 w-[34px]" side="right" />
 
       <ScrollPlaceholder label="Entry placeholder" />
 
       <section ref={trackRef} className="relative h-[200dvh]" data-sticky-scroll-track="">
         <div
           ref={stickyRef}
-          className="sticky top-0 flex h-[100dvh] items-center justify-center px-14"
+          className="sticky top-0 flex h-dvh items-center justify-center px-14"
           data-sticky-scroll-layer=""
         >
           <motion.div
@@ -129,7 +129,7 @@ export const StickyScrollScene: FC<StickyScrollSceneProps> = ({
 };
 
 const ScrollPlaceholder: FC<{ label: string }> = ({ label }) => (
-  <div className="flex min-h-[100dvh] items-center justify-center px-14 py-12">
+  <div className="flex min-h-dvh items-center justify-center px-14 py-12">
     <div
       className={`
         flex min-h-80 w-full max-w-4xl items-center justify-center outline-1 -outline-offset-1 outline-neutral-500/25

@@ -194,7 +194,7 @@ export const PathBenchmarkPanel: FC<PathBenchmarkPanelProps> = ({
       )}
 
       {rows.length > 0 && !running && (
-        <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-xs/relaxed text-neutral-500">
           Read <span className="font-mono">d / P2D</span> for the price of the move: the same vertices cost that much
           more to express as a string than as a <span className="font-mono">Path2D</span>, and{' '}
           <span className="font-mono">b/vert</span> is what the browser then has to reparse per vertex.{' '}

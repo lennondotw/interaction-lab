@@ -102,7 +102,7 @@ const KIND_CLASS: Record<TraceKind, string> = {
 };
 
 const Panel: FC<{ label: string; children: ReactNode; className?: string }> = ({ label, children, className }) => (
-  <div className={cn('rounded-lg bg-neutral-500/5 p-3 text-xs leading-relaxed', className)}>
+  <div className={cn('rounded-lg bg-neutral-500/5 p-3 text-xs/relaxed', className)}>
     <div className="mb-1 text-[10px] font-semibold tracking-wider uppercase opacity-40">{label}</div>
     {children}
   </div>

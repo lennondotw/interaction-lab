@@ -164,7 +164,7 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
         >
           SDF edge trace
         </h1>
-        <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-sm/relaxed text-neutral-500">
           Extracting a real contour from the metaball shape in <span className="font-mono text-xs">sdf-effect</span>.
           The two fields describe slightly different shapes — they blend on different terms. Within one field, all three
           traversals return the <em>identical</em> contour; only the cost of finding it differs. Turn on{' '}
@@ -274,7 +274,7 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
           {degraded && (
             <p
               className={`
-                max-w-prose text-xs leading-relaxed text-amber-800
+                max-w-prose text-xs/relaxed text-amber-800
                 dark:text-amber-400
               `}
             >
@@ -308,7 +308,7 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
           </div>
 
           {dash && stats !== null && stats.loopCount > 1 && (
-            <p className="text-xs leading-relaxed text-neutral-500">
+            <p className="text-xs/relaxed text-neutral-500">
               Drag two balls together and watch the dashes jump at the moment the loops merge — loop identity is not
               continuous across a topology change, which is the real problem with stroke-dash animation here.
             </p>

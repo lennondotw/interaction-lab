@@ -23,7 +23,8 @@ export const NavBackButton: FC<NavBackButtonProps> = ({ className }) => {
         `
           flex size-7 cursor-pointer items-center justify-center rounded-sm text-neutral-700 transition-colors
           hover:bg-black/5
-          dark:text-neutral-200 dark:hover:bg-white/10
+          dark:text-neutral-200
+          dark:hover:bg-white/10
         `,
         className
       )}

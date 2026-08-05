@@ -23,7 +23,7 @@ const Layout: FC<{ className?: string; children: React.ReactNode }> = ({ childre
       className={cn(
         `
           mx-auto grid min-h-screen w-screen max-w-4xl grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start
-          justify-center gap-2 px-2 py-2
+          justify-center gap-2 p-2
           md:grid-cols-[repeat(auto-fill,minmax(150px,200px))] md:px-6 md:py-4
         `,
         className
@@ -157,8 +157,8 @@ export const EagerLayoutSideBySide: FC = () => {
         </div>
         <EagerLayout
           className={cn(`
-            w-full grid-cols-[repeat(auto-fill,minmax(100px,1fr))] px-0 py-0
-            md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:px-0 md:py-0
+            w-full grid-cols-[repeat(auto-fill,minmax(100px,1fr))] p-0
+            md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:p-0
           `)}
           onFirstClose={() => withEagerTimerRef.current?.start()}
           onLastClose={() => withEagerTimerRef.current?.pause()}
@@ -177,8 +177,8 @@ export const EagerLayoutSideBySide: FC = () => {
         </div>
         <EagerLayoutWithoutEager
           className={cn(`
-            w-full grid-cols-[repeat(auto-fill,minmax(100px,1fr))] px-0 py-0
-            md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:px-0 md:py-0
+            w-full grid-cols-[repeat(auto-fill,minmax(100px,1fr))] p-0
+            md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:p-0
           `)}
           onFirstClose={() => withoutEagerTimerRef.current?.start()}
           onLastClose={() => withoutEagerTimerRef.current?.pause()}
@@ -288,7 +288,7 @@ const Landscape: FC<{
           {/* image overlay */}
           <div
             className={cn(`
-              pointer-events-none absolute top-0 right-0 left-0 hidden h-15 bg-linear-to-b from-black/10 to-black/0
+              pointer-events-none absolute inset-x-0 top-0 hidden h-15 bg-linear-to-b from-black/10 to-black/0
               [&:where([data-name='tile-root']:has(>_img[data-state='loaded'])_*)]:block
             `)}
           />

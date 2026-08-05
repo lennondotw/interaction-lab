@@ -26,7 +26,7 @@ export const DebugPanel: FC<DebugPanelProps> = ({
   return (
     <div
       className={`
-        pointer-events-none fixed right-0 bottom-4 left-0 hidden overflow-clip font-mono text-[10px] select-none
+        pointer-events-none fixed inset-x-0 bottom-4 hidden overflow-clip font-mono text-[10px] select-none
         lg:flex lg:flex-col lg:items-center lg:gap-2
       `}
     >

@@ -43,8 +43,7 @@ export const NativeScrollRuler: FC<NativeScrollRulerProps> = ({ className, side 
     aria-hidden="true"
     className={cn(
       `
-        pointer-events-none
-        [--native-scroll-ruler-tick:0_0_0]
+        pointer-events-none [--native-scroll-ruler-tick:0_0_0]
         dark:[--native-scroll-ruler-tick:255_255_255]
       `,
       className

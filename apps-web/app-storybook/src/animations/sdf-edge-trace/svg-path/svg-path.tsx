@@ -208,7 +208,7 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
         >
           SVG path
         </h1>
-        <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-sm/relaxed text-neutral-500">
           The same trace, drawn to a canvas and to an SVG <span className="font-mono text-xs">&lt;path&gt;</span>. Both
           walk the geometry through one shared emitter, so they cannot disagree on the curve — on{' '}
           <span className="font-mono text-xs">both</span> the thin line rides inside the thick band, and leaving it
@@ -373,7 +373,7 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
             />
           </div>
 
-          <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+          <p className="max-w-prose text-xs/relaxed text-neutral-500">
             <span className="font-mono">build d</span> is the string alone. The browser reparsing it lands in the paint
             cost of the frame instead, which is why these two together are the honest comparison against{' '}
             <span className="font-mono">trace</span> at {totalMs.toFixed(3)} ms.{' '}
@@ -385,7 +385,7 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
           {precision === 0 && (
             <p
               className={`
-                max-w-prose text-xs leading-relaxed text-amber-800
+                max-w-prose text-xs/relaxed text-amber-800
                 dark:text-amber-400
               `}
             >

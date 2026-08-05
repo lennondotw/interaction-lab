@@ -237,7 +237,7 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
         >
           Clip and outline
         </h1>
-        <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-sm/relaxed text-neutral-500">
           One <span className="font-mono text-xs">d</span> string, three consumers — a fill, an inner border, and a{' '}
           <span className="font-mono text-xs">clip-path</span> over live DOM content. None of them touch layout, and the
           next suspicion — that a clip moving every frame would make its subtree re-raster — does not survive
@@ -438,7 +438,7 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
             />
           </div>
 
-          <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+          <p className="max-w-prose text-xs/relaxed text-neutral-500">
             <span className="font-mono">fps</span> is here to catch the clip, and it comes up empty. Nothing about the
             trace changes when you switch <span className="font-mono">content</span>, so anything{' '}
             <span className="font-mono">fps</span> did would be the browser re-rastering that subtree against a moved
@@ -451,7 +451,7 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
           {pinched && (
             <p
               className={`
-                max-w-prose text-xs leading-relaxed text-amber-800
+                max-w-prose text-xs/relaxed text-amber-800
                 dark:text-amber-400
               `}
             >

@@ -40,7 +40,7 @@ const Bar: FC<{ className?: string }> = ({ className }) => (
 );
 
 const Caption: FC<{ children: ReactNode }> = ({ children }) => (
-  <p className="max-w-100 text-center text-xs leading-relaxed opacity-40">{children}</p>
+  <p className="max-w-100 text-center text-xs/relaxed opacity-40">{children}</p>
 );
 
 const ACTION_CLASS = `
@@ -506,7 +506,7 @@ const FlowDemo: FC = () => {
           // carries the higher z-index, because overlap is what reads as depth —
           // and the frame is bottom-aligned so the overlap always lands on the card.
           <SafeArea>
-            <div className="flex flex-col items-center px-5 pt-5 pb-5">
+            <div className="flex flex-col items-center p-5">
               <Frame className="h-36 w-52">the thing being set up</Frame>
 
               <div className="relative z-10 -mt-2 w-full">

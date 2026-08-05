@@ -57,12 +57,12 @@ export const ScrollLinkedTriggered: FC = () => {
   return (
     <>
       <div className="relative w-full">
-        <div className="flex h-[100vh] w-full items-center justify-center bg-green-500/10">Scroll down</div>
+        <div className="flex h-screen w-full items-center justify-center bg-green-500/10">Scroll down</div>
 
         <div className="h-[500vh] w-full bg-red-500/10" ref={sectionRef}>
           <div
             className={`
-              sticky top-0 flex h-[100vh] w-full flex-row items-center justify-center overflow-clip bg-amber-500/10
+              sticky top-0 flex h-screen w-full flex-row items-center justify-center overflow-clip bg-amber-500/10
             `}
           >
             <motion.div
@@ -75,14 +75,13 @@ export const ScrollLinkedTriggered: FC = () => {
           </div>
         </div>
 
-        <div className="flex h-[100vh] w-full items-center justify-center bg-blue-500/10">The end</div>
+        <div className="flex h-screen w-full items-center justify-center bg-blue-500/10">The end</div>
       </div>
       <div
         className={cn(`
-          fixed right-0 bottom-[4px] left-0 grid
-          [grid-template-columns:repeat(2,180px)]
-          justify-center justify-items-center gap-2 p-2 font-mono text-xs opacity-50 select-none
-          md:[grid-template-columns:repeat(4,180px)]
+          fixed inset-x-0 bottom-[4px] grid grid-cols-[repeat(2,180px)] justify-center justify-items-center gap-2 p-2
+          font-mono text-xs opacity-50 select-none
+          md:grid-cols-[repeat(4,180px)]
         `)}
       >
         <p>

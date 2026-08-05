@@ -242,7 +242,7 @@ export const ShapeGlass: FC<ShapeGlassProps> = ({
                 width={56}
                 height={56}
                 className={`
-                  size-14 rounded border border-neutral-200
+                  size-14 rounded-sm border border-neutral-200
                   dark:border-neutral-800
                 `}
                 style={{ filter: channel.filter }}

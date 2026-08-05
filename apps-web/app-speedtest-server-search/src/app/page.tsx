@@ -71,7 +71,7 @@ export default function Home() {
           {serversWithDistance.map((server) => (
             <li
               key={server.id}
-              className="rounded-md bg-neutral-500/10 px-3 py-3 outline-1 -outline-offset-1 outline-blue-200/40"
+              className="rounded-md bg-neutral-500/10 p-3 outline-1 -outline-offset-1 outline-blue-200/40"
             >
               <div className="-mt-1 flex flex-row items-baseline justify-between gap-2">
                 <span className="font-medium">

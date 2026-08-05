@@ -24,7 +24,7 @@ export const FpsIndicator: FC<{ className?: string; defaultShowAnimation?: boole
     <div
       className={cn(
         `
-          flex h-fit w-fit flex-col items-stretch gap-3 bg-red-500/50 p-2 font-mono text-xs text-black
+          flex size-fit flex-col items-stretch gap-3 bg-red-500/50 p-2 font-mono text-xs text-black
           dark:text-white
         `,
         className

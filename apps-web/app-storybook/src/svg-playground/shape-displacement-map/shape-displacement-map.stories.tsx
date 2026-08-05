@@ -16,7 +16,7 @@ type Story = StoryObj<typeof ShapeGlass>;
  */
 const StagedGlass: FC<ComponentProps<typeof ShapeGlass>> = (props) => (
   <div className="flex w-full items-center justify-center p-4">
-    <div className={props.channelLayout === 'filmstrip' ? 'w-full max-w-[64rem]' : 'w-[19rem]'}>
+    <div className={props.channelLayout === 'filmstrip' ? 'w-full max-w-5xl' : 'w-76'}>
       <ShapeGlass {...props} />
     </div>
   </div>

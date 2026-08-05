@@ -88,7 +88,8 @@ export const Segmented = <T extends string | number>({ options, value, onChange,
             : `
               text-neutral-500
               not-disabled:hover:text-neutral-900
-              dark:text-neutral-400 dark:not-disabled:hover:text-neutral-100
+              dark:text-neutral-400
+              dark:not-disabled:hover:text-neutral-100
             `
         )}
       >

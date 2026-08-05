@@ -69,7 +69,7 @@ interface Anchor {
 export const useScrollAnchoring = ({
   containerRef,
   containerId,
-  defaultEnableAnchoring = true,
+  defaultEnableAnchoring,
 }: {
   containerRef: RefObject<HTMLElement | null>;
   containerId: string;

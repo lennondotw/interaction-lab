@@ -308,7 +308,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
         >
           Rect field
         </h1>
-        <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-sm/relaxed text-neutral-500">
           The other three stories vary where the contour goes and keep the sources fixed as draggable balls. This varies
           the sources: the boxes below are ordinary flex children, and the field&apos;s primitives are the rects the
           layout gave them. Turn on the overlay to watch the quadtree subdivide along the row and cull everything else —
@@ -376,7 +376,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
         <div
           className={`
             flex w-full flex-col gap-5
-            xl:w-[26rem]
+            xl:w-104
           `}
         >
           <div className="flex flex-row flex-wrap gap-x-8 gap-y-4">
@@ -492,7 +492,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
           {degenerate && traversal === 'sparse' && (
             <p
               className={`
-                max-w-prose text-xs leading-relaxed text-amber-800
+                max-w-prose text-xs/relaxed text-amber-800
                 dark:text-amber-400
               `}
             >
@@ -507,7 +507,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
           )}
 
           {blend === 0 && (
-            <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+            <p className="max-w-prose text-xs/relaxed text-neutral-500">
               At blend 0 nothing merges, so the contour is each rect&apos;s own rounded outline and sits exactly on the
               dashed sources. That is the check that the box primitive is the shape it claims to be — the field adds
               nothing here, so any gap would be the primitive being wrong.

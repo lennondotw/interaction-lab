@@ -560,8 +560,8 @@ export const ScrollAnchoring: FC = () => {
 
         <div
           className={`
-            pointer-events-none fixed top-0 right-0 left-0 flex flex-col border-b border-neutral-400/50
-            bg-neutral-200/70 px-3 py-2 font-mono text-xs text-black opacity-70
+            pointer-events-none fixed inset-x-0 top-0 flex flex-col border-b border-neutral-400/50 bg-neutral-200/70
+            px-3 py-2 font-mono text-xs text-black opacity-70
             dark:border-neutral-500/30 dark:bg-neutral-900 dark:text-white
           `}
         >
@@ -689,15 +689,9 @@ export const ScrollContainer = forwardRef<ScrollContainerControls, ScrollContain
       <div
         data-scroll-container-id={id}
         ref={containerRef}
-        className={cn(
-          `
-            relative
-            [overflow-anchor:none]
-          `,
-          className
-        )}
+        className={cn(`relative [overflow-anchor:none]`, className)}
       >
-        <div data-scroll-container-anchor-id={id} className="invisible absolute top-0 left-0 h-0 w-0 overflow-clip" />
+        <div data-scroll-container-anchor-id={id} className="invisible absolute top-0 left-0 size-0 overflow-clip" />
         <div
           data-scroll-container-content-id={id}
           className={cn('will-change-transform', props.contentProps?.className)}
@@ -729,8 +723,8 @@ export const Profile: FC<{
 
   return (
     <div className={cn('flex flex-row items-center gap-3 px-3', className)} style={paddingBlockStyle}>
-      <div className="h-8 w-8 shrink-0 rounded-full bg-neutral-500/50">
-        <img src={avatar} alt={name} className="h-full w-full rounded-full" />
+      <div className="size-8 shrink-0 rounded-full bg-neutral-500/50">
+        <img src={avatar} alt={name} className="size-full rounded-full" />
       </div>
       <div className="flex flex-col">
         <div data-scroll-anchor className="self-start text-sm font-medium">
@@ -749,7 +743,7 @@ export const Item: FC<{ children?: ReactNode; className?: string }> = ({ childre
     <div
       className={cn(
         `
-          border-t-[0.5px] border-b-[0.5px] border-neutral-500/50 bg-white/50
+          border-y-[0.5px] border-neutral-500/50 bg-white/50
           dark:bg-black/50
         `,
         className

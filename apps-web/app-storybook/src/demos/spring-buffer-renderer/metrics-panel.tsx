@@ -31,7 +31,7 @@ export const MetricsPanel: FC<{ className?: string }> = ({ className }) => {
     <div
       className={cn(
         `
-          w-full rounded-md border border-neutral-400/50 bg-white/60 p-4 font-mono text-xs leading-relaxed
+          w-full rounded-md border border-neutral-400/50 bg-white/60 p-4 font-mono text-xs/relaxed
           dark:border-neutral-600/40 dark:bg-black/60
         `,
         className

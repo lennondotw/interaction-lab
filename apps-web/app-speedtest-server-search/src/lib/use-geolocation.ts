@@ -26,7 +26,7 @@ export function useGeolocation(): UseGeolocationResult {
         PERMISSION_DENIED: 1,
         POSITION_UNAVAILABLE: 2,
         TIMEOUT: 3,
-      } as GeolocationPositionError);
+      });
       setIsLoading(false);
       return;
     }

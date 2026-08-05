@@ -10,7 +10,7 @@ export const Overflow: FC<{ demoId?: string }> = ({ demoId }) => {
       className="overflow-x-auto overflow-y-clip py-[2em] ring-1 ring-red-500"
       data-overflow-demo-id={demoId ?? internalDemoId}
     >
-      <div className="bg-amber-500/20 px-[1em] py-[1em] outline-1 -outline-offset-1 outline-amber-500">
+      <div className="bg-amber-500/20 p-[1em] outline-1 -outline-offset-1 outline-amber-500">
         <div
           onClick={() => setContent(faker.lorem.sentence({ min: 1, max: 3 }))}
           className="mr-[-3em] bg-amber-500/20 px-[4em] py-[1em] outline-1 -outline-offset-1 outline-amber-500"

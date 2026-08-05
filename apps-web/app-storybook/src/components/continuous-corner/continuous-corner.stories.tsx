@@ -87,7 +87,7 @@ export const AutoHeight: Story = {
       <ContinuousCorner {...args}>
         <p
           className={`
-            text-sm leading-relaxed text-neutral-600
+            text-sm/relaxed text-neutral-600
             dark:text-neutral-400
           `}
         >
@@ -356,7 +356,7 @@ export const NestedScroller: Story = {
             <p
               key={index}
               className={`
-                text-sm leading-relaxed text-neutral-600
+                text-sm/relaxed text-neutral-600
                 dark:text-neutral-400
               `}
             >

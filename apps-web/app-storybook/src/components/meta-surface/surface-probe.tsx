@@ -236,7 +236,7 @@ export const MetaSurfaceProbe: FC = () => {
         >
           MetaSurface layout tracking
         </h1>
-        <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-sm/relaxed text-neutral-500">
           Each case mutates the layout and samples how far the painted contour drifts from where the participants
           actually are. The error is <span className="font-mono text-xs">max |field(v)|</span> over the painted vertices
           against rects measured the other way — <span className="font-mono text-xs">getBoundingClientRect</span> where

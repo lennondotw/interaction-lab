@@ -24,7 +24,7 @@ export const TimelineRuler: FC<TimelineRulerProps> = ({ scrollProgress, flashing
         return (
           <div key={`center-${i}`}>
             <div
-              className="absolute top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-500"
+              className="absolute top-1/2 h-3 w-0.5 -translate-1/2 rounded-full bg-neutral-500"
               style={{ left: `calc(${position}% * 0.92 + 4%)` }}
               title={`Card ${i + 1} centered: ${position.toFixed(0)}%`}
             />
@@ -58,10 +58,7 @@ export const TimelineRuler: FC<TimelineRulerProps> = ({ scrollProgress, flashing
             {/* Backward trigger point */}
             <div
               className={cn(
-                `
-                  absolute top-1/2 h-5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-600
-                  ease-out
-                `,
+                `absolute top-1/2 h-5 w-0.5 -translate-1/2 rounded-full transition-all duration-600 ease-out`,
                 flashingBackward.has(i) ? 'bg-red-200 duration-0' : 'bg-cyan-600'
               )}
               style={{ left: `calc(${triggerLow}% * 0.92 + 4%)` }}
@@ -70,10 +67,7 @@ export const TimelineRuler: FC<TimelineRulerProps> = ({ scrollProgress, flashing
             {/* Forward trigger point */}
             <div
               className={cn(
-                `
-                  absolute top-1/2 h-5 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-600
-                  ease-out
-                `,
+                `absolute top-1/2 h-5 w-0.5 -translate-1/2 rounded-full transition-all duration-600 ease-out`,
                 flashingForward.has(i) ? 'bg-red-200 duration-0' : 'bg-cyan-600'
               )}
               style={{ left: `calc(${triggerHigh}% * 0.92 + 4%)` }}
@@ -85,9 +79,7 @@ export const TimelineRuler: FC<TimelineRulerProps> = ({ scrollProgress, flashing
 
       {/* Current scroll position indicator */}
       <motion.div
-        className={`
-          absolute top-1/2 h-7 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-lg shadow-white/30
-        `}
+        className={`absolute top-1/2 h-7 w-0.5 -translate-1/2 rounded-full bg-white shadow-lg shadow-white/30`}
         style={{ left: scrollLeft }}
       />
     </div>

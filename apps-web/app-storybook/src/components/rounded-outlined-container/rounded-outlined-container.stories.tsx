@@ -194,7 +194,7 @@ export const ScrollContainer: Story = {
         </h2>
         <div
           className={`
-            flex flex-col gap-4 text-sm leading-relaxed text-neutral-600
+            flex flex-col gap-4 text-sm/relaxed text-neutral-600
             dark:text-neutral-400
           `}
         >

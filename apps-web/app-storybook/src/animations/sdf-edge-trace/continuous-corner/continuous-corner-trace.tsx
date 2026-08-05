@@ -290,7 +290,7 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
         >
           Continuous corners
         </h1>
-        <p className="max-w-prose text-sm leading-relaxed text-neutral-500">
+        <p className="max-w-prose text-sm/relaxed text-neutral-500">
           The corner term is a p-norm now, which buys CSS&apos;s{' '}
           <span className="font-mono text-xs">corner-shape: superellipse(k)</span> family exactly — that curve is
           confined to the <span className="font-mono text-xs">r × r</span> corner box, and the p-norm level set in that
@@ -479,13 +479,13 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
             <Stat label="field evals" value={stats ? `${stats.fieldEvals}` : '—'} />
           </div>
 
-          <p className="max-w-prose text-xs leading-relaxed text-neutral-500">{scene.note}</p>
-          {scene.usesFamily && <p className="max-w-prose text-xs leading-relaxed text-neutral-500">{family.note}</p>}
+          <p className="max-w-prose text-xs/relaxed text-neutral-500">{scene.note}</p>
+          {scene.usesFamily && <p className="max-w-prose text-xs/relaxed text-neutral-500">{family.note}</p>}
 
           {stats?.clamped === true && scene.measured && (
             <p
               className={`
-                max-w-prose text-xs leading-relaxed text-amber-800
+                max-w-prose text-xs/relaxed text-amber-800
                 dark:text-amber-400
               `}
             >
@@ -503,7 +503,7 @@ export const SdfContinuousCorner: FC<{ className?: string }> = ({ className }) =
           )}
 
           {blend > 0 && members.length > 1 && (
-            <p className="max-w-prose text-xs leading-relaxed text-neutral-500">
+            <p className="max-w-prose text-xs/relaxed text-neutral-500">
               Bridged at <span className="font-mono">blend = {blend}</span>, which closes any gap up to{' '}
               <span className="font-mono">{blend / 2}px</span> — the fold lowers the field by at most{' '}
               <span className="font-mono">blend / 4</span>, and a gap&apos;s midpoint starts at half the gap. Corners of

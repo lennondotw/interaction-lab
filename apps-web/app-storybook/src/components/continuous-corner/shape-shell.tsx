@@ -115,8 +115,7 @@ export const ContinuousShapeShell: FC<
       ref={rootRef}
       className={cn(
         `
-          relative isolate
-          [corner-shape:var(--continuous-corner-shape)]
+          relative isolate [corner-shape:var(--continuous-corner-shape)]
           supports-[corner-shape:squircle]:[--continuous-corner-radius-scale:var(--continuous-corner-radius-compensation)]
         `,
         className
@@ -131,13 +130,7 @@ export const ContinuousShapeShell: FC<
     >
       <div
         aria-hidden="true"
-        className={cn(
-          `
-            absolute inset-0 -z-10
-            [corner-shape:var(--continuous-corner-shape)]
-          `,
-          surfaceClassName
-        )}
+        className={cn(`absolute inset-0 -z-10 [corner-shape:var(--continuous-corner-shape)]`, surfaceClassName)}
         style={shapeStyle}
         data-slot="fill"
       />
@@ -153,10 +146,7 @@ export const ContinuousShapeShell: FC<
         // container for no reason.
         <div
           className={cn(
-            `
-              size-full
-              [corner-shape:var(--continuous-corner-shape)]
-            `,
+            `size-full [corner-shape:var(--continuous-corner-shape)]`,
             !usingPath && 'overflow-hidden',
             contentClassName
           )}
