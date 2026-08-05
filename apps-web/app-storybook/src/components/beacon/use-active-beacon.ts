@@ -21,7 +21,7 @@
  */
 
 import { useMotionValue, useReducedMotion, useSpring, type MotionValue } from 'motion/react';
-import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BeaconStoreContext } from './context.js';
 
 const POSITION_SPRING = { stiffness: 380, damping: 30, mass: 0.9 } as const;
@@ -143,17 +143,15 @@ export function useActiveBeacon(
     setLastActivePreserveOnEmpty(activePreserveOnEmpty);
   }
 
-  const initialRectRef = useRef(initialRect);
   // Tracks `initialRect` until the first activation, so a caller that measures
-  // it asynchronously still seeds the springs from the real rect. Writing it in
-  // render is safe *because the only read is in an effect* (the `hasBeenActive`
-  // branch below): effects run after commit, so whatever an abandoned render
-  // wrote has already been overwritten by the committed one. Moving the write
-  // into an effect would trade that for a silent ordering dependency — it would
-  // have to be declared above the effect that reads it. Revisit if this ref ever
-  // gains a render-phase reader.
-  // eslint-disable-next-line react-hooks/refs
-  initialRectRef.current = initialRect;
+  // it asynchronously still seeds the springs from the real rect. Mirrored in a
+  // layout effect rather than during render: the sole reader is the passive
+  // effect below, and every layout effect runs before every passive one, so the
+  // write always lands first no matter where this sits.
+  const initialRectRef = useRef(initialRect);
+  useLayoutEffect(() => {
+    initialRectRef.current = initialRect;
+  });
 
   useEffect(() => {
     if (!active) {
