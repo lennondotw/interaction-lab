@@ -43,6 +43,27 @@ open questions, in the order they are worth answering:
 - [ ] displacement_mat's semantics. inferred from a field name and a float4 type
       as the hook for transforming a cached displacement field; unverified.
 
+toolchain, once upstream moves:
+- [ ] typescript 7. the pin to 6.x is not ours to lift yet: TS 7 ships the
+      compiler as platform binaries and no longer emits lib/typescript.js, and
+      storybook's docgen path (@storybook/react-vite -> react-docgen-typescript,
+      @joshwooding/vite-plugin-react-docgen-typescript) reads that JS API.
+      removing typescript-eslint cleared the original reason for the pin; this
+      one outlived it. the typecheck already runs on tsgo, which is a separate
+      native binary, so only the tooling side is waiting. webapp-factory has no
+      storybook and is on 7.0.2 with its own native tsc and no native-preview —
+      that repo is the check on whether the rest of the stack is ready.
+- [ ] revisit oxlint's react-hooks coverage. refs, set-state-in-effect, use-memo
+      and purity have no equivalent, and exhaustive-deps has one in name only —
+      with this repo's eleven suppressions removed it reports nothing at any of
+      them. those four found real bugs here in august. README lists the full set
+      that stopped being checked.
+- [ ] retry an oxlint.config.ts. as of oxlint 1.77 a .ts config loads plugins
+      and rules but type-aware rules never fire from it, even with
+      options.typeAware set and --type-aware passed, which is why the config is
+      JSONC. a .ts config would typecheck itself and let the tailwind entry
+      point be a named constant.
+
 notes that keep biting:
 - feDisplacementMap gathers, its range is +/-scale/2, it needs
   color-interpolation-filters="sRGB", and its map must be opaque everywhere —
