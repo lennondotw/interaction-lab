@@ -129,7 +129,20 @@ export function useActiveBeacon(
 
   const [mounted, setMounted] = useState(false);
   const hasBeenActiveRef = useRef(false);
-  const lastActivePreserveOnEmptyRef = useRef(true);
+
+  // Remembered so the returned `preserveOnEmpty` survives the slot going empty:
+  // callers need the *last* active beacon's choice to decide whether to keep
+  // gliding once there is nothing active. State rather than a ref, because it
+  // feeds the return value — mutating a ref would not re-render, so the hook
+  // could keep reporting a previous activation's choice. Adjusted during render
+  // (React's documented recipe, same as elsewhere in this repo) rather than from
+  // an effect, which would cost a second paint per activation.
+  const [lastActivePreserveOnEmpty, setLastActivePreserveOnEmpty] = useState(true);
+  const activePreserveOnEmpty = active ? active.preserveOnEmpty !== false : lastActivePreserveOnEmpty;
+  if (active && lastActivePreserveOnEmpty !== activePreserveOnEmpty) {
+    setLastActivePreserveOnEmpty(activePreserveOnEmpty);
+  }
+
   const initialRectRef = useRef(initialRect);
   // Tracks `initialRect` until the first activation, so a caller that measures
   // it asynchronously still seeds the springs from the real rect. Writing it in
@@ -155,7 +168,6 @@ export function useActiveBeacon(
     const y = active.y.get();
     const w = active.w.get();
     const h = active.h.get();
-    lastActivePreserveOnEmptyRef.current = active.preserveOnEmpty !== false;
 
     if (!hasBeenActiveRef.current) {
       hasBeenActiveRef.current = true;
@@ -222,6 +234,6 @@ export function useActiveBeacon(
     targetY: active?.y.get() ?? 0,
     targetWidth: active?.w.get() ?? 0,
     targetHeight: active?.h.get() ?? 0,
-    preserveOnEmpty: active ? active.preserveOnEmpty !== false : lastActivePreserveOnEmptyRef.current,
+    preserveOnEmpty: activePreserveOnEmpty,
   };
 }

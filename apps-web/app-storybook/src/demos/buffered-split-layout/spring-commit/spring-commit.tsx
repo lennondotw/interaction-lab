@@ -197,6 +197,17 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   const metricsRef = useRef<LayoutMetrics | null>(null);
   const rightMetricsRef = useRef<HTMLPreElement>(null);
   const [trailingOpen, setTrailingOpen] = useState(initialTrailingOpen);
+  // Re-seed from the prop when a story arg flips, so the demo resets instead of
+  // keeping whatever the last manual toggle left behind. Adjusted during render
+  // rather than from an effect: the effect form rendered once with the stale
+  // value, then set state and rendered again, and React flags it as a cascading
+  // render. This is the documented adjust-state-on-prop-change recipe, and the
+  // extra render still lands before paint, so there is no flash either way.
+  const [lastInitialTrailingOpen, setLastInitialTrailingOpen] = useState(initialTrailingOpen);
+  if (lastInitialTrailingOpen !== initialTrailingOpen) {
+    setLastInitialTrailingOpen(initialTrailingOpen);
+    setTrailingOpen(initialTrailingOpen);
+  }
   const leftCommittedXPx = useMotionValue(0);
   const leftCommittedWidthPx = useMotionValue(0);
   const rightCommittedWidthPx = useMotionValue(0);
@@ -607,10 +618,6 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
   useEffect(() => {
     renderMetricsPanels();
   });
-
-  useEffect(() => {
-    setTrailingOpen(initialTrailingOpen);
-  }, [initialTrailingOpen]);
 
   useEffect(() => {
     const root = rootRef.current;
