@@ -21,7 +21,6 @@
     "@eslint/js": "catalog:",
     "@mdx-js/language-service": "catalog:",
     "@monorepo/tsconfig": "workspace:^",
-    "@next/eslint-plugin-next": "catalog:",
     "@types/eslint": "catalog:",
     "@types/eslint-config-prettier": "catalog:",
     "@types/node": "catalog:",

@@ -46,7 +46,6 @@
     "vaul": "catalog:"
   },
   "devDependencies": {
-    "@monorepo/app-types": "workspace:^",
     "@monorepo/tsconfig": "workspace:^",
     "@storybook/addon-docs": "catalog:",
     "@storybook/builder-vite": "catalog:",

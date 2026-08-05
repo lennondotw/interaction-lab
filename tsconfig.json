@@ -11,12 +11,6 @@
       "path": "./apps-web/app-storybook/tsconfig.json"
     },
     {
-      "path": "./apps-web/app-template-nextjs/tsconfig.json"
-    },
-    {
-      "path": "./apps-web/app-template-vite/tsconfig.json"
-    },
-    {
       "path": "./packages/utils/tsconfig.json"
     }
   ]

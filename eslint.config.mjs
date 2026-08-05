@@ -1,5 +1,4 @@
 import eslintJsPlugin from '@eslint/js';
-import next from '@next/eslint-plugin-next';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import eslintPluginBetterTailwindcss from 'eslint-plugin-better-tailwindcss';
 import * as mdx from 'eslint-plugin-mdx';
@@ -26,10 +25,6 @@ const STORYBOOK_FILES = ['**/{,.}*.stories.{,c,m}{j,t}s{,x}'];
 /** @type {string[]} */
 const STORYBOOK_MAIN_FILES = ['**/.storybook/main.{,c,m}{j,t}s'];
 
-/** @type {string[]} */
-const NEXTJS_FILES = ['apps/app-template-nextjs/src/**/{,.}*.{,c,m}{j,t}s{,x}'];
-
-const nextjsTemplateAppPath = new URL('./apps/app-template-nextjs/', import.meta.url);
 const storybookAppPath = new URL('./apps-web/app-storybook/', import.meta.url);
 const tailwindCssStylesheetPath = new URL('./packages/tailwindcss/tailwindcss.css', import.meta.url);
 
@@ -44,18 +39,13 @@ const eslintConfig = [
   // node_modules and eslint.config.mjs. ESLint 10 resolves config from the
   // linted file's directory, so leaving them in loads a second copy of every
   // plugin against a different eslint major.
-  // `next-env.d.ts` is written by Next on every build, is gitignored, and says
-  // so itself ("This file should not be edited") — its relative reference into
-  // .next/ trips no-cross-package-relative-import and cannot be fixed in place.
   {
     ignores: [
       '**/node_modules/',
       '**/dist/',
       '**/dist-*/',
       '**/storybook-static/',
-      '**/.next/',
       '**/__fixtures__/',
-      '**/next-env.d.ts',
       'archive/',
       '.claude/',
     ],
@@ -144,26 +134,6 @@ const eslintConfig = [
     },
     ignores: MDX_VIRTUAL_TS_FILES,
     files: STORYBOOK_MAIN_FILES,
-  },
-
-  // config for nextjs
-  {
-    plugins: {
-      '@next/next': next,
-    },
-    rules: {
-      ...next.configs.recommended.rules,
-      ...next.configs['core-web-vitals'].rules,
-    },
-    ignores: MDX_VIRTUAL_TS_FILES,
-    files: NEXTJS_FILES,
-  },
-  {
-    rules: {
-      '@next/next/no-html-link-for-pages': ['error', fileURLToPath(nextjsTemplateAppPath)],
-    },
-    ignores: MDX_VIRTUAL_TS_FILES,
-    files: NEXTJS_FILES,
   },
 
   // config for javascript/typescript code

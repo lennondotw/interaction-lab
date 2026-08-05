@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@monorepo/tsconfig/tsconfig.web.json",
   "compilerOptions": {
-    "types": ["@monorepo/app-types/vite", "node"],
+    "types": ["vite/client", "node"],
     "rootDir": ".",
     "outDir": "./node_modules/.cache/tsc-tests",
     "tsBuildInfoFile": "./node_modules/.cache/tsc-tests/tsconfig.tests.tsbuildinfo",
