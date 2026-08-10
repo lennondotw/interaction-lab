@@ -1,1 +1,8 @@
-export { DisclosureTree, type DisclosureMode, type DisclosureTreeProps } from './disclosure-tree.js';
+export {
+  countVisibleRows,
+  PITCH,
+  WireframeTree,
+  type DisclosureMode,
+  type WireframeTreeProps,
+  type WireNode,
+} from './wireframe-tree.js';
