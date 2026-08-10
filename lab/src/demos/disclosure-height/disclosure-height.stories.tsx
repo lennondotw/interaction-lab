@@ -126,19 +126,35 @@ const Plot: FC<{ series: number[] }> = ({ series }) => (
   </div>
 );
 
-const Metric: FC<{ label: string; value: string; bad?: boolean }> = ({ bad = false, label, value }) => (
+/**
+ * `data-metric` is the handle the archived probe reads, so the probe measures what
+ * this story measured rather than re-implementing the measurement and drifting from
+ * it. See `archive/2026-08-disclosure-height-target`.
+ */
+const Metric: FC<{ mode: DisclosureMode; label: string; value: string; bad?: boolean }> = ({
+  bad = false,
+  label,
+  mode,
+  value,
+}) => (
   <div className="flex items-baseline justify-between gap-2 font-mono text-[11px]">
     <span className="text-neutral-400">{label}</span>
-    <span className={bad ? 'text-red-500 tabular-nums' : 'text-neutral-500 tabular-nums'}>{value}</span>
+    <span
+      className={bad ? 'text-red-500 tabular-nums' : 'text-neutral-500 tabular-nums'}
+      data-metric={`${mode}-${label}`}
+    >
+      {value}
+    </span>
   </div>
 );
 
-const Panel: FC<{ title: string; subtitle: string; trace: Trace | null; children: ReactNode }> = ({
-  children,
-  subtitle,
-  title,
-  trace,
-}) => (
+const Panel: FC<{
+  mode: DisclosureMode;
+  title: string;
+  subtitle: string;
+  trace: Trace | null;
+  children: ReactNode;
+}> = ({ children, mode, subtitle, title, trace }) => (
   <div className="flex min-w-0 flex-col gap-3">
     <div className="flex min-w-0 flex-col gap-0.5">
       <span className="truncate font-mono text-xs text-neutral-600 dark:text-neutral-300">{title}</span>
@@ -153,10 +169,20 @@ const Panel: FC<{ title: string; subtitle: string; trace: Trace | null; children
     >
       <Plot series={trace?.series ?? []} />
       <div className="flex flex-col gap-0.5 px-3 pb-2">
-        <Metric bad={trace !== null && trace.maxStep > 60} label="step" value={trace ? `${trace.maxStep}px` : '—'} />
-        <Metric bad={trace !== null && trace.stallMs > 40} label="stall" value={trace ? `${trace.stallMs}ms` : '—'} />
-        <Metric label="settled" value={trace ? `${trace.settleMs}ms` : '—'} />
-        <Metric label="moved" value={trace ? `${trace.travelled}px` : '—'} />
+        <Metric
+          bad={trace !== null && trace.maxStep > 60}
+          label="step"
+          mode={mode}
+          value={trace ? `${trace.maxStep}px` : '—'}
+        />
+        <Metric
+          bad={trace !== null && trace.stallMs > 40}
+          label="stall"
+          mode={mode}
+          value={trace ? `${trace.stallMs}ms` : '—'}
+        />
+        <Metric label="settled" mode={mode} value={trace ? `${trace.settleMs}ms` : '—'} />
+        <Metric label="moved" mode={mode} value={trace ? `${trace.travelled}px` : '—'} />
       </div>
     </div>
 
@@ -225,7 +251,7 @@ const Comparison: FC = () => {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8">
+    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8" data-testid="stage">
       <div className="flex flex-wrap items-center gap-4">
         <button className={button} disabled={running} type="button" onClick={() => void replay()}>
           {running ? 'Recording…' : 'Replay the interrupt'}
@@ -257,7 +283,7 @@ const Comparison: FC = () => {
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:gap-6 xl:grid-cols-4">
         {MODES.map(({ mode, subtitle, title }) => (
-          <Panel key={mode} subtitle={subtitle} title={title} trace={traces[mode] ?? null}>
+          <Panel key={mode} mode={mode} subtitle={subtitle} title={title} trace={traces[mode] ?? null}>
             <WireframeTree expandedIds={expandedIds} mode={mode} nodes={nodes} onToggle={toggle} />
             <div ref={(node) => void markers.current.set(mode, node)} className="h-px w-full shrink-0 bg-red-500/40" />
           </Panel>
