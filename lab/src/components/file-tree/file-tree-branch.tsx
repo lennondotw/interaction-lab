@@ -230,17 +230,37 @@ export const FileTreeBranch: FC<FileTreeBranchProps> = ({ actionsLabel, expanded
       {isFolder ? (
         /*
           The disclosure. Mounted for every folder from the first render and never
-          unmounted, which is what lets the height animate in both directions
-          without `AnimatePresence` — and sidesteps its `initial={false}` trap,
-          where the child that mounts on the first render has its enter animation
-          vetoed *permanently* and comes back invisible after an exit completes.
+          unmounted, which is what lets it animate in both directions without
+          `AnimatePresence` — and sidesteps its `initial={false}` trap, where the
+          child that mounts on the first render has its enter animation vetoed
+          *permanently* and comes back invisible after an exit completes.
 
-          `height: auto` rather than a measured number: Motion resolves `auto` by
-          applying it, measuring the box, animating between the two numbers, and
-          then putting `auto` back as the final keyframe. So an open folder is left
-          on `auto`, and a nested folder opening inside it takes this one along for
-          free, on the same frame, with nothing observing anything — the
-          `ResizeObserver` this used to need is the layout engine's job again.
+          # The animation owns a ratio, not a length
+
+          `grid-template-rows` travels between two unitless fractions, and the
+          layout engine resolves what the fraction is a fraction *of* — this row's
+          content height — on every frame. So the animation never holds a length,
+          and there is no length that can go stale.
+
+          That matters because the obvious version, `height: 0 → auto`, is stale by
+          construction the moment a folder opens inside a folder that is still
+          opening. Motion resolves `auto` by measuring, *once*, on the frame the
+          animation starts, and writes the string `auto` back on the frame it
+          finishes. Open this folder and then one inside it 150ms later and the
+          outer clip flies to a target 156px short of the content it now has, pins
+          there for ~110ms with the lower half of the subtree clipped away, and then
+          steps 152px in a single frame when the final keyframe lands. Measured, four
+          candidate mechanisms compared, in
+          `archive/2026-08-disclosure-height-target`.
+
+          The fraction is also why nothing observes anything: a nested folder growing
+          mid-flight pushes this one open on the same frame it happens, with no
+          `ResizeObserver` and no re-targeting.
+
+          `min-h-0 overflow-hidden` on the inner child is load-bearing, not hygiene.
+          It is what makes the grid track's base size zero; without it the track
+          cannot shrink below the content's min-content contribution and the collapse
+          stops part-way.
 
           `initial={false}` so a tree that mounts with folders already open paints
           them open instead of animating every one of them from zero on frame one.
@@ -248,27 +268,31 @@ export const FileTreeBranch: FC<FileTreeBranchProps> = ({ actionsLabel, expanded
           `inert` while closed is what makes keeping the subtree mounted honest: it
           takes the hidden rows out of the accessibility tree and out of the focus
           order, so `aria-expanded="false"` cannot be contradicted by a row a screen
-          reader or a Tab press can still reach inside a zero-height box.
+          reader or a Tab press can still reach inside a zero-height box. Both
+          wrappers are `role="none"`, so the rows inside stay direct `treeitem`
+          children of the tree however many boxes the disclosure needs.
         */
         <motion.div
-          animate={{ height: isExpanded ? 'auto' : 0 }}
-          className="overflow-hidden"
+          animate={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+          className="grid overflow-hidden"
           initial={false}
           inert={!isExpanded}
           role="none"
           transition={disclosureTransition(prefersReducedMotion)}
         >
-          {hasEverExpanded
-            ? siblingRows(node.children ?? [], childParentIds(row), expandedIds).map((childRow) => (
-                <FileTreeBranch
-                  key={childRow.node.id}
-                  actionsLabel={actionsLabel}
-                  expandedIds={expandedIds}
-                  row={childRow}
-                  tabbableId={tabbableId}
-                />
-              ))
-            : null}
+          <div className="min-h-0 overflow-hidden" role="none">
+            {hasEverExpanded
+              ? siblingRows(node.children ?? [], childParentIds(row), expandedIds).map((childRow) => (
+                  <FileTreeBranch
+                    key={childRow.node.id}
+                    actionsLabel={actionsLabel}
+                    expandedIds={expandedIds}
+                    row={childRow}
+                    tabbableId={tabbableId}
+                  />
+                ))
+              : null}
+          </div>
         </motion.div>
       ) : null}
     </>
