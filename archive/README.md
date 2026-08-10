@@ -35,7 +35,7 @@ composited by the window server and an in-process render would miss it silently.
 
 Browser probes are the exception, and they say so: they need
 `pnpm exec playwright install chromium`. Most also want a running Storybook
-(`pnpm --filter @monorepo/app-storybook dev`, or `STORYBOOK_URL` for a
+(`pnpm --filter @monorepo/lab dev`, or `STORYBOOK_URL` for a
 non-default port), because they drive the **real stories** rather than a copy of
 them and so cannot quietly drift from what ships — which is also the one thing
 they ask of the app, a `data-testid` handle on the stage under test.
@@ -69,3 +69,4 @@ the probe regenerates them.
 | [2026-08-view-transition-overlay-stacking](./2026-08-view-transition-overlay-stacking/README.md) | What does a View Transition commit do to overlays it knows nothing about?    | Covers and freezes them — naming fixes only paint.  |
 | [2026-08-liquid-glass-internals](./2026-08-liquid-glass-internals/README.md)                     | How does Apple's Liquid Glass compute its refraction and its dispersion?     | Six overlapping taps — and it ships with them off.  |
 | [2026-08-displacement-map-reuse](./2026-08-displacement-map-reuse/README.md)                     | When can one displacement map be reused, and what does a merge cost?         | Transforms are free; a merge wants an SDF instead.  |
+| [2026-08-disclosure-height-target](./2026-08-disclosure-height-target/README.md)                 | What should a disclosure animation own — a length or a ratio?                | A ratio — a resolved length is stale by design.     |
