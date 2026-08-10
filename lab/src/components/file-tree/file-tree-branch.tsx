@@ -141,9 +141,10 @@ export const FileTreeBranch: FC<FileTreeBranchProps> = ({ actionsLabel, expanded
    * with the state that hid them would animate an empty box shrinking.
    *
    * Written during render — the state-adjustment pattern — because it has to be
-   * true on the *same* commit that first sets `isExpanded`. The height animation
-   * resolves `auto` by measuring, so children arriving a commit later would be
-   * measured as zero and the first open of every folder would jump.
+   * true on the *same* commit that first sets `isExpanded`. The disclosure animates
+   * a fraction of whatever its content comes to, so children arriving one commit
+   * later would have the fraction travel against an empty box and then jump to full
+   * height on the frame they land.
    */
   const [hasEverExpanded, setHasEverExpanded] = useState(isExpanded);
 
