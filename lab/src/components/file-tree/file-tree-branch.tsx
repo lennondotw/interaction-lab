@@ -84,23 +84,37 @@ const DISCLOSURE_OVERLAY = 'inset-x-0.5 inset-y-3.5';
  * the hover state, so keyboard focus and pointer hover describe one target — which
  * is how a user can tell that Enter will do what a click would.
  *
- * `outline` rather than a ring, and `outline-offset-0` rather than the usual 2px:
- * an outline costs no layout and is not clipped by the disclosure's
- * `overflow-hidden`, and at zero offset it lands exactly on the highlight's edge
- * instead of floating in the 6px of clearance that separates two rows' highlights.
+ * `outline` rather than a ring, because an outline costs no layout — and drawn
+ * *inwards*, with a negative offset, because an outline is very much clipped by an
+ * ancestor's `overflow-hidden`. This overlay runs the full width of its column, and
+ * with no actions button the column reaches the row's right edge, which is also the
+ * disclosure's clip edge: measured, the clipper's right edge and the overlay's
+ * coincide exactly, so an outward ring had nowhere to paint and every row below
+ * depth 0 lost its right-hand side. A depth-0 row has no clipping ancestor at all,
+ * which is why the defect looked like it was about nesting.
+ *
+ * At `-outline-offset-2` the whole ring sits inside the box, so its outer edge lands
+ * on the highlight's edge rather than 2px beyond it — the same rounded rectangle as
+ * the hover state, which is the point of drawing it here.
  */
 const CONTENT_OVERLAY = `
   inset-x-0 inset-y-1.5
-  group-focus-visible/row:opacity-100 group-focus-visible/row:outline-2 group-focus-visible/row:outline-offset-0
-  group-focus-visible/row:outline-blue-500
+  group-focus-visible/row:-outline-offset-2 group-focus-visible/row:opacity-100
+  group-focus-visible/row:outline-2 group-focus-visible/row:outline-blue-500
   dark:group-focus-visible/row:outline-blue-400
 `;
 
-/** 28px, centred in the 36×52 column, with its own ring since the button owns focus. */
+/**
+ * 28px, centred in the 36×52 column, with its own ring since the button owns focus.
+ *
+ * Inset by the same 2px as the content's. Its 4px of column inset means an outward
+ * ring would have survived the clip here, but two focus rings in one component that
+ * sit differently against their highlights read as a mistake.
+ */
 const ACTIONS_OVERLAY = `
   inset-x-1 inset-y-3
-  group-focus-visible/tile:opacity-100 group-focus-visible/tile:outline-2 group-focus-visible/tile:outline-offset-0
-  group-focus-visible/tile:outline-blue-500
+  group-focus-visible/tile:-outline-offset-2 group-focus-visible/tile:opacity-100
+  group-focus-visible/tile:outline-2 group-focus-visible/tile:outline-blue-500
   dark:group-focus-visible/tile:outline-blue-400
 `;
 
