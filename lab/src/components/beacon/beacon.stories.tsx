@@ -31,9 +31,7 @@ const BUTTON_CLASS = `
   cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1.5 font-mono text-[12px] text-black/70
   hover:bg-black/5
   active:bg-black/10
-  disabled:cursor-not-allowed disabled:border-black/10 disabled:text-black/25 disabled:hover:bg-white/0
   dark:border-white/30 dark:text-white/80 dark:hover:bg-white/5 dark:active:bg-white/10
-  dark:disabled:border-white/10 dark:disabled:text-white/25 dark:disabled:hover:bg-white/0
 `;
 
 // Fixed box: the copy changes length between states, and the stories
@@ -265,55 +263,25 @@ export const PushPop: Story = {
   },
 };
 
-// Priority wins regardless of mount order, and it can be changed on a
-// beacon that is already registered — the two buttons walk the contender
-// up and down the ladder while the other two sit still. This is the only
-// path through the store's `replacePriority`: nothing is mounted or
-// unmounted here, so any handover you see is a live entry being re-ranked.
-//
-// Watch *where* the handover happens. The contender takes the surface at
-// `high`, not at `critical`, because at equal priority the most recently
-// pushed entry wins — and `replacePriority` also moves the entry it
-// re-ranks to the LIFO tail. So a tie is a win for whoever moved last,
-// which is the rule that makes `critical` look like the only special
-// level when it isn't.
-const PRIORITY_LADDER: readonly BeaconPriority[] = ['low', 'normal', 'high', 'critical'];
-
+// Priority wins regardless of mount order. The `critical` target
+// overrides the two lower-priority siblings when enabled; dismissing it
+// hands the surface back to the most-recently-pushed normal / high.
 export const Priority: Story = {
   render: function Render() {
-    const [priority, setPriority] = useState<BeaconPriority>('low');
-    const rung = PRIORITY_LADDER.indexOf(priority);
-    const step = (delta: number): void => {
-      const next = PRIORITY_LADDER[rung + delta];
-      if (next) setPriority(next);
-    };
+    const [critical, setCritical] = useState(false);
     return (
       <Frame>
-        <div className="flex items-center gap-3">
-          <button className={BUTTON_CLASS} disabled={rung === 0} onClick={() => step(-1)} type="button">
-            lower
-          </button>
-          <button
-            className={BUTTON_CLASS}
-            disabled={rung === PRIORITY_LADDER.length - 1}
-            onClick={() => step(1)}
-            type="button"
-          >
-            raise
-          </button>
-        </div>
+        <ToggleButton
+          offLabel="raise · critical"
+          on={critical}
+          onLabel="dismiss · critical"
+          onToggle={() => setCritical((v) => !v)}
+        />
         <div className="flex flex-wrap items-start gap-6">
-          <Target height={80} label="fixed · normal" priority="normal" width={168} />
-          <Target height={80} label="fixed · high" priority="high" width={168} />
-          {/* Fixed box: the label's length tracks the priority, and letting it
-              size the target would move the very thing being tracked. */}
-          <Target height={100} label={`contender · ${priority}`} priority={priority} width={208} />
+          <Target label="normal" width={160} height={80} priority="normal" />
+          <Target label="high" width={160} height={80} priority="high" />
+          <Target label="critical" width={200} height={100} priority="critical" enabled={critical} />
         </div>
-        <p className={NOTE_CLASS}>
-          Raise the contender. Nothing mounts or unmounts — the same beacon is re-ranked in place, and the surface
-          crosses to it at <code>high</code>, where it ties and wins on being the most recent. Lower it again and the
-          fixed <code>high</code> takes it back.
-        </p>
       </Frame>
     );
   },
