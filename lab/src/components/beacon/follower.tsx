@@ -36,6 +36,7 @@ import { AnimatePresence, motion, type MotionStyle, type MotionValue } from 'mot
 import { useContext, useEffect, useState, type CSSProperties, type FC, type ReactNode } from 'react';
 
 import { BeaconContainerContext } from './context.js';
+import { beaconOriginPercent } from './origin.js';
 import { useActiveBeacon, type BeaconInitialRect } from './use-active-beacon.js';
 
 const PRESERVED_EMPTY_RESTORE_DURATION_SEC = 0.2;
@@ -154,10 +155,13 @@ export const BeaconFollower: FC<BeaconFollowerProps> = ({
   // Under 'freeze' the caller wants spatial continuity on re-entry from
   // the frozen position, so leave the gate held.
   const releaseMountGate = expired || optedOut;
-  const { mounted, empty, x, y, width, height, targetWidth, targetHeight, preserveOnEmpty } = useActiveBeacon(slot, {
-    initialRect,
-    resetOnEmpty: onEmpty === 'hide' && (!canConfigurePreserveEmpty || releaseMountGate),
-  });
+  const { mounted, empty, x, y, width, height, targetWidth, targetHeight, preserveOnEmpty, origin } = useActiveBeacon(
+    slot,
+    {
+      initialRect,
+      resetOnEmpty: onEmpty === 'hide' && (!canConfigurePreserveEmpty || releaseMountGate),
+    }
+  );
   const shouldPreserveEmpty = canConfigurePreserveEmpty && preserveOnEmpty;
 
   // Adjust-state-during-render: React re-runs this component before
@@ -199,10 +203,30 @@ export const BeaconFollower: FC<BeaconFollowerProps> = ({
   const opacityDuration =
     fadePreservedEmpty && empty ? Math.max(0, preserveOnEmptyMs / 2 / 1000) : PRESERVED_EMPTY_RESTORE_DURATION_SEC;
 
+  // The active beacon's origin frame, rebuilt out of two CSS
+  // percentages so neither term of it goes through a spring:
+  //
+  // - `left` / `top` place the follower at the origin fraction of the
+  //   container (or the viewport). The browser re-resolves this during
+  //   layout, so a container that grows moves the follower in the same
+  //   frame it grows in — instantly, with no observer and nothing to
+  //   catch up on. This is what removes resize lag; springing this term
+  //   is what caused it.
+  // - `translate` backs off by the same fraction of the follower's own
+  //   box, putting its origin point (not its top-left) on the
+  //   coordinate. Percentages there resolve against the element itself,
+  //   so the compositor recomputes it on every frame of the size spring
+  //   and the anchor point holds still while the box grows around it.
+  //
+  // `translate` is an independent transform property, applied before
+  // `transform` and composing with it, so it coexists with the `x` / `y`
+  // motion writes rather than fighting them. It is also not one of
+  // motion's transform props, so it passes through as a plain style.
   const containerStyle: MotionStyle = {
     position: hasContainer ? 'absolute' : 'fixed',
-    top: 0,
-    left: 0,
+    left: beaconOriginPercent(origin.x),
+    top: beaconOriginPercent(origin.y),
+    translate: `${beaconOriginPercent(-origin.x)} ${beaconOriginPercent(-origin.y)}`,
     x,
     y,
     width,

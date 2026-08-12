@@ -13,6 +13,12 @@
  * - Velocity-continuous handoff when the active beacon swaps within a
  *   slot, implemented as a simple re-subscribe to the new entry's
  *   MotionValues without resetting the springs.
+ * - Reconciling origin frames across that handoff: two beacons may
+ *   measure themselves from different reference points, and the springs
+ *   hold a value in the outgoing one. It is converted to the incoming
+ *   frame before the renderer paints, so the surface keeps its position
+ *   and its velocity through a frame change instead of jumping by the
+ *   difference between the two.
  * - Optional `resetOnEmpty`: when the stack goes empty the mount gate
  *   is released so the NEXT active snaps fresh rather than gliding in
  *   from wherever the springs were last parked. Use under
@@ -23,7 +29,8 @@
 import { useMotionValue, useReducedMotion, useSpring, type MotionValue } from 'motion/react';
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { BeaconStoreContext } from './context.js';
+import { BeaconContainerContext, BeaconOriginContext, BeaconStoreContext } from './context.js';
+import { readBeaconOriginFrame, reframeBeaconCoordinate, type ResolvedBeaconOrigin } from './origin.js';
 
 const POSITION_SPRING = { stiffness: 380, damping: 30, mass: 0.9 } as const;
 const SIZE_SPRING = { stiffness: 420, damping: 32, mass: 1.0 } as const;
@@ -91,6 +98,15 @@ export interface ActiveBeacon {
   targetHeight: number;
   /** Whether the last active beacon allows empty-state preservation. */
   preserveOnEmpty: boolean;
+  /**
+   * Origin frame `x` / `y` (and `targetX` / `targetY`) are expressed in
+   * — the active beacon's, or the last active one's while the slot is
+   * empty. A renderer must place itself at this fraction of its
+   * container and offset by this fraction of its own box, or the
+   * coordinates mean nothing. `BeaconFollower` does it with CSS
+   * percentages; see its `containerStyle`.
+   */
+  origin: ResolvedBeaconOrigin;
 }
 
 export function useActiveBeacon(
@@ -98,6 +114,8 @@ export function useActiveBeacon(
   { resetOnEmpty = false, initialRect = null }: UseActiveBeaconOptions = {}
 ): ActiveBeacon {
   const store = useContext(BeaconStoreContext);
+  const containerRef = useContext(BeaconContainerContext);
+  const defaultOrigin = useContext(BeaconOriginContext);
 
   // Re-render only when the active entry's id changes — not on
   // lower-priority stack mutations or MotionValue updates.
@@ -143,6 +161,41 @@ export function useActiveBeacon(
   if (active && lastActivePreserveOnEmpty !== activePreserveOnEmpty) {
     setLastActivePreserveOnEmpty(activePreserveOnEmpty);
   }
+
+  // Remembered for the same reason as `preserveOnEmpty` above: while the
+  // slot is empty a frozen / preserved surface still has to paint, and it
+  // has to keep painting in the frame its springs hold.
+  const [lastOrigin, setLastOrigin] = useState(defaultOrigin);
+  const origin = active?.origin ?? lastOrigin;
+  if (active && (lastOrigin.x !== origin.x || lastOrigin.y !== origin.y)) {
+    setLastOrigin(origin);
+  }
+
+  // The frame the springs' current values are expressed in. It is the
+  // renderer's frame too, one render behind: `origin` above is already
+  // the new beacon's on the render that observes the swap, so the CSS
+  // percentages change on that render and the springs must be converted
+  // before it paints — hence a layout effect, not the passive one below.
+  // Skipped on first activation, where the passive effect jumps the
+  // springs to the target outright and no old value needs preserving.
+  const renderOriginRef = useRef<ResolvedBeaconOrigin>(origin);
+  useLayoutEffect(() => {
+    const from = renderOriginRef.current;
+    if (from.x === origin.x && from.y === origin.y) return;
+    renderOriginRef.current = origin;
+    if (!hasBeenActiveRef.current) return;
+    const held = reframeBeaconCoordinate(
+      { x: springX.get(), y: springY.get() },
+      { width: springW.get(), height: springH.get() },
+      readBeaconOriginFrame(containerRef?.current ?? null),
+      from,
+      origin
+    );
+    springX.jump(held.x);
+    springY.jump(held.y);
+    // Springs are identity-stable; `origin` is the only real trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin, containerRef]);
 
   // Tracks `initialRect` until the first activation, so a caller that measures
   // it asynchronously still seeds the springs from the real rect. Mirrored in a
@@ -234,5 +287,6 @@ export function useActiveBeacon(
     targetWidth: active?.w.get() ?? 0,
     targetHeight: active?.h.get() ?? 0,
     preserveOnEmpty: activePreserveOnEmpty,
+    origin,
   };
 }

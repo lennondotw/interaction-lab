@@ -31,10 +31,17 @@
  */
 
 import { useMotionValue } from 'motion/react';
-import { useCallback, useContext, useEffect, useId, useMemo, useRef, type RefObject } from 'react';
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, type RefObject } from 'react';
 
-import { BeaconContainerContext, BeaconStoreContext } from './context.js';
+import { BeaconContainerContext, BeaconOriginContext, BeaconStoreContext } from './context.js';
 import { layoutOffsetRelativeTo } from './layout-offset.js';
+import {
+  readBeaconOriginFrame,
+  resolveBeaconOrigin,
+  resolveBeaconOriginAxis,
+  toBeaconOriginFrame,
+  type BeaconOrigin,
+} from './origin.js';
 import type { BeaconDescriptor, BeaconEntry, BeaconHandle, BeaconPriority } from './types.js';
 import { useLayoutObservation } from './use-layout-observation.js';
 
@@ -45,6 +52,7 @@ const NOOP_HANDLE: BeaconHandle = { update: () => undefined };
 
 export function useBeacon(descriptor: BeaconDescriptor | null): BeaconHandle {
   const store = useContext(BeaconStoreContext);
+  const defaultOrigin = useContext(BeaconOriginContext);
 
   // Stable id per mount. React 19's `useId` is stable across Strict
   // Mode double-mount, and the store push is idempotent by id, so the
@@ -73,6 +81,11 @@ export function useBeacon(descriptor: BeaconDescriptor | null): BeaconHandle {
     priority: descriptor?.priority ?? 'normal',
     slot: descriptor?.slot,
     preserveOnEmpty: descriptor?.preserveOnEmpty,
+    // Seeded here, then re-read at push time (see `pendingOriginRef`).
+    // Once pushed it is the fixed frame of this entry's x / y, so a
+    // renderer can treat it as constant and reconcile frames only on
+    // handoff.
+    origin: resolveBeaconOrigin(descriptor?.origin, defaultOrigin),
     x,
     y,
     w,
@@ -89,9 +102,27 @@ export function useBeacon(descriptor: BeaconDescriptor | null): BeaconHandle {
   // `descriptor` itself — the second effect below handles per-frame
   // descriptor changes without re-running the push / pop pair.
   const isEnabled = descriptor != null;
+
+  // Latest resolved origin, mirrored in a layout effect so the push
+  // below reads the descriptor that is current *at push time*. A beacon
+  // that mounts disabled has a null descriptor on its first render, and
+  // committing that render's fallback would register the wrong frame the
+  // moment it is enabled — silently, since the beacon then reports
+  // plausible coordinates that mean something else. Layout effects all
+  // run before passive ones, so this write always lands first.
+  const pendingOriginRef = useRef(entryRef.current.origin);
+  useLayoutEffect(() => {
+    pendingOriginRef.current = resolveBeaconOrigin(descriptor?.origin, defaultOrigin);
+  });
+
   useEffect(() => {
     if (!store || !isEnabled) return;
     const entry = entryRef.current;
+    // Adopted per registration rather than per mount: the contract is
+    // that the origin can't change while the beacon is pushed (the
+    // positions written under it would be reinterpreted), and an
+    // unregistered beacon has no position to preserve.
+    entry.origin = pendingOriginRef.current;
     store.push(entry);
     return () => {
       store.pop(id);
@@ -115,12 +146,26 @@ export function useBeacon(descriptor: BeaconDescriptor | null): BeaconHandle {
       );
     }
 
+    // Same for the origin, with a sharper failure mode: the position
+    // above was just written in the committed frame, so a silently
+    // accepted change would reinterpret it and displace the beacon by
+    // the difference between the two frames.
+    const committedOrigin = entryRef.current.origin;
+    const nextOrigin = resolveBeaconOrigin(descriptor.origin, defaultOrigin);
+    if (nextOrigin.x !== committedOrigin.x || nextOrigin.y !== committedOrigin.y) {
+      console.warn(
+        '[beacon] useBeacon: descriptor.origin is immutable while registered (got %o, expected %o).',
+        nextOrigin,
+        committedOrigin
+      );
+    }
+
     const nextPriority = descriptor.priority ?? 'normal';
     if (entryRef.current.priority !== nextPriority) {
       entryRef.current = { ...entryRef.current, priority: nextPriority };
       store.replacePriority(id, nextPriority);
     }
-  }, [descriptor, store, id, x, y, w, h]);
+  }, [descriptor, store, id, x, y, w, h, defaultOrigin]);
 
   return useMemo<BeaconHandle>(() => {
     if (!store) return NOOP_HANDLE;
@@ -156,6 +201,13 @@ export interface BeaconAnchorOptions {
   slot?: string;
   /** See {@link BeaconDescriptor.preserveOnEmpty}. */
   preserveOnEmpty?: boolean;
+  /**
+   * See {@link BeaconDescriptor.origin}. Set the axis that matches how
+   * this element is laid out — `{ x: 'center' }` for an element the
+   * container centres horizontally, so a container / window resize
+   * doesn't register as movement.
+   */
+  origin?: BeaconOrigin;
   /**
    * Extra rectangle margin on each side, in pixels. A positive value
    * makes the beacon larger than the anchored element; useful when the
@@ -220,17 +272,43 @@ export interface BeaconAnchorOptions {
  * is temporarily detached), we fall back to `getBoundingClientRect`
  * differencing so the beacon still reports a meaningful position for
  * that frame.
+ *
+ * Origin — which corner (or centre) the position is measured from.
+ *
+ * Measuring from the container's top-left makes a resize look like
+ * motion for anything the layout centres, and the follower's spring
+ * dutifully trails the moving target. Pass the `origin` that matches how
+ * the element is laid out — `{ x: 'center' }` for a centred column — and
+ * the resize cancels out of the measurement entirely. See
+ * {@link BeaconOrigin}.
  */
 export function useBeaconAnchor(ref: RefObject<HTMLElement | null>, options: BeaconAnchorOptions = {}): BeaconHandle {
-  const { priority, slot, preserveOnEmpty, inset = 0, enabled = true } = options;
+  const { priority, slot, preserveOnEmpty, origin, inset = 0, enabled = true } = options;
   const containerRef = useContext(BeaconContainerContext);
+  const defaultOrigin = useContext(BeaconOriginContext);
+
+  // Resolved to two numbers rather than kept as an object: they are
+  // `measure`'s dependencies, and a caller's inline `{ x: 'center' }`
+  // literal would otherwise rebuild the whole observation cascade on
+  // every render.
+  const originX = origin?.x === undefined ? defaultOrigin.x : resolveBeaconOriginAxis(origin.x);
+  const originY = origin?.y === undefined ? defaultOrigin.y : resolveBeaconOriginAxis(origin.y);
 
   // Initial descriptor. The effect below replaces size / position with
   // real measurements on mount — this seed is just so the MVs are
   // created with sensible initial values.
   const initialDescriptor = useMemo<BeaconDescriptor | null>(
     () =>
-      enabled ? { priority, preserveOnEmpty, slot, position: { x: 0, y: 0 }, size: { width: 0, height: 0 } } : null,
+      enabled
+        ? {
+            priority,
+            preserveOnEmpty,
+            slot,
+            origin: { x: originX, y: originY },
+            position: { x: 0, y: 0 },
+            size: { width: 0, height: 0 },
+          }
+        : null,
     // priority / preserveOnEmpty changes propagate via the
     // `handle.update` effect below; slot is immutable after mount;
     // `enabled` toggles registration. We intentionally don't include
@@ -276,16 +354,33 @@ export function useBeaconAnchor(ref: RefObject<HTMLElement | null>, options: Bea
       y = layout.y;
     } else {
       const rect = el.getBoundingClientRect();
-      const origin = container?.getBoundingClientRect() ?? null;
-      x = rect.left - (origin?.left ?? 0);
-      y = rect.top - (origin?.top ?? 0);
+      const containerRect = container?.getBoundingClientRect() ?? null;
+      x = rect.left - (containerRect?.left ?? 0);
+      y = rect.top - (containerRect?.top ?? 0);
     }
 
+    // The inset box is the beacon, so it is the box the origin fraction
+    // is taken along — an `'end'` origin has to anchor the halo's own
+    // right edge, not the element's.
+    const box = {
+      left: x - inset,
+      top: y - inset,
+      width: width + inset * 2,
+      height: height + inset * 2,
+    };
+
+    // Both terms of the origin frame are read in this one call, so a
+    // resize that moves the element and the frame by the same amount
+    // cancels within a single measurement and the beacon's position
+    // never changes. Two separate observers would each fire with a stale
+    // view of the other's term and leave a frame of jitter behind.
+    const frame = readBeaconOriginFrame(container);
+
     handle.update({
-      position: { x: x - inset, y: y - inset },
-      size: { width: width + inset * 2, height: height + inset * 2 },
+      position: toBeaconOriginFrame(box, frame, { x: originX, y: originY }),
+      size: { width: box.width, height: box.height },
     });
-  }, [ref, containerRef, handle, inset]);
+  }, [ref, containerRef, handle, inset, originX, originY]);
 
   useLayoutObservation(ref, containerRef, measure, { enabled });
 

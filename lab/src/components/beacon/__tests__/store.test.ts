@@ -1,6 +1,7 @@
 import { motionValue } from 'motion/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { BEACON_ORIGIN_START } from '../origin.js';
 import { BeaconStore } from '../store.js';
 import type { BeaconEntry, BeaconPriority } from '../types.js';
 
@@ -9,6 +10,7 @@ function makeEntry(id: string, priority: BeaconPriority = 'normal', slot?: strin
     id,
     priority,
     slot,
+    origin: BEACON_ORIGIN_START,
     x: motionValue(0),
     y: motionValue(0),
     w: motionValue(100),

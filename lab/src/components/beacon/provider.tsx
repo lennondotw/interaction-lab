@@ -17,8 +17,9 @@
 
 import { useMemo, type FC, type ReactNode, type RefObject } from 'react';
 
-import { BeaconContainerContext, BeaconStoreContext } from './context.js';
+import { BeaconContainerContext, BeaconOriginContext, BeaconStoreContext } from './context.js';
 import { BeaconFollower, type BeaconFollowerProps } from './follower.js';
+import { BEACON_ORIGIN_START, resolveBeaconOrigin, type BeaconOrigin } from './origin.js';
 import { BeaconStore } from './store.js';
 
 export interface BeaconProviderProps {
@@ -41,6 +42,14 @@ export interface BeaconProviderProps {
    * this prop, the system uses viewport-relative coords.
    */
   containerRef?: RefObject<HTMLElement | null>;
+  /**
+   * Default reference point for beacons beneath this provider, per axis.
+   * Defaults to the container's top-left. Set `{ x: 'center' }` when the
+   * region centres its content horizontally — a centred beacon then
+   * reports a position that doesn't change with the container's width,
+   * so resizing produces no spring lag. See {@link BeaconOrigin}.
+   */
+  origin?: BeaconOrigin;
 }
 
 export const BeaconProvider: FC<BeaconProviderProps> = ({
@@ -48,15 +57,26 @@ export const BeaconProvider: FC<BeaconProviderProps> = ({
   renderFollower = true,
   followerProps,
   containerRef,
+  origin,
 }) => {
   const store = useMemo(() => new BeaconStore(), []);
   const containerValue = containerRef ?? null;
 
+  // Resolved once so the context value's identity is stable across the
+  // caller passing a fresh object literal every render — consumers hold
+  // it in effect deps.
+  const originValue = useMemo(
+    () => resolveBeaconOrigin(origin, BEACON_ORIGIN_START),
+    [origin?.x, origin?.y] // eslint-disable-line react-hooks/exhaustive-deps -- the two axes are the whole value
+  );
+
   return (
     <BeaconStoreContext.Provider value={store}>
       <BeaconContainerContext.Provider value={containerValue}>
-        {children}
-        {renderFollower && <BeaconFollower {...followerProps} />}
+        <BeaconOriginContext.Provider value={originValue}>
+          {children}
+          {renderFollower && <BeaconFollower {...followerProps} />}
+        </BeaconOriginContext.Provider>
       </BeaconContainerContext.Provider>
     </BeaconStoreContext.Provider>
   );

@@ -22,6 +22,8 @@
 
 import type { MotionValue } from 'motion/react';
 
+import type { BeaconOrigin, ResolvedBeaconOrigin } from './origin.js';
+
 /**
  * Priority bucket. Higher buckets always win; within the same bucket
  * the most recently pushed beacon wins (LIFO).
@@ -40,10 +42,15 @@ export interface BeaconSize {
   height: number;
 }
 
+/**
+ * Position in the beacon's origin frame — the beacon's own origin point
+ * offset from the container's origin point (viewport if the provider has
+ * no `containerRef`). With the default `'start'` origin that is plainly
+ * the top-left corner's offset, as if from `getBoundingClientRect()`.
+ * See {@link BeaconOrigin} for why a beacon would choose another.
+ */
 export interface BeaconPosition {
-  /** Viewport-relative x (as if from `getBoundingClientRect().left`). */
   x: number;
-  /** Viewport-relative y (as if from `getBoundingClientRect().top`). */
   y: number;
 }
 
@@ -51,6 +58,16 @@ export interface BeaconDescriptor {
   size: BeaconSize;
   position: BeaconPosition;
   priority?: BeaconPriority;
+  /**
+   * Reference point `position` is measured against, per axis. Omitted
+   * axes inherit the provider's default (itself `'start'` unless the
+   * provider says otherwise). Immutable while the beacon is registered —
+   * it defines the frame every value the caller writes is interpreted
+   * in, so changing it under a live beacon would silently displace it
+   * rather than move it. A beacon that is toggled off and on again
+   * adopts whatever origin it has at that point.
+   */
+  origin?: BeaconOrigin;
   /**
    * Whether a renderer may preserve itself briefly when this beacon is
    * the last active entry and then unmounts. Set `false` for terminal
@@ -91,6 +108,13 @@ export interface BeaconEntry {
   slot?: string;
   /** See {@link BeaconDescriptor.preserveOnEmpty}. */
   preserveOnEmpty?: boolean;
+  /**
+   * Resolved {@link BeaconDescriptor.origin}. Committed at push time and
+   * never mutated, so a renderer can treat it as the fixed frame of
+   * this entry's `x` / `y` and only reconcile frames when the active
+   * entry changes.
+   */
+  origin: ResolvedBeaconOrigin;
   x: MotionValue<number>;
   y: MotionValue<number>;
   w: MotionValue<number>;
