@@ -139,17 +139,32 @@ const Frame: FC<FrameProps> = ({ children, onEmpty }) => (
 
 // ---------------------------------------------------------------------------
 // A stage the origin stories can resize on demand, standing in for a
-// window resize without needing one. Its own provider, so the two stages
-// in a story are independent and can disagree about the origin.
+// window resize without needing one. Its own provider, so the stages in a
+// story are independent and can disagree about the origin.
 //
 // `containerRef` puts measurements and the follower in the stage's
 // coordinate space; `renderFollower={false}` plus an explicit
 // `<BeaconFollower/>` inside is how the follower ends up in the DOM
 // subtree its `position: absolute` resolves against.
+//
+// A consequence worth knowing before reaching for the window: resizing it
+// does nothing to these stories. The frame is the stage, and the stage's
+// size comes from the slider, not the viewport — a window resize slides
+// the whole stage across the page without changing its `clientWidth` or
+// the target's `offsetLeft` inside it, so the beacon's position doesn't
+// change and there is nothing for a spring to chase. Drag the slider to
+// resize the frame itself. (Nothing extra is wrapped around the stage to
+// achieve that; the caption wrapper below is not a containing block.) The
+// stories that do respond to the window are the ones with no container at
+// all, which measure against the viewport.
+//
+// No `overflow-hidden`: a follower that lags does so *past* the stage's
+// edge, and clipping the evidence at the boundary would hide the biggest
+// part of the effect these stories exist to show.
 // ---------------------------------------------------------------------------
 
 const STAGE_CLASS = `
-  relative overflow-hidden rounded-[6px] border border-dashed border-black/15
+  relative rounded-[6px] border border-dashed border-black/15
   dark:border-white/20
 `;
 
@@ -159,8 +174,11 @@ const STAGE_LABEL_CLASS = `
 `;
 
 // Fixed height so a caption that rewraps as the stage narrows can't
-// change the row's height and slide the stages around mid-drag.
-const CAPTION_CLASS = 'h-11 font-mono text-[11px] leading-[1.5]';
+// change the row's height and slide the stages around mid-drag. Sized for
+// the longest caption at the narrowest stage, which is where they wrap
+// hardest — keep captions short enough to fit and leave the prose to the
+// story's own note.
+const CAPTION_CLASS = 'h-16 font-mono text-[11px] leading-[1.5]';
 const CAPTION_MATCH_CLASS = 'text-black/40 dark:text-white/40';
 const CAPTION_MISMATCH_CLASS = 'text-black/75 dark:text-white/85';
 
@@ -336,7 +354,7 @@ export const OriginResize: Story = {
         />
         <div className="flex items-start gap-6">
           <Stage
-            caption="Centred layout measured from the corner. The beacon’s x is half the stage’s width, so it moves on every drag frame."
+            caption="Centred layout, corner origin. x is half the stage’s width."
             label="origin · start"
             match={false}
             width={width}
@@ -346,7 +364,7 @@ export const OriginResize: Story = {
             </div>
           </Stage>
           <Stage
-            caption="Same layout measured from the centre. The beacon’s x is 0 at every width, so there is nothing to animate."
+            caption="Same layout, centre origin. x is 0 at every width."
             label="origin · center"
             match
             origin={{ x: 'center' }}
@@ -426,7 +444,7 @@ export const OriginMatch: Story = {
         <SizeControl onChange={setWidth} value={width} />
         <div className="flex items-start gap-6">
           <Stage
-            caption="Pinned to the corner the coordinates start from, so both offsets are constants. The default origin."
+            caption="Corner-pinned, corner origin. Both offsets are constants."
             height={height}
             label="top-left · start"
             match
@@ -435,7 +453,7 @@ export const OriginMatch: Story = {
             <StageContent layout="corner" />
           </Stage>
           <Stage
-            caption="Centred on both axes, measured from the centre on both axes. Reports (0, 0) at every stage size."
+            caption="Centred both axes, centre origin. Always reports (0, 0)."
             height={height}
             label="centred · center"
             match
@@ -445,7 +463,7 @@ export const OriginMatch: Story = {
             <StageContent layout="centre" />
           </Stage>
           <Stage
-            caption="Pinned to the far corner, measured from the far corner. Its inset from the right and bottom edges is what stays fixed."
+            caption="Far-corner pinned, far-corner origin. Its inset is fixed."
             height={height}
             label="bottom-right · end"
             match
@@ -498,7 +516,7 @@ export const OriginMismatch: Story = {
             <StageContent layout="corner" />
           </Stage>
           <Stage
-            caption="Wrong by half. Centring spends half of each axis, so the beacon moves by half the drag and the spring trails it."
+            caption="Wrong by half: centring spends half of each axis."
             height={height}
             label="centred · start"
             match={false}
@@ -508,7 +526,7 @@ export const OriginMismatch: Story = {
             <StageContent layout="centre" />
           </Stage>
           <Stage
-            caption="Wrong by all of it. Pinning to the far corner spends the whole axis, so the beacon moves the full drag — the worst case of the three."
+            caption="Wrong by all of it: the far corner spends the whole axis."
             height={height}
             label="bottom-right · start"
             match={false}
@@ -521,6 +539,68 @@ export const OriginMismatch: Story = {
         <p className={NOTE_CLASS}>
           Both axes move here, so the two wrong stages lag diagonally. Fixing this is not a spring change: give each
           beacon the origin its layout holds still against and all three behave like the left one.
+        </p>
+      </div>
+    );
+  },
+};
+
+// The handoff again, with one of the two origins wrong.
+//
+// Both targets are centred in the same flex column, so the *layout* is
+// identical for both — only the claim differs. #1 says `'start'`, which is
+// false for a centred element and costs it half of every drag; #2 says
+// `'center'`, which is true and costs it nothing. Same stage, same drag,
+// same spring: the only variable is the frame, which is the cleanest
+// version of the argument the other origin stories make with two layouts.
+//
+// It also puts the frame conversion under load. In `Origin · handoff` the
+// springs are at rest at the moment of the swap, so continuity is easy;
+// here you can drag the slider and toggle mid-flight, handing over from a
+// frame the surface is *actively lagging in* to one it can't lag in. The
+// conversion is of the spring's current value, not the target's, so what
+// it has to preserve is the lag itself — the outline should keep whatever
+// gap it had and glide from there, rather than snapping onto the new
+// target or jumping by the difference between the frames.
+export const OriginHandoffCentred: Story = {
+  name: 'Origin · handoff · one wrong',
+  render: function Render() {
+    const [width, setWidth] = useState(400);
+    const [second, setSecond] = useState(false);
+    return (
+      <div className="flex flex-col items-center gap-6">
+        <div className="flex items-center gap-4">
+          <input
+            className={RANGE_CLASS}
+            max={480}
+            min={220}
+            onChange={(e) => setWidth(e.target.valueAsNumber)}
+            type="range"
+            value={width}
+          />
+          <ToggleButton offLabel="push · #2" on={second} onLabel="pop · #2" onToggle={() => setSecond((v) => !v)} />
+        </div>
+        <Stage
+          caption="Same layout for both. Only #1’s claim about it is wrong."
+          label="both centred · one wrong origin"
+          match={false}
+          width={width}
+        >
+          {/*
+            Flex centring is box-model centring, so `offsetLeft` reports the
+            centred position and both beacons measure the same layout. #2
+            stays mounted while inactive so the column can't reflow on
+            toggle — the handoff has to be the only thing that changes.
+          */}
+          <div className="flex h-full flex-col items-center justify-center gap-5">
+            <Target height={44} label="#1 · claims start" origin={{ x: 'start' }} width={196} />
+            <Target enabled={second} height={44} label="#2 · claims center" origin={{ x: 'center' }} width={196} />
+          </div>
+        </Stage>
+        <p className={NOTE_CLASS}>
+          {second
+            ? 'On #2, whose claim is true: drag at any speed and the outline stays on it. Pop back to #1 mid-drag — the lag returns, from wherever the surface was.'
+            : 'On #1, whose claim is false: drag and the outline trails by half the delta. Push #2 mid-drag to hand over to the frame that doesn’t lag.'}
         </p>
       </div>
     );
@@ -558,7 +638,7 @@ export const OriginHandoff: Story = {
           <ToggleButton offLabel="push · #2" on={centred} onLabel="pop · #2" onToggle={() => setCentred((v) => !v)} />
         </div>
         <Stage
-          caption="Two beacons, two frames, one follower. The swap converts between them before it paints."
+          caption="Two frames, one follower. The swap converts between them."
           label="mixed origins"
           match
           width={width}
