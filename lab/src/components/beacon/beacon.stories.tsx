@@ -31,7 +31,9 @@ const BUTTON_CLASS = `
   cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1.5 font-mono text-[12px] text-black/70
   hover:bg-black/5
   active:bg-black/10
+  disabled:cursor-not-allowed disabled:border-black/10 disabled:text-black/25 disabled:hover:bg-white/0
   dark:border-white/30 dark:text-white/80 dark:hover:bg-white/5 dark:active:bg-white/10
+  dark:disabled:border-white/10 dark:disabled:text-white/25 dark:disabled:hover:bg-white/0
 `;
 
 // Fixed box: the copy changes length between states, and the stories
@@ -115,6 +117,11 @@ const Target: FC<TargetProps> = ({ label, width, height, priority = 'normal', en
 interface FrameProps {
   children: ReactNode;
   onEmpty?: BeaconEmptyBehavior;
+  /**
+   * Overrides {@link STORY_ORIGIN}. Only for the stories whose point is
+   * what a frame that doesn't describe this layout costs.
+   */
+  origin?: BeaconOrigin;
 }
 
 // Storybook's `layout: 'centered'` centres the story in the viewport on
@@ -131,8 +138,8 @@ interface FrameProps {
 // centre is a constant even when it isn't at the centre.
 const STORY_ORIGIN: BeaconOrigin = { x: 'center', y: 'center' };
 
-const Frame: FC<FrameProps> = ({ children, onEmpty }) => (
-  <BeaconProvider followerProps={{ className: FOLLOWER_CLASS, onEmpty }} origin={STORY_ORIGIN}>
+const Frame: FC<FrameProps> = ({ children, onEmpty, origin = STORY_ORIGIN }) => (
+  <BeaconProvider followerProps={{ className: FOLLOWER_CLASS, onEmpty }} origin={origin}>
     <div className="flex flex-col items-center gap-6">{children}</div>
   </BeaconProvider>
 );
@@ -258,25 +265,55 @@ export const PushPop: Story = {
   },
 };
 
-// Priority wins regardless of mount order. The `critical` target
-// overrides the two lower-priority siblings when enabled; dismissing it
-// hands the surface back to the most-recently-pushed normal / high.
+// Priority wins regardless of mount order, and it can be changed on a
+// beacon that is already registered — the two buttons walk the contender
+// up and down the ladder while the other two sit still. This is the only
+// path through the store's `replacePriority`: nothing is mounted or
+// unmounted here, so any handover you see is a live entry being re-ranked.
+//
+// Watch *where* the handover happens. The contender takes the surface at
+// `high`, not at `critical`, because at equal priority the most recently
+// pushed entry wins — and `replacePriority` also moves the entry it
+// re-ranks to the LIFO tail. So a tie is a win for whoever moved last,
+// which is the rule that makes `critical` look like the only special
+// level when it isn't.
+const PRIORITY_LADDER: readonly BeaconPriority[] = ['low', 'normal', 'high', 'critical'];
+
 export const Priority: Story = {
   render: function Render() {
-    const [critical, setCritical] = useState(false);
+    const [priority, setPriority] = useState<BeaconPriority>('low');
+    const rung = PRIORITY_LADDER.indexOf(priority);
+    const step = (delta: number): void => {
+      const next = PRIORITY_LADDER[rung + delta];
+      if (next) setPriority(next);
+    };
     return (
       <Frame>
-        <ToggleButton
-          offLabel="raise · critical"
-          on={critical}
-          onLabel="dismiss · critical"
-          onToggle={() => setCritical((v) => !v)}
-        />
-        <div className="flex flex-wrap items-start gap-6">
-          <Target label="normal" width={160} height={80} priority="normal" />
-          <Target label="high" width={160} height={80} priority="high" />
-          <Target label="critical" width={200} height={100} priority="critical" enabled={critical} />
+        <div className="flex items-center gap-3">
+          <button className={BUTTON_CLASS} disabled={rung === 0} onClick={() => step(-1)} type="button">
+            lower
+          </button>
+          <button
+            className={BUTTON_CLASS}
+            disabled={rung === PRIORITY_LADDER.length - 1}
+            onClick={() => step(1)}
+            type="button"
+          >
+            raise
+          </button>
         </div>
+        <div className="flex flex-wrap items-start gap-6">
+          <Target height={80} label="fixed · normal" priority="normal" width={168} />
+          <Target height={80} label="fixed · high" priority="high" width={168} />
+          {/* Fixed box: the label's length tracks the priority, and letting it
+              size the target would move the very thing being tracked. */}
+          <Target height={100} label={`contender · ${priority}`} priority={priority} width={208} />
+        </div>
+        <p className={NOTE_CLASS}>
+          Raise the contender. Nothing mounts or unmounts — the same beacon is re-ranked in place, and the surface
+          crosses to it at <code>high</code>, where it ties and wins on being the most recent. Lower it again and the
+          fixed <code>high</code> takes it back.
+        </p>
       </Frame>
     );
   },
@@ -689,6 +726,196 @@ export const OriginHandoff: Story = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Scroll — the case the origin can't fix.
+//
+// An origin removes a resize from the measurement because a resize can
+// leave the element's position unchanged *in the right frame*. Scrolling
+// can't be absorbed that way: relative to the viewport, a scrolled
+// element genuinely moves, and no reference point inside the viewport
+// makes it stationary. There is no origin that fixes this, which makes it
+// the counterexample to reaching for one.
+//
+// What does fix it is the other choice — which box is the frame. Measured
+// against a scroll container, `layoutOffsetRelativeTo` deliberately stops
+// at the container and leaves its own scroll in (see `layout-offset.ts`),
+// because the follower is `position: absolute` inside it and is carried by
+// the same scroll. The coordinate then doesn't change at all while
+// scrolling, so there is nothing to animate and nothing to lag.
+//
+// Two stories, because the two scrollers people actually have behave
+// differently in one respect: a bounded panel can be the container
+// directly, while a scrolling *page* has to have its content wrapped for
+// there to be a container to point at.
+// ---------------------------------------------------------------------------
+
+const SCROLL_PANEL_CLASS = `
+  relative h-52 overflow-auto rounded-[6px] border border-dashed border-black/15
+  dark:border-white/20
+`;
+
+const SCROLL_PANEL_WIDTH = 300;
+
+interface ScrollPanelProps {
+  label: string;
+  caption: string;
+  match: boolean;
+  /**
+   * When false the provider is given no `containerRef`, so the frame is
+   * the viewport and the follower renders `position: fixed` — which also
+   * means the panel's `overflow` doesn't clip it, since a fixed element's
+   * containing block is the viewport rather than the scroller. Seeing it
+   * drift outside the panel is part of the point: it was never part of
+   * the scrolled content.
+   */
+  framedByPanel: boolean;
+  /** Push the second target, to hand over inside the scrolled flow. */
+  second: boolean;
+}
+
+const ScrollPanel: FC<ScrollPanelProps> = ({ label, caption, match, framedByPanel, second }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Taller than the panel, with both targets near the top so they are on
+  // screen before you scroll and leave the frame if you scroll far. #2
+  // stays mounted while inactive so the flow can't reflow on toggle.
+  const content = (
+    <>
+      <span className={STAGE_LABEL_CLASS}>{label}</span>
+      <div className="flex h-[520px] flex-col items-center gap-5 pt-14">
+        <Target height={52} label="#1 · in flow" width={180} />
+        <Target enabled={second} height={52} label="#2 · in flow" width={180} />
+      </div>
+    </>
+  );
+  return (
+    <div className="flex shrink-0 flex-col gap-2" style={{ width: SCROLL_PANEL_WIDTH }}>
+      <div ref={panelRef} className={SCROLL_PANEL_CLASS} style={{ width: SCROLL_PANEL_WIDTH }}>
+        {framedByPanel ? (
+          <BeaconProvider containerRef={panelRef} renderFollower={false}>
+            {content}
+            <BeaconFollower className={FOLLOWER_CLASS} />
+          </BeaconProvider>
+        ) : (
+          <BeaconProvider followerProps={{ className: FOLLOWER_CLASS }}>{content}</BeaconProvider>
+        )}
+      </div>
+      <p className={cn(CAPTION_CLASS, match ? CAPTION_MATCH_CLASS : CAPTION_MISMATCH_CLASS)}>{caption}</p>
+    </div>
+  );
+};
+
+// Two identical scroll panels holding identical content. The only
+// difference is which box the beacon is measured against, and it decides
+// whether scrolling is movement.
+//
+// Left, framed by the panel: the coordinate is the target's offset inside
+// the scrolled content, which scrolling doesn't change, and the follower
+// is absolutely positioned in that same content — so it is carried along
+// by layout, not by a spring. Measured 0px of error on every frame of a
+// 400px scroll, with the follower's `transform` never changing.
+//
+// Right, framed by the viewport: the same scroll moves the target across
+// the viewport, so the coordinate changes by the full scroll delta and the
+// spring chases it. This is worse than the resize case rather than
+// comparable — a resize moves a centred element by half the delta, a
+// scroll moves it by all of it.
+export const ScrollFrame: Story = {
+  name: 'Scroll · frame',
+  render: function Render() {
+    const [second, setSecond] = useState(false);
+    return (
+      <div className="flex flex-col items-center gap-6">
+        <ToggleButton offLabel="push · #2" on={second} onLabel="pop · #2" onToggle={() => setSecond((v) => !v)} />
+        <div className="flex items-start gap-6">
+          <ScrollPanel
+            caption="Framed by the panel. Scrolling doesn’t change the coordinate."
+            framedByPanel
+            label="frame · the panel"
+            match
+            second={second}
+          />
+          <ScrollPanel
+            caption="Framed by the viewport. Scrolling is the full delta of movement."
+            framedByPanel={false}
+            label="frame · the viewport"
+            match={false}
+            second={second}
+          />
+        </div>
+        <p className={NOTE_CLASS}>
+          Scroll inside each panel. No origin helps the right one: relative to the viewport the target really did move.
+          Its outline isn’t clipped either — a fixed follower was never part of the scrolled content. Toggle mid-scroll
+          to add a handoff to the fight.
+        </p>
+      </div>
+    );
+  },
+};
+
+const PAGE_SCROLL_HEIGHT = 1700;
+
+// The same lesson for the scroller people don't think of as one: the page.
+//
+// `layout: 'fullscreen'` and a page taller than the frame, so the story
+// itself scrolls. Both columns hold the same target; the left one's
+// provider points at the wrapper around the page content, the right one
+// has no container and lands on the viewport.
+//
+// The instructive part is what the fix looks like here. The wrapper is not
+// a scroll container — the document scrolls — but registering it is still
+// enough: the walk stops there, so the document's scroll never gets
+// subtracted, and the follower becomes an absolutely positioned element in
+// the page flow that scrolls with everything else. The reflex for page
+// scroll is to reach for `position: fixed`, and that is exactly the
+// version that lags.
+export const ScrollPage: Story = {
+  name: 'Scroll · page',
+  parameters: { layout: 'fullscreen' },
+  render: function Render() {
+    const pageRef = useRef<HTMLDivElement>(null);
+    const [second, setSecond] = useState(false);
+    return (
+      // Centred like a real page column, and `pageRef` stays the wrapper
+      // that gets registered — so it must also stay the nearest positioned
+      // ancestor of the follower. `mx-auto` on this same element keeps both
+      // roles in one box instead of adding a `relative` layer between them.
+      <div ref={pageRef} className="relative mx-auto w-[720px] px-10 pt-16" style={{ height: PAGE_SCROLL_HEIGHT }}>
+        <p className="font-mono text-[11px] leading-[1.7] text-black/45 dark:text-white/45">
+          Scroll the page. Both columns hold the same two targets in the same flow; only the frame differs. The left
+          follower is an absolutely positioned element inside the wrapper its provider was pointed at, so the page
+          carries it. The right one is fixed to the viewport, so every scrolled pixel is a pixel it has to catch up.
+        </p>
+        <div className="mt-[360px] flex flex-col items-center gap-6">
+          <ToggleButton offLabel="push · #2" on={second} onLabel="pop · #2" onToggle={() => setSecond((v) => !v)} />
+          <div className="flex gap-10">
+            {/*
+              The follower must be a DOM descendant of `pageRef` and must not
+              find a nearer positioned ancestor, or its `position: absolute`
+              would resolve against the wrong box — hence no `relative` on
+              the rows or the columns between here and there.
+            */}
+            <BeaconProvider containerRef={pageRef} renderFollower={false}>
+              <div className="flex flex-col gap-3" style={{ width: 260 }}>
+                <Target height={56} label="#1 · page content" width={260} />
+                <Target enabled={second} height={56} label="#2 · page content" width={260} />
+                <p className={cn(CAPTION_CLASS, CAPTION_MATCH_CLASS)}>Carried by the page. Nothing to animate.</p>
+              </div>
+              <BeaconFollower className={FOLLOWER_CLASS} />
+            </BeaconProvider>
+            <BeaconProvider followerProps={{ className: FOLLOWER_CLASS }}>
+              <div className="flex flex-col gap-3" style={{ width: 260 }}>
+                <Target height={56} label="#1 · viewport" width={260} />
+                <Target enabled={second} height={56} label="#2 · viewport" width={260} />
+                <p className={cn(CAPTION_CLASS, CAPTION_MISMATCH_CLASS)}>Fixed to the viewport. Chases every pixel.</p>
+              </div>
+            </BeaconProvider>
+          </div>
+        </div>
+      </div>
+    );
+  },
+};
+
 // Same toggle, but the follower is told to stay in place when the stack
 // empties. The dashed outline remains at the last position and size;
 // re-pushing the beacon snaps-then-springs back from the frozen state
@@ -726,6 +953,49 @@ export const LoseLastBeaconFreeze: Story = {
           {enabled
             ? 'active — the outline tracks the target. Resize the window: the target re-centres and the outline stays glued to it, because this story measures from the viewport’s centre and nothing moved in that frame.'
             : 'inactive — the outline is frozen on the last measured box and no measurement is running. Resize the window: the freeze survives it, because a centred target’s position in the centre frame is the one thing a resize doesn’t change. Push again to resume measuring.'}
+        </p>
+      </Frame>
+    );
+  },
+};
+
+// The same freeze, in a frame that doesn't describe the layout — which is
+// what makes a frozen box actually go stale, and is the demonstration the
+// centre origin above quietly took away.
+//
+// The content is centred exactly as before; only the frame is the
+// viewport's corner. While a beacon is active that difference is invisible
+// at rest and shows only as resize lag. Pop it and the difference becomes
+// permanent: no measurement is running, the frozen coordinate is an offset
+// from a corner, and the target's distance from that corner is precisely
+// what a resize changes. The outline is left behind by half the delta and
+// stays there until something measures again.
+//
+// The pair is the useful part. Freezing geometry is only safe in a frame
+// the layout preserves, so `onEmpty: 'freeze'` and the origin are not
+// independent choices — freeze inherits whatever the frame guarantees.
+export const LoseLastBeaconFreezeCorner: Story = {
+  name: 'Lose Last · freeze · corner frame',
+  render: function Render() {
+    const [enabled, setEnabled] = useState(true);
+    return (
+      <Frame onEmpty="freeze" origin={{ x: 'start', y: 'start' }}>
+        <ToggleButton
+          offLabel="push · only beacon"
+          on={enabled}
+          onLabel="pop · only beacon"
+          onToggle={() => setEnabled((v) => !v)}
+        />
+        <Target
+          enabled={enabled}
+          height={120}
+          label={enabled ? 'corner frame · active' : 'corner frame · inactive'}
+          width={280}
+        />
+        <p className={NOTE_CLASS}>
+          {enabled
+            ? 'active — measured from the viewport’s corner, which this centred layout does not hold still in. Resize the window and the outline trails the target instead of staying glued. Now pop it, then resize.'
+            : 'inactive — frozen on a corner-relative coordinate with nothing measuring. Resize the window: the target re-centres, the outline does not, and the gap is permanent. Compare with the centre-framed story, where the same pop and resize keeps it glued.'}
         </p>
       </Frame>
     );
