@@ -781,7 +781,7 @@ const ScrollPanel: FC<ScrollPanelProps> = ({ label, caption, match, framedByPane
   const content = (
     <>
       <span className={STAGE_LABEL_CLASS}>{label}</span>
-      <div className="flex h-[520px] flex-col items-center gap-5 pt-14">
+      <div className="flex h-130 flex-col items-center gap-5 pt-14">
         <Target height={52} label="#1 · in flow" width={180} />
         <Target enabled={second} height={52} label="#2 · in flow" width={180} />
       </div>
@@ -879,13 +879,13 @@ export const ScrollPage: Story = {
       // that gets registered — so it must also stay the nearest positioned
       // ancestor of the follower. `mx-auto` on this same element keeps both
       // roles in one box instead of adding a `relative` layer between them.
-      <div ref={pageRef} className="relative mx-auto w-[720px] px-10 pt-16" style={{ height: PAGE_SCROLL_HEIGHT }}>
+      <div ref={pageRef} className="relative mx-auto w-180 px-10 pt-16" style={{ height: PAGE_SCROLL_HEIGHT }}>
         <p className="font-mono text-[11px] leading-[1.7] text-black/45 dark:text-white/45">
           Scroll the page. Both columns hold the same two targets in the same flow; only the frame differs. The left
           follower is an absolutely positioned element inside the wrapper its provider was pointed at, so the page
           carries it. The right one is fixed to the viewport, so every scrolled pixel is a pixel it has to catch up.
         </p>
-        <div className="mt-[360px] flex flex-col items-center gap-6">
+        <div className="mt-90 flex flex-col items-center gap-6">
           <ToggleButton offLabel="push · #2" on={second} onLabel="pop · #2" onToggle={() => setSecond((v) => !v)} />
           <div className="flex gap-10">
             {/*
