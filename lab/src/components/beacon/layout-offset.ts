@@ -3,12 +3,13 @@
  * layout offset of `el`, immune to CSS `transform`.
  *
  * Walks the `offsetParent` chain from `el` up to `container`,
- * accumulating `offsetLeft` / `offsetTop` and subtracting the
- * `scrollLeft` / `scrollTop` of every ancestor along the way, up to and
- * including each hop's `offsetParent` (the container excepted — see the
- * loop). The result is the element's position as laid out by the
- * browser, *not* where it currently paints after transforms are
- * applied.
+ * accumulating `offsetLeft` / `offsetTop` plus each hop's border
+ * (`clientLeft` / `clientTop`, since the two ends of a hop are measured
+ * from different edges) and subtracting the `scrollLeft` / `scrollTop`
+ * of every ancestor along the way, up to and including each hop's
+ * `offsetParent` (the container excepted from both — see the loop). The
+ * result is the element's position as laid out by the browser, *not*
+ * where it currently paints after transforms are applied.
  *
  * Why not `getBoundingClientRect()`?
  *
@@ -70,6 +71,27 @@ export function layoutOffsetRelativeTo(el: HTMLElement, container: HTMLElement |
     y += node.offsetTop;
 
     const offsetParent = node.offsetParent as HTMLElement | null;
+
+    // Add the offsetParent's border, because the two ends of a hop are
+    // measured from different edges: `node.offsetLeft` is relative to the
+    // offsetParent's **padding** edge, while the next iteration's
+    // `offsetParent.offsetLeft` locates that parent's **border** edge.
+    // Summing raw `offsetLeft`s therefore drops one border width per hop,
+    // permanently — a 1px-bordered panel between the element and the
+    // container parked the beacon 1px off on both axes, and a 4px border
+    // would cost 4. `clientLeft` / `clientTop` is exactly the missing
+    // quantity (border width, plus the scrollbar gutter when it sits on
+    // the leading edge, which `offsetLeft` also measures past).
+    //
+    // The container is excluded, and has to be: the follower is
+    // positioned inside it, so these coordinates are relative to the
+    // container's padding box — which is what the final hop's
+    // `offsetLeft` already reports. Adding its border would push the
+    // follower off by that much in the other direction.
+    if (offsetParent && offsetParent !== container) {
+      x += offsetParent.clientLeft;
+      y += offsetParent.clientTop;
+    }
 
     // Subtract the scroll offset of every ancestor from `node` up to and
     // **including** its `offsetParent`. `offsetLeft` / `offsetTop` are
