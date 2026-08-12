@@ -43,6 +43,45 @@ const NOTE_CLASS = `
 `;
 
 // ---------------------------------------------------------------------------
+// Every control here is a two-state toggle whose label changes length, so
+// every one of them is a width change waiting to re-centre the column the
+// target sits in — the same shift the fixed-size note above exists to
+// avoid. The beacon would follow that shift faithfully and read as lag in
+// the thing being demonstrated.
+//
+// Both labels are therefore always in the DOM: the inactive one in a
+// zero-height `visibility: hidden` stack that still contributes its
+// intrinsic width, so the button sizes to the wider of the two and stops
+// resizing on toggle. `visibility: hidden` rather than `display: none`
+// because only the former keeps the box in flow to be measured; `h-0` +
+// `leading-0` keep it from contributing height, `overflow-clip` from
+// being scrolled into. Taking both labels as props rather than a
+// hand-written list of variants is what keeps the hidden set from
+// drifting away from what the button actually renders.
+// ---------------------------------------------------------------------------
+
+const HIDDEN_LABELS_CLASS = 'invisible flex h-0 flex-col overflow-clip leading-0';
+
+interface ToggleButtonProps {
+  on: boolean;
+  /** Label while `on`. */
+  onLabel: string;
+  /** Label while not `on`. */
+  offLabel: string;
+  onToggle: () => void;
+}
+
+const ToggleButton: FC<ToggleButtonProps> = ({ on, onLabel, offLabel, onToggle }) => (
+  <button className={BUTTON_CLASS} onClick={onToggle} type="button">
+    {on ? onLabel : offLabel}
+    <span className={HIDDEN_LABELS_CLASS}>
+      <span>{onLabel}</span>
+      <span>{offLabel}</span>
+    </span>
+  </button>
+);
+
+// ---------------------------------------------------------------------------
 // Reusable target — emits a beacon that wraps its own DOM bounds.
 // ---------------------------------------------------------------------------
 
@@ -78,8 +117,22 @@ interface FrameProps {
   onEmpty?: BeaconEmptyBehavior;
 }
 
+// Storybook's `layout: 'centered'` centres the story in the viewport on
+// both axes, and the column below centres its own children — so every
+// target in these stories is at a fixed offset from the viewport's
+// centre and at a viewport-dependent offset from its corner. The centre
+// is therefore the frame that describes this layout: resize the window
+// and the beacons don't move at all, rather than moving by half the
+// delta and being chased there.
+//
+// It applies to a column of stacked children too, not just a single
+// centred one: the column's own size is fixed (the notes and rows below
+// are pinned for exactly that reason), so each child's offset from the
+// centre is a constant even when it isn't at the centre.
+const STORY_ORIGIN: BeaconOrigin = { x: 'center', y: 'center' };
+
 const Frame: FC<FrameProps> = ({ children, onEmpty }) => (
-  <BeaconProvider followerProps={{ className: FOLLOWER_CLASS, onEmpty }}>
+  <BeaconProvider followerProps={{ className: FOLLOWER_CLASS, onEmpty }} origin={STORY_ORIGIN}>
     <div className="flex flex-col items-center gap-6">{children}</div>
   </BeaconProvider>
 );
@@ -96,7 +149,7 @@ const Frame: FC<FrameProps> = ({ children, onEmpty }) => (
 // ---------------------------------------------------------------------------
 
 const STAGE_CLASS = `
-  relative h-44 shrink-0 overflow-hidden rounded-[6px] border border-dashed border-black/15
+  relative overflow-hidden rounded-[6px] border border-dashed border-black/15
   dark:border-white/20
 `;
 
@@ -105,24 +158,39 @@ const STAGE_LABEL_CLASS = `
   dark:text-white/35
 `;
 
+// Fixed height so a caption that rewraps as the stage narrows can't
+// change the row's height and slide the stages around mid-drag.
+const CAPTION_CLASS = 'h-11 font-mono text-[11px] leading-[1.5]';
+const CAPTION_MATCH_CLASS = 'text-black/40 dark:text-white/40';
+const CAPTION_MISMATCH_CLASS = 'text-black/75 dark:text-white/85';
+
 const RANGE_CLASS = 'w-[420px] cursor-ew-resize accent-black/50 dark:accent-white/60';
 
 interface StageProps {
+  /** Inside the stage: the layout it uses and the origin it claims. */
   label: string;
+  /** Under the stage: what to expect from that pairing while dragging. */
+  caption: string;
+  /** Whether the claimed origin actually describes the layout. Drives caption emphasis. */
+  match: boolean;
   width: number;
+  height?: number;
   origin?: BeaconOrigin;
   children: ReactNode;
 }
 
-const Stage: FC<StageProps> = ({ label, width, origin, children }) => {
+const Stage: FC<StageProps> = ({ label, caption, match, width, height = 176, origin, children }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   return (
-    <div ref={stageRef} className={STAGE_CLASS} style={{ width }}>
-      <BeaconProvider containerRef={stageRef} renderFollower={false} origin={origin}>
-        <span className={STAGE_LABEL_CLASS}>{label}</span>
-        {children}
-        <BeaconFollower className={FOLLOWER_CLASS} />
-      </BeaconProvider>
+    <div className="flex shrink-0 flex-col gap-2" style={{ width }}>
+      <div ref={stageRef} className={STAGE_CLASS} style={{ width, height }}>
+        <BeaconProvider containerRef={stageRef} renderFollower={false} origin={origin}>
+          <span className={STAGE_LABEL_CLASS}>{label}</span>
+          {children}
+          <BeaconFollower className={FOLLOWER_CLASS} />
+        </BeaconProvider>
+      </div>
+      <p className={cn(CAPTION_CLASS, match ? CAPTION_MATCH_CLASS : CAPTION_MISMATCH_CLASS)}>{caption}</p>
     </div>
   );
 };
@@ -162,9 +230,7 @@ export const PushPop: Story = {
     const [second, setSecond] = useState(false);
     return (
       <Frame>
-        <button className={BUTTON_CLASS} onClick={() => setSecond((v) => !v)} type="button">
-          {second ? 'pop · #2' : 'push · #2'}
-        </button>
+        <ToggleButton offLabel="push · #2" on={second} onLabel="pop · #2" onToggle={() => setSecond((v) => !v)} />
         <div className="flex items-center gap-6" style={{ width: 448 }}>
           <Target label="#1 · fixed" width={300} height={140} />
           {second && <Target label="#2 · pushed" width={124} height={44} />}
@@ -182,9 +248,12 @@ export const Priority: Story = {
     const [critical, setCritical] = useState(false);
     return (
       <Frame>
-        <button className={BUTTON_CLASS} onClick={() => setCritical((v) => !v)} type="button">
-          {critical ? 'dismiss · critical' : 'raise · critical'}
-        </button>
+        <ToggleButton
+          offLabel="raise · critical"
+          on={critical}
+          onLabel="dismiss · critical"
+          onToggle={() => setCritical((v) => !v)}
+        />
         <div className="flex flex-wrap items-start gap-6">
           <Target label="normal" width={160} height={80} priority="normal" />
           <Target label="high" width={160} height={80} priority="high" />
@@ -214,9 +283,12 @@ export const LoseLastBeaconHide: Story = {
     const [enabled, setEnabled] = useState(true);
     return (
       <Frame onEmpty="hide">
-        <button className={BUTTON_CLASS} onClick={() => setEnabled((v) => !v)} type="button">
-          {enabled ? 'pop · only beacon' : 'push · only beacon'}
-        </button>
+        <ToggleButton
+          offLabel="push · only beacon"
+          on={enabled}
+          onLabel="pop · only beacon"
+          onToggle={() => setEnabled((v) => !v)}
+        />
         <Target
           label={enabled ? 'only beacon · active' : 'only beacon · inactive'}
           width={280}
@@ -225,7 +297,7 @@ export const LoseLastBeaconHide: Story = {
         />
         <p className={NOTE_CLASS}>
           {enabled
-            ? 'active — the outline tracks the target. Resize the window: the target re-centres and the outline follows it.'
+            ? 'active — the outline tracks the target. Resize the window: the target re-centres and the outline stays glued to it, because this story measures from the viewport’s centre and nothing moved in that frame.'
             : 'inactive — the stack is empty, so the follower unmounted and no measurement is running. Resize the window, then push again: the outline fades in on the target’s new box, never flying in from the old one.'}
         </p>
       </Frame>
@@ -263,12 +335,23 @@ export const OriginResize: Story = {
           value={width}
         />
         <div className="flex items-start gap-6">
-          <Stage label="origin · start" width={width}>
+          <Stage
+            caption="Centred layout measured from the corner. The beacon’s x is half the stage’s width, so it moves on every drag frame."
+            label="origin · start"
+            match={false}
+            width={width}
+          >
             <div className="flex h-full items-center justify-center">
               <Target height={72} label="lags" width={140} />
             </div>
           </Stage>
-          <Stage label="origin · center" origin={{ x: 'center' }} width={width}>
+          <Stage
+            caption="Same layout measured from the centre. The beacon’s x is 0 at every width, so there is nothing to animate."
+            label="origin · center"
+            match
+            origin={{ x: 'center' }}
+            width={width}
+          >
             <div className="flex h-full items-center justify-center">
               <Target height={72} label="doesn’t" width={140} />
             </div>
@@ -276,8 +359,168 @@ export const OriginResize: Story = {
         </div>
         <p className={NOTE_CLASS}>
           Drag slowly, then quickly. The left outline’s lag scales with drag speed — that’s a spring doing its job on a
-          target that shouldn’t have moved. Only the x axis is re-origined here; the stage’s height is fixed, so y has
-          nothing to gain from it.
+          target that shouldn’t have moved. Only x changes frame here; the stage’s height is fixed, so y has nothing to
+          gain from it.
+        </p>
+      </div>
+    );
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Three layouts, used by the two stories below to pair each one with a
+// right and a wrong origin. Each pins its target somewhere the
+// container's own size does or doesn't reach: the top-left corner is
+// reached by neither axis, the centre by half of each, the far corner by
+// all of each.
+// ---------------------------------------------------------------------------
+
+type StageLayout = 'corner' | 'centre' | 'far-corner';
+
+const StageContent: FC<{ layout: StageLayout }> = ({ layout }) => {
+  if (layout === 'centre') {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Target height={52} label="centred" width={132} />
+      </div>
+    );
+  }
+  const corner = layout === 'corner';
+  return (
+    <Target
+      className={corner ? 'absolute top-9 left-4' : 'absolute right-4 bottom-4'}
+      height={52}
+      label={corner ? 'top-left' : 'bottom-right'}
+      width={132}
+    />
+  );
+};
+
+const SizeControl: FC<{ value: number; onChange: (next: number) => void }> = ({ value, onChange }) => (
+  <input
+    className={RANGE_CLASS}
+    max={300}
+    min={180}
+    onChange={(e) => onChange(e.target.valueAsNumber)}
+    type="range"
+    value={value}
+  />
+);
+
+/** Both axes off one slider, so a drag exercises x and y at once. */
+const stageHeight = (width: number): number => Math.round(width * 0.62);
+
+// The rule, stated three times. Each stage claims the origin its own
+// layout actually holds still against, and all three are lag-free through
+// the same drag — including the corner one, which is what the default
+// `'start'` origin is for. There is no "best" origin: the corner stage
+// would lag under a centre origin exactly as the centre stage lags under
+// a corner one.
+export const OriginMatch: Story = {
+  name: 'Origin · match',
+  render: function Render() {
+    const [width, setWidth] = useState(260);
+    const height = stageHeight(width);
+    return (
+      <div className="flex flex-col items-center gap-6">
+        <SizeControl onChange={setWidth} value={width} />
+        <div className="flex items-start gap-6">
+          <Stage
+            caption="Pinned to the corner the coordinates start from, so both offsets are constants. The default origin."
+            height={height}
+            label="top-left · start"
+            match
+            width={width}
+          >
+            <StageContent layout="corner" />
+          </Stage>
+          <Stage
+            caption="Centred on both axes, measured from the centre on both axes. Reports (0, 0) at every stage size."
+            height={height}
+            label="centred · center"
+            match
+            origin={{ x: 'center', y: 'center' }}
+            width={width}
+          >
+            <StageContent layout="centre" />
+          </Stage>
+          <Stage
+            caption="Pinned to the far corner, measured from the far corner. Its inset from the right and bottom edges is what stays fixed."
+            height={height}
+            label="bottom-right · end"
+            match
+            origin={{ x: 'end', y: 'end' }}
+            width={width}
+          >
+            <StageContent layout="far-corner" />
+          </Stage>
+        </div>
+        <p className={NOTE_CLASS}>
+          Drag as fast as you like: none of the three outlines separates from its target, because none of the three
+          beacons reports a changing position. The origin isn’t a smoothing setting — it decides whether a resize is
+          movement at all.
+        </p>
+      </div>
+    );
+  },
+};
+
+// The same three layouts, all claiming the corner origin. The claim is
+// only true for one of them, and the error is proportional to how much of
+// the container's size the layout actually consumes: none for the corner,
+// half the delta for the centre, all of it for the far corner. The
+// outlines don't just lag — they lag by different amounts in the same
+// drag, which is the tell that the frame is wrong rather than the spring
+// being slow.
+//
+// Worth keeping as a story because a wrong origin is worse than no
+// origin: it reads as configured, the beacon reports numbers that look
+// plausible, and nothing warns. The only check is whether the layout
+// really holds that fraction still.
+export const OriginMismatch: Story = {
+  name: 'Origin · mismatch',
+  render: function Render() {
+    const [width, setWidth] = useState(260);
+    const height = stageHeight(width);
+    const corner: BeaconOrigin = { x: 'start', y: 'start' };
+    return (
+      <div className="flex flex-col items-center gap-6">
+        <SizeControl onChange={setWidth} value={width} />
+        <div className="flex items-start gap-6">
+          <Stage
+            caption="Correct. Nothing to chase."
+            height={height}
+            label="top-left · start"
+            match
+            origin={corner}
+            width={width}
+          >
+            <StageContent layout="corner" />
+          </Stage>
+          <Stage
+            caption="Wrong by half. Centring spends half of each axis, so the beacon moves by half the drag and the spring trails it."
+            height={height}
+            label="centred · start"
+            match={false}
+            origin={corner}
+            width={width}
+          >
+            <StageContent layout="centre" />
+          </Stage>
+          <Stage
+            caption="Wrong by all of it. Pinning to the far corner spends the whole axis, so the beacon moves the full drag — the worst case of the three."
+            height={height}
+            label="bottom-right · start"
+            match={false}
+            origin={corner}
+            width={width}
+          >
+            <StageContent layout="far-corner" />
+          </Stage>
+        </div>
+        <p className={NOTE_CLASS}>
+          Both axes move here, so the two wrong stages lag diagonally. Fixing this is not a spring change: give each
+          beacon the origin its layout holds still against and all three behave like the left one.
         </p>
       </div>
     );
@@ -312,11 +555,14 @@ export const OriginHandoff: Story = {
             type="range"
             value={width}
           />
-          <button className={BUTTON_CLASS} onClick={() => setCentred((v) => !v)} type="button">
-            {centred ? 'pop · #2' : 'push · #2'}
-          </button>
+          <ToggleButton offLabel="push · #2" on={centred} onLabel="pop · #2" onToggle={() => setCentred((v) => !v)} />
         </div>
-        <Stage label="mixed origins" width={width}>
+        <Stage
+          caption="Two beacons, two frames, one follower. The swap converts between them before it paints."
+          label="mixed origins"
+          match
+          width={width}
+        >
           <Target className="absolute top-8 left-4" height={44} label="#1 · start" width={124} />
           {/*
             Box-model centring, per `useBeaconAnchor`'s contract: `inset-x-0`
@@ -351,20 +597,26 @@ export const OriginHandoff: Story = {
 // about to unmount but you want the visual anchor to linger — e.g.
 // tutorial steps that remove the highlighted control.
 //
-// The trade-off shows up on resize: freezing keeps a *stale* box, and an
-// inactive anchor no longer measures, so a window resize re-centres the
-// target while the frozen outline stays where it was. That's inherent to
-// freezing geometry the layout is still free to move — the next push
-// remeasures and springs the outline back onto the target.
+// The trade-off is that freezing keeps a *stale* box while no
+// measurement is running — but "stale" is relative to the frame it was
+// frozen in. This story measures from the viewport's centre, which is the
+// frame its centred layout holds still in, so a window resize moves the
+// frozen outline and the target by the same amount and the freeze
+// survives it. Staleness only shows for movement the frame doesn't
+// absorb, and a frame that absorbs the wrong things is what `Origin ·
+// mismatch` is about.
 export const LoseLastBeaconFreeze: Story = {
   name: 'Lose Last · freeze',
   render: function Render() {
     const [enabled, setEnabled] = useState(true);
     return (
       <Frame onEmpty="freeze">
-        <button className={BUTTON_CLASS} onClick={() => setEnabled((v) => !v)} type="button">
-          {enabled ? 'pop · only beacon' : 'push · only beacon'}
-        </button>
+        <ToggleButton
+          offLabel="push · only beacon"
+          on={enabled}
+          onLabel="pop · only beacon"
+          onToggle={() => setEnabled((v) => !v)}
+        />
         <Target
           label={enabled ? 'only beacon · active' : 'only beacon · inactive'}
           width={280}
@@ -373,8 +625,8 @@ export const LoseLastBeaconFreeze: Story = {
         />
         <p className={NOTE_CLASS}>
           {enabled
-            ? 'active — the outline tracks the target. Resize the window: the target re-centres and the outline follows it.'
-            : 'inactive — the outline is frozen on the last measured box, and no measurement is running. Resize the window: the target re-centres but the frozen outline stays behind. Push again and it springs back onto the target.'}
+            ? 'active — the outline tracks the target. Resize the window: the target re-centres and the outline stays glued to it, because this story measures from the viewport’s centre and nothing moved in that frame.'
+            : 'inactive — the outline is frozen on the last measured box and no measurement is running. Resize the window: the freeze survives it, because a centred target’s position in the centre frame is the one thing a resize doesn’t change. Push again to resume measuring.'}
         </p>
       </Frame>
     );
