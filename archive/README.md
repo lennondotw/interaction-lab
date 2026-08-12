@@ -70,3 +70,4 @@ the probe regenerates them.
 | [2026-08-liquid-glass-internals](./2026-08-liquid-glass-internals/README.md)                     | How does Apple's Liquid Glass compute its refraction and its dispersion?     | Six overlapping taps — and it ships with them off.  |
 | [2026-08-displacement-map-reuse](./2026-08-displacement-map-reuse/README.md)                     | When can one displacement map be reused, and what does a merge cost?         | Transforms are free; a merge wants an SDF instead.  |
 | [2026-08-disclosure-height-target](./2026-08-disclosure-height-target/README.md)                 | What should a disclosure animation own — a length or a ratio?                | A ratio — a resolved length is stale by design.     |
+| [2026-08-beacon-origin-frame](./2026-08-beacon-origin-frame/README.md)                           | What does choosing a beacon's coordinate frame buy, and what can't it buy?   | All of resize, none of scroll — 0 against 203px.    |
