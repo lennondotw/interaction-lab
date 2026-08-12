@@ -1,6 +1,6 @@
 # What choosing a coordinate frame buys a beacon's follower, and what it cannot buy
 
-**Date:** 2026-08 · **Status:** shipped; one measurement bug found on the way · **Applies to:** `origin.ts`, `use-beacon.ts`, `use-active-beacon.ts`, `follower.tsx`, `layout-offset.ts`
+**Date:** 2026-08 · **Status:** shipped; two bugs found on the way · **Applies to:** `origin.ts`, `use-beacon.ts`, `use-active-beacon.ts`, `follower.tsx`, `layout-offset.ts`, `use-layout-observation.ts`
 
 A beacon publishes one box — position and size — and a shared follower springs to
 it. Which numbers that box contains is a choice, and until this investigation the
@@ -129,7 +129,7 @@ that merely resizes would kick the position spring.
 
 ## Method
 
-Seven blocks against the real `Components/Beacon` stories, driven by
+Eight blocks against the real `Components/Beacon` stories, driven by
 [`probe.mjs`](./probe.mjs). Nothing is re-implemented: every measurement is the
 **painted** geometry — `getBoundingClientRect` on the follower against
 `getBoundingClientRect` on the target — which is deliberately _not_ the
@@ -141,7 +141,9 @@ where that mattered.)
 Sampling is per `requestAnimationFrame` inside the page, so a "frame" is a real
 compositor frame. Headless Chromium, for one specific reason: an occluded headed
 window stalls rAF while still reporting `visibilityState: "visible"`, and every
-peak in this file would read as `0`.
+peak in this file would read as `0`. §8 is the one exception and has to be headed,
+because headless lays out no scrollbar at all — it says so where it runs, and
+checks rAF is ticking before trusting anything.
 
 Two columns recur. **peak Δ** is the worst disagreement at any frame — the error a
 user could see. **settled Δ** is the gap once everything is at rest; non-zero
@@ -344,6 +346,53 @@ running.
 Which means `onEmpty` and `origin` are not independent choices. Freezing geometry
 is only safe in a frame the layout preserves.
 
+## 8 · The one input to the frame that resizes nothing
+
+A viewport-framed beacon's origin term is `f × documentElement.clientWidth`. A
+classic scrollbar takes layout width out of the ICB, so that term changes while
+no ancestor resizes and `resize` does not fire — the only input to the coordinate
+the ancestor cascade cannot see, because the walk stops at `<body>`.
+
+Reproducing it needs two departures from the rest of this file. It must run
+**headed**: headless Chromium lays out no scrollbar at all — `innerWidth −
+clientWidth` stays 0 with 4000px of overflow — so the case is invisible there.
+And the page has to style `::-webkit-scrollbar`, which opts it out of overlay
+scrollbars; that is the platform condition rather than a proxy for it, since the
+ICB and `clientWidth` then shrink together exactly as on a machine set to
+always-visible scrollbars. `--disable-features=OverlayScrollbar` does not help on
+macOS, where overlay-vs-classic is an OS setting. The body is pinned to a fixed
+width so its own RO cannot be what notices, the overflow is added out of flow so
+no ancestor's height changes, and the target does not move.
+
+Before observing `documentElement`:
+
+| state               | ICB  | gutter | target centre | resize events | coordinate x | Δ x     |
+| ------------------- | ---- | ------ | ------------- | ------------- | ------------ | ------- |
+| no scrollbar        | 1000 | 0      | 450           | 0             | −50          | 0       |
+| scrollbar appears   | 985  | 15     | 450           | 0             | −42.5        | 0       |
+| scrollbar goes away | 1000 | 0      | 450           | 0             | −42.5        | **7.5** |
+
+The gap turned out to be **half-covered by accident, in one direction only**. The
+appearance is caught — the coordinate moves −50 → −42.5, exactly the +7.5 the
+narrower ICB requires — with `resize events: 0` ruling out the resize listener.
+The credit goes to the layout-shift `IntersectionObserver`, whose frame insets are
+computed against the ICB: shrinking the viewport pushes the frame off the element
+and drops the ratio below 1, so it fires even though nothing moved. Growing the
+viewport back leaves the element still fully inside the frame, the ratio stays 1,
+and it stays silent — so the way _out_ left a permanent 7.5px error, half a
+scrollbar, on every centre-origin beacon in a viewport frame.
+
+Observing `documentElement` when there is no container closes it
+([`use-layout-observation.ts`](../../lab/src/components/beacon/use-layout-observation.ts)):
+the third row's coordinate returns to −50 and Δ x is 0 in all three states.
+
+The shape of this one is worth keeping. Adding the origin **widened what the
+cascade has to cover**: before it, the coordinate was a function of the element's
+own layout box only, and the cascade's job was "catch movement". After it, the
+coordinate is also a function of the frame's extent, so the job became "catch
+movement _or_ a change of frame" — and the frame's extent is the one quantity that
+can change with no ancestor resizing at all.
+
 ## What this says about the design
 
 The frame is not a smoothing setting. It decides **whether a change is movement**,
@@ -375,14 +424,11 @@ observer, and no chance for two observers to disagree by a frame.
 
 ## What this does not bound
 
-- **Classic scrollbars.** Every measurement here is on macOS overlay scrollbars,
-  where `clientWidth` does not change when a scroller becomes scrollable —
-  observed ad hoc while building §2 (a panel turned into a scroller stayed at
-  `clientWidth` 398), not a column of any table below. Where a scrollbar takes
-  layout width, the viewport-framed origin term changes by half its width without
-  any _ancestor_ resizing. The observation cascade walks up to `document.body`, not
-  `documentElement`, so the common case (auto-width body) is covered by the body
-  RO and the fixed-width-body case is a gap. Unmeasured, and left open.
+- **Classic scrollbars on a _container_ frame.** §8 covers the viewport frame. A
+  scroller that gains a classic scrollbar also loses `clientWidth`, and there the
+  container itself is in the observed set, so it should be covered — but that path
+  was not run, because §2's panels are on macOS overlay scrollbars and stayed at
+  `clientWidth` 398 throughout.
 - **Writing modes and RTL.** `offsetLeft` / `clientLeft` are physical, and
   `clientLeft` folds in the scrollbar gutter when it sits on the leading edge. No
   RTL or vertical-writing-mode case was run.
@@ -420,7 +466,8 @@ node archive/2026-08-beacon-origin-frame/probe.mjs   # § 6 loses a pixel; § 2'
 git checkout HEAD -- lab/src/components/beacon/layout-offset.ts
 ```
 
-Absolute peaks track the machine and vary between runs — ~1px in §1, ~5px on §2's
+§8 opens a second, headed browser window for the length of that block. Absolute
+peaks track the machine and vary between runs — ~1px in §1, ~5px on §2's
 scroll peaks — because both depend on where in the spring's response a sampled
 frame lands. Everything the conclusions rest on is exact and stable: the zeros,
 the 1 : 2 ratio between the two wrong rows in §1, the `coordinate moved` column in

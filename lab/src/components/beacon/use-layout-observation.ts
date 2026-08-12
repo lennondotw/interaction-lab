@@ -89,6 +89,23 @@ export function useLayoutObservation(
         node = node.parentElement;
       }
     }
+    if (!container) {
+      // Without a container the origin frame's extent is
+      // `documentElement.clientWidth / clientHeight`, so that box has to be
+      // observed even though the walk above stops at `<body>` — a change to it
+      // is a change to the beacon's coordinate, and nothing else here is
+      // guaranteed to notice.
+      //
+      // The case is a scrollbar that takes layout width: it comes out of the
+      // ICB without resizing any ancestor, and `resize` does not fire for it.
+      // Measured with real classic scrollbars, the layout-shift observer
+      // happens to cover *one* direction — its frame insets are computed
+      // against the ICB, so shrinking the viewport pushes the frame off the
+      // element and fires, while growing it back leaves the element still
+      // fully inside and silent. That left a permanent half-a-scrollbar error
+      // on the way out (7.5px of a 15px bar) for any centre origin.
+      ro.observe(document.documentElement);
+    }
     const shiftObserver = observeLayoutShift(el, measure);
     window.addEventListener('scroll', measure, { passive: true, capture: true });
     window.addEventListener('resize', measure, { passive: true });

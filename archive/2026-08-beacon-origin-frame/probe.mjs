@@ -539,6 +539,109 @@ const freezeFrames = async () => {
 };
 
 // ---------------------------------------------------------------------------
+// 8 · The one change to the viewport frame that resizes nothing.
+//
+// A viewport-framed beacon's origin term is `f × documentElement.clientWidth`.
+// A classic scrollbar takes layout width out of the ICB, so the term changes
+// while no ancestor resizes and `resize` does not fire — the one input to the
+// coordinate that the ancestor cascade cannot see, because the walk stops at
+// `<body>`.
+//
+// Two things this block needs that the rest of the file does not:
+//
+//   - **headed** Chromium. Headless lays out no scrollbar at all (measured:
+//     `innerWidth - clientWidth` stays 0 with 4000px of overflow), so the whole
+//     case is invisible there. `--disable-features=OverlayScrollbar` does not
+//     help on macOS, where overlay-vs-classic is an OS setting.
+//   - styling `::-webkit-scrollbar`, which opts the page out of overlay
+//     scrollbars and gives the bar real layout width. That is the platform
+//     condition being reproduced, not a proxy for it: the ICB and
+//     `documentElement.clientWidth` shrink together, exactly as they do on a
+//     machine set to always-visible scrollbars.
+//
+// The body is pinned to a fixed width so its own ResizeObserver cannot be the
+// thing that notices, and the overflow is added out of flow so no ancestor's
+// height changes either. The target does not move, so the layout-shift observer
+// has no movement to see.
+// ---------------------------------------------------------------------------
+
+const scrollbarGutter = async () => {
+  const headed = await chromium.launch({
+    headless: false,
+    args: [
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--disable-backgrounding-occluded-windows',
+    ],
+  });
+  const page = await headed.newPage({ viewport: { width: 1000, height: 800 } });
+  await page.addInitScript(() => {
+    globalThis.resizes = 0;
+    addEventListener('resize', () => globalThis.resizes++);
+  });
+  await page.goto(story('components-beacon--single'));
+  await page.waitForSelector('div[style*="z-index: 9000"]');
+
+  const rows = await page.evaluate(async () => {
+    const raf = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    const settle = async (n) => {
+      for (let i = 0; i < n; i++) await raf();
+    };
+    // A headed window that ends up occluded stalls rAF while still reporting
+    // `visibilityState: "visible"`. Everything below would then read as "no
+    // error" for the wrong reason, so refuse to report rather than mislead.
+    let ticks = 0;
+    const spin = () => {
+      ticks++;
+      requestAnimationFrame(spin);
+    };
+    requestAnimationFrame(spin);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    if (ticks < 5) throw new Error(`rAF is stalled (${ticks} ticks in 400ms) — bring the window to the front`);
+
+    const style = document.createElement('style');
+    style.textContent =
+      '::-webkit-scrollbar { width: 15px; background: #222; } ::-webkit-scrollbar-thumb { background: #888; }';
+    document.head.appendChild(style);
+    document.body.style.width = '900px';
+    document.body.style.margin = '0';
+    await settle(90);
+
+    const target = document.querySelector('[style*="width: 240px"]');
+    const follower = () => document.querySelector('div[style*="z-index: 9000"]');
+    const snap = () => {
+      const t = target.getBoundingClientRect();
+      const f = follower().getBoundingClientRect();
+      return {
+        ICB: document.documentElement.clientWidth,
+        gutter: window.innerWidth - document.documentElement.clientWidth,
+        'target centre': t.left + t.width / 2,
+        'resize events': globalThis.resizes,
+        'coordinate x': Number(
+          Number(/translateX\((-?[\d.]+)px\)/.exec(follower().style.transform)?.[1] ?? 0).toFixed(1)
+        ),
+        'Δ x': Number((f.left + f.width / 2 - (t.left + t.width / 2)).toFixed(2)),
+      };
+    };
+
+    const out = {};
+    out['no scrollbar'] = snap();
+    const spacer = document.createElement('div');
+    spacer.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:4000px;';
+    document.body.appendChild(spacer);
+    await settle(150);
+    out['scrollbar appears'] = snap();
+    spacer.remove();
+    await settle(150);
+    out['scrollbar goes away'] = snap();
+    return out;
+  });
+
+  await headed.close();
+  return rows;
+};
+
+// ---------------------------------------------------------------------------
 
 const heading = (text) => console.log(`\n── ${text} ${'─'.repeat(Math.max(0, 66 - text.length))}`);
 
@@ -594,5 +697,8 @@ console.table(await borderTerm());
 
 heading('7 · freeze inherits the frame · viewport 1280×900 → 940×680');
 console.table(await freezeFrames());
+
+heading('8 · a classic scrollbar takes width out of the frame · headed');
+console.table(await scrollbarGutter());
 
 await browser.close();
