@@ -545,14 +545,20 @@ export const OriginMismatch: Story = {
   },
 };
 
-// The handoff again, with one of the two origins wrong.
+// The handoff again, with one of the two origins wrong on both axes.
 //
-// Both targets are centred in the same flex column, so the *layout* is
-// identical for both — only the claim differs. #1 says `'start'`, which is
-// false for a centred element and costs it half of every drag; #2 says
-// `'center'`, which is true and costs it nothing. Same stage, same drag,
-// same spring: the only variable is the frame, which is the cleanest
-// version of the argument the other origin stories make with two layouts.
+// Both targets are centred in the same flex column, on both axes, so the
+// *layout* is identical for both — only the claim differs. #1 says
+// `{ start, start }`, which is false for a centred element and costs it
+// half of every drag on each axis; #2 says `{ center, center }`, which is
+// true and costs it nothing. Same stage, same drag, same spring: the only
+// variable is the frame, which is the cleanest version of the argument the
+// other origin stories make by varying the layout instead.
+//
+// The slider drives width and height together, so #1 lags diagonally and
+// there is no axis left where a wrong claim happens to be harmless — the
+// earlier version pinned the stage's height, which quietly let y be
+// correct in either frame.
 //
 // It also puts the frame conversion under load. In `Origin · handoff` the
 // springs are at rest at the moment of the swap, so continuity is easy;
@@ -570,10 +576,15 @@ export const OriginHandoffCentred: Story = {
     return (
       <div className="flex flex-col items-center gap-6">
         <div className="flex items-center gap-4">
+          {/*
+            Narrower range than the other handoff story: the height follows
+            the width here, and the stacked column stops clearing the
+            stage's own label below ~300 (measured 1px of clearance at 260).
+          */}
           <input
             className={RANGE_CLASS}
             max={480}
-            min={220}
+            min={300}
             onChange={(e) => setWidth(e.target.valueAsNumber)}
             type="range"
             value={width}
@@ -582,25 +593,33 @@ export const OriginHandoffCentred: Story = {
         </div>
         <Stage
           caption="Same layout for both. Only #1’s claim about it is wrong."
+          height={stageHeight(width)}
           label="both centred · one wrong origin"
           match={false}
           width={width}
         >
           {/*
-            Flex centring is box-model centring, so `offsetLeft` reports the
-            centred position and both beacons measure the same layout. #2
-            stays mounted while inactive so the column can't reflow on
-            toggle — the handoff has to be the only thing that changes.
+            Flex centring is box-model centring, so `offsetLeft` / `offsetTop`
+            report the centred position and both beacons measure the same
+            layout. #2 stays mounted while inactive so the column can't
+            reflow on toggle — the handoff has to be the only thing that
+            changes.
           */}
           <div className="flex h-full flex-col items-center justify-center gap-5">
-            <Target height={44} label="#1 · claims start" origin={{ x: 'start' }} width={196} />
-            <Target enabled={second} height={44} label="#2 · claims center" origin={{ x: 'center' }} width={196} />
+            <Target height={44} label="#1 · claims start" origin={{ x: 'start', y: 'start' }} width={196} />
+            <Target
+              enabled={second}
+              height={44}
+              label="#2 · claims center"
+              origin={{ x: 'center', y: 'center' }}
+              width={196}
+            />
           </div>
         </Stage>
         <p className={NOTE_CLASS}>
           {second
-            ? 'On #2, whose claim is true: drag at any speed and the outline stays on it. Pop back to #1 mid-drag — the lag returns, from wherever the surface was.'
-            : 'On #1, whose claim is false: drag and the outline trails by half the delta. Push #2 mid-drag to hand over to the frame that doesn’t lag.'}
+            ? 'On #2, whose claim is true on both axes: drag at any speed and the outline stays on it. Pop back to #1 mid-drag — the lag returns, from wherever the surface was.'
+            : 'On #1, whose claim is false on both axes: drag and the outline trails diagonally, by half of each delta. Push #2 mid-drag to hand over to the frame that can’t lag.'}
         </p>
       </div>
     );

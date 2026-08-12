@@ -36,12 +36,16 @@
  * from its top-left. For a centred element that is the point — it stays
  * centred for the whole animation, not just at the ends.
  *
- * Precision: `offsetLeft` and `clientWidth` are both integers, so at
- * odd container widths the two halves of the centre term disagree by up
- * to half a pixel and a centred beacon's reported coordinate wobbles
- * between `0` and `±0.5` across a drag. That is the residue of DOM
- * rounding, not of the frame; it is a spring input a hundred times
- * smaller than the lag it replaces, and invisible once smoothed.
+ * Precision: `offsetLeft` / `offsetTop` and `clientWidth` /
+ * `clientHeight` are all integers, while layout positions elements at
+ * fractional pixels, so a beacon's reported coordinate carries up to
+ * half a pixel of rounding residue and wobbles between `0` and `±0.5`
+ * across a drag. Measured in every frame, not just the centre one — a
+ * corner-pinned beacon in a container of odd height reports the same
+ * ±0.5 for the same reason. It is the price of `offset*`'s
+ * transform-immunity (see `layout-offset.ts`), it is a spring input a
+ * hundred times smaller than the lag the frame removes, and it is
+ * invisible once smoothed.
  */
 
 /**
