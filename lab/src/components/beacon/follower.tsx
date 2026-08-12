@@ -217,6 +217,9 @@ export const BeaconFollower: FC<BeaconFollowerProps> = ({
   //   coordinate. Percentages there resolve against the element itself,
   //   so the compositor recomputes it on every frame of the size spring
   //   and the anchor point holds still while the box grows around it.
+  //   That the growth anchor is the coordinate's anchor, rather than a
+  //   parameter of its own, is a deliberate call — `origin.ts` records
+  //   what separating them would cost.
   //
   // `translate` is an independent transform property, applied before
   // `transform` and composing with it, so it coexists with the `x` / `y`

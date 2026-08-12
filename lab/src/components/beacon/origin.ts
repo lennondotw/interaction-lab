@@ -31,10 +31,42 @@
  * the top.
  *
  * Using the same fraction for both roles couples one more thing: the
- * anchor point is what stays still while the size spring runs, so a
- * centre origin makes the follower grow from its centre rather than
- * from its top-left. For a centred element that is the point — it stays
- * centred for the whole animation, not just at the ends.
+ * origin point is what holds still while the size spring runs, so a
+ * centre origin grows the follower symmetrically about its centre and an
+ * `'end'` origin grows it up and to the left. Measured across a size
+ * change, exactly one quantity per axis stays put for the *whole*
+ * transition — left/top at `0`, the centre at `0.5`, right/bottom at `1`
+ * — because the renderer's own offset is a percentage of its live box,
+ * recomputed per frame rather than interpolated between two states.
+ *
+ * Whether the growth anchor should be a second, independent parameter
+ * was asked and decided against. The two roles are not equally free:
+ *
+ * - The *position* anchor has no freedom at all. The coordinate names
+ *   the element's origin point, so the renderer has to put its own
+ *   origin point there; anchoring the box by any other point displaces
+ *   it statically by `(other − origin) · size`. Not an aesthetic
+ *   choice — the coordinate stops meaning what it says.
+ * - The *growth* anchor genuinely could be separated, by springing
+ *   `x' = x + (g − origin) · targetSize` and rendering `x' − g · size`.
+ *   Resting geometry comes out identical for any `g` (substitute and the
+ *   extra terms cancel), so this is a real option, not a broken one.
+ *
+ * It stays coupled because `g = origin` is the only choice that keeps
+ * position and size **orthogonal**. Any other `g` puts `targetSize`
+ * inside the position value, so an element that merely resizes — without
+ * moving at all — would kick the position spring, and a size change
+ * arriving mid-handoff would disturb its velocity. As it stands the two
+ * channels are written from separate measurements and animated by
+ * separate springs, and a resize touches size alone.
+ *
+ * Coupling is also the more correct default rather than the cheaper one:
+ * a centred element wants its follower centred throughout the animation,
+ * not only at both ends of it. Wanting a growth *direction* that
+ * disagrees with the anchor is a presentation choice, and it already has
+ * somewhere to live — `BeaconFollower` hands `widthMV` / `heightMV` to
+ * its children, so an inner surface can open however it likes inside the
+ * outer container without touching the coordinate frame.
  *
  * Precision: `offsetLeft` / `offsetTop` and `clientWidth` /
  * `clientHeight` are all integers, while layout positions elements at
