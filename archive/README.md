@@ -73,3 +73,4 @@ the probe regenerates them.
 | [2026-08-beacon-origin-frame](./2026-08-beacon-origin-frame/README.md)                           | What does choosing a beacon's coordinate frame buy, and what can't it buy?   | All of resize, none of scroll — 0 against 203px.    |
 | [2026-08-split-minimum-across-frames](./2026-08-split-minimum-across-frames/README.md)           | Can a split pane held at a stale width be painted below its own minimum?     | No — the resize task re-clamps before that frame.   |
 | [2026-08-junction-spacing](./2026-08-junction-spacing/README.md)                                 | Is deciding one text junction enough, and how much of pangu.js applies?      | Enough — 98.93%, in 958 bytes against 6.5 KB.       |
+| [2026-08-backdrop-filter-corner-thread](./2026-08-backdrop-filter-corner-thread/README.md)       | Why does a blurred bar leave a hairline on a rounded frame's corner?         | Its clip is rasterised apart — 248px to 25.         |
