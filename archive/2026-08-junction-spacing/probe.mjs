@@ -168,9 +168,16 @@ if (divergences.size > 0) {
 }
 
 const HOSTILE = [
+  // Kana and Hangul are wide, and are still left flush: typing the space is a
+  // Chinese convention, and Japanese and Korean each have their own answer. See
+  // the README's locale section, and junction-spacing's module comment.
   ['한국', 'word', '입니다'],
   ['총', '42', '개'],
+  ['오늘은 ', 'Lime', '와 대화'],
+  ['PC에서 ', 'Mac', '으로 갈아타기'],
   ['ひらがな', 'ABC', 'です'],
+  ['お近くの', 'Apple Store', ''],
+  ['', 'Mac', 'を詳しく見る'],
   ['ﾊﾝｶｸ', 'abc', 'ｶﾅ'],
   ['\u{20000}字', 'word', ''],
   ['中文', 'Привет', '世界'],

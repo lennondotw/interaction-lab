@@ -1,15 +1,16 @@
 # junction spacing: is deciding one boundary enough?
 
 Copy in this repo is interpolated — a client-side string, a run that came from a
-server, sometimes a third piece after it — and CJK text wants a space where it
-meets a half-width run. The obvious reach is pangu.js, whose `spacingText()`
+server, sometimes a third piece after it — and Chinese copy wants a space where
+it meets a half-width run. The obvious reach is pangu.js, whose `spacingText()`
 formats a whole string. But the dynamic run is not ours to edit: it has to come
 out byte-identical, so the only question is **whether a space belongs at each
 junction**.
 
-Two things had to be answered before writing anything: how much of pangu we
-would actually use, and whether a junction-only decision can be as good as a
-whole-string pass.
+Three things had to be answered: how much of pangu we would actually use,
+whether a junction-only decision can be as good as a whole-string pass, and —
+found last, after the first version shipped it wrong — **which locales want the
+space typed at all**, since the answer is not "CJK".
 
 ## how much of pangu applies
 
@@ -65,22 +66,26 @@ on `!ANY_CJK.test(text)`.
 The second corpus has no oracle. Where the two differ, the reason is on the
 left:
 
-|                          | ours                 | pangu               |
-| ------------------------ | -------------------- | ------------------- |
-| `한국`⟦`word`⟧`입니다`   | `한국 word 입니다`   | `한국word입니다`    |
-| `ﾊﾝｶｸ`⟦`abc`⟧`ｶﾅ`        | `ﾊﾝｶｸ abc ｶﾅ`        | `ﾊﾝｶｸabcｶﾅ`         |
-| `中文`⟦`Привет`⟧`世界`   | `中文 Привет 世界`   | `中文Привет世界`    |
-| `中文`⟦`العربية`⟧`结束`  | `中文 العربية 结束`  | `中文العربية结束`   |
-| `航班`⟦`✈`⟧`起飞`        | `航班✈起飞`          | `航班 ✈ 起飞`       |
-| `中文`⟦`1️⃣`⟧`第一`       | `中文 1️⃣ 第一`       | `中文 1️⃣第一`       |
-| `文件在`⟦`/foo/bar`⟧`里` | `文件在 /foo/bar 里` | `文件在/foo/bar 里` |
+|                           | ours                  | pangu                  |
+| ------------------------- | --------------------- | ---------------------- |
+| `お近くの`⟦`Apple Store`⟧ | `お近くのApple Store` | `お近くの Apple Store` |
+| ⟦`Mac`⟧`を詳しく見る`     | `Macを詳しく見る`     | `Mac を詳しく見る`     |
+| `中文`⟦`Привет`⟧`世界`    | `中文 Привет 世界`    | `中文Привет世界`       |
+| `中文`⟦`العربية`⟧`结束`   | `中文 العربية 结束`   | `中文العربية结束`      |
+| `航班`⟦`✈`⟧`起飞`         | `航班✈起飞`           | `航班 ✈ 起飞`          |
+| `中文`⟦`1️⃣`⟧`第一`        | `中文 1️⃣ 第一`        | `中文 1️⃣第一`          |
+| `文件在`⟦`/foo/bar`⟧`里`  | `文件在 /foo/bar 里`  | `文件在/foo/bar 里`    |
 
-- Hangul, halfwidth katakana, Han above U+FFFF: pangu's CJK class is nine
-  hardcoded blocks, and `\p{scx=Han|Hira|Kana|Hang|Bopo}` covers **87371 more
-  code points** than it over U+0000–U+3FFFF (28827 in both, 116 in pangu's
-  ranges only — those are unassigned code points in the radicals blocks).
-  Hangul syllables are the bulk of the difference, so the K in its CJK is
-  decorative.
+- Han above U+FFFF: pangu's CJK class is nine hardcoded blocks, and
+  `\p{scx=Han|Hira|Kana|Hang|Bopo}` covers **87371 more code points** than it
+  over U+0000–U+3FFFF (28827 in both, 116 in pangu's ranges only — those are
+  unassigned code points in the radicals blocks). Hangul syllables are the bulk
+  of that difference, so the K in its CJK is decorative — but see the locale
+  section below: Hangul is not something to space at all, and pangu is
+  accidentally right there.
+- Kana is where pangu is wrong rather than merely incomplete. Hiragana and
+  Katakana are in its CJK class, so it produces `Mac を詳しく見る` and
+  `お近くの Apple Store`, and neither is what Japanese ships.
 - Cyrillic, Arabic, Hebrew, Thai, Devanagari: pangu's half-width class is
   `A-Za-z`, Greek, Latin-1, digits and a few symbols, so every other script gets
   nothing.
@@ -93,6 +98,64 @@ left:
 - **`\p{scx=Han}` cannot be used on its own**: Script_Extensions includes CJK
   punctuation, so a first attempt produced `world 。`. It has to be intersected
   with `\p{L}\p{N}` and have the fullwidth forms removed.
+
+## which locales take the space
+
+The first version of this treated `wide` as one category, which quietly applied a
+Chinese convention to Japanese and Korean. It is not one convention.
+
+What the standards ask for is a **typographic gap of about a quarter em, from the
+composition engine, belonging to no character**:
+
+- W3C [CLReq](https://www.w3.org/TR/clreq/), Mixed Text Composition — spacing
+  between Han and Western text in Chinese.
+- W3C [JLReq](https://www.w3.org/TR/jlreq/) — 和欧文間の空き, the same gap in
+  Japanese, which JIS X 4051 fixes at 四分アキ, a quarter em.
+- W3C [KLReq](https://www.w3.org/TR/klreq/) for Korean, which already spaces
+  words and so has no such rule to make.
+- [CSS Text 4](https://www.w3.org/TR/css-text-4/#text-autospace-property)'s
+  `text-autospace` is that gap handed to a stylesheet.
+
+Typing a U+0020 is the Chinese _web_ convention on top of that — pangu.js is its
+implementation — and nobody else's. Measured in Chrome 153 at 16px:
+
+|                                | gap    |                                                                        |
+| ------------------------------ | ------ | ---------------------------------------------------------------------- |
+| `text-autospace: normal`       | 2.00px | ≈ 1/8 em                                                               |
+| `text-autospace: no-autospace` | 0      | the **initial value**, so autospace is opt-in                          |
+| typed U+0020                   | 4.19px | ≈ 1/4 em, and it suppresses the autospace rather than stacking with it |
+
+So inserting a character where CSS would do is not neutral: it is 2.09× the gap
+the engine would have drawn, and it is a real character — copied, searched,
+line-breakable, stretched by `justify`.
+
+Who does what: `locale-probe.mjs` walks the text nodes of one publisher's three
+CJK localisations and counts the ones carrying a typed space at a CJK/Latin
+boundary against the ones left flush. One publisher rather than a survey, so the
+locale is the only thing varying — a house style compared against itself.
+
+|                       | typed space | flush   | samples                                                                                                                                                     |
+| --------------------- | ----------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| apple.com.cn, `zh-CN` | **115**     | 2       | spaced `探索 Mac`, `Mac 机型比较`; the two exceptions are filing numbers (`京ICP备10214630号`), where a space would be wrong                                |
+| apple.com/jp, `ja-JP` | 10          | **127** | flush `お近くのApple Store`, `Macを詳しく見る`; the 10 spaced are a carousel's `項目 1 -` labels, not prose                                                 |
+| apple.com/kr, `ko-KR` | **101**     | 15      | spaced `Mac 살펴보기`, `PC에서 Mac으로 갈아타기` — word boundaries; flush `Apple이 만든 앱`, `iPhone으로 탁월하게`, `Mac과 비즈니스` — every one a particle |
+
+Korean's two columns are the whole answer in one row: the spaces are at word
+boundaries, where Korean orthography has always put them and where the copy
+already contains them, and the flush cases are particles. Counts drift by a few
+between loads because the pages are dynamic; the direction does not.
+
+Korean is the case that settles it. A particle (조사) attaches to whatever
+precedes it, Latin words included, so `Apple 이 만든 앱` is a grammatical error
+rather than a typographic preference — and no window of characters distinguishes
+`Lime와` (particle, flush) from `Lime 와` (a word, which the copy would already
+have spaced). Japanese と/は/を/が have the same shape. Hence: **Hangul never,
+kana off by default, Han only.**
+
+Han cannot be narrowed further by inspection, because a Japanese document is full
+of it and Script_Extensions cannot tell `ja` from `zh`. Only the caller knows its
+locale, so the policy is a parameter (`scripts`, defaulting to `['han']`), and a
+Japanese host passes `scripts: []`.
 
 ## what a character-level probe gets wrong
 
@@ -126,7 +189,7 @@ punctuation corner cases scored 9278/9278 on the first corpus. It was not kept:
 once the window, the grapheme veto, the normalisation and the script classes are
 in place, pangu is only answering for half-width-only junctions that we
 deliberately decline anyway. `packages/utils/src/junction-spacing.ts` is the
-same decision written as a class matrix: 1.8 KB minified, 844 bytes gzipped, no
+same decision written as a class matrix: 2.0 KB minified, 958 bytes gzipped, no
 dependency, against pangu's 6.5 KB gzipped.
 
 ## cost
@@ -160,9 +223,16 @@ half of the job — it has to be verified in a browser, not in this probe.
 ```bash
 npm install --prefix archive/2026-08-junction-spacing
 node archive/2026-08-junction-spacing/probe.mjs
+
+pnpm exec playwright install chromium
+node archive/2026-08-junction-spacing/locale-probe.mjs
 ```
 
 pangu 9.1.0 is pinned in this directory's `package.json`, installed with npm
-because the probe is deliberately outside the pnpm workspace. Node runs the
+because `probe.mjs` is deliberately outside the pnpm workspace. Node runs its
 TypeScript import by stripping types, so it needs Node >= 23.6; this repo is on
 26.6.
+
+`locale-probe.mjs` is the browser-and-network one: it loads three live pages, so
+it is the one probe here whose numbers can move under it, and it prints its
+samples alongside its counts for exactly that reason.
