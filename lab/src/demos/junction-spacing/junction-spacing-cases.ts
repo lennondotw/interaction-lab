@@ -115,18 +115,13 @@ export const SPACING_GROUPS: readonly SpacingGroup[] = [
   },
   {
     blurb:
-      'Wide is decided by Script_Extensions, so every wide script qualifies — not the nine Unicode blocks pangu.js hardcodes, which contain no Hangul and stop below U+FFFF.',
+      'Script is decided by Script_Extensions, so Han qualifies wherever it lives — not only inside the nine Unicode blocks pangu.js hardcodes, which stop below U+FFFF.',
     cases: [
-      { label: 'Traditional — same block, same answer', parts: [client('與'), dynamic('Lime'), client('聊聊')] },
-      { label: 'Japanese, kana on both edges', parts: [client('今日は'), dynamic('Lime'), client('と話す')] },
-      { label: 'Korean — pangu leaves this flush', parts: [client('오늘은'), dynamic('Lime'), client('와 대화')] },
+      { label: 'Traditional — same script, same answer', parts: [client('與'), dynamic('Lime'), client('聊聊')] },
       {
-        label: 'Hangul written decomposed, as macOS filenames are',
-        parts: [client('오늘은'.normalize('NFD')), dynamic('Lime'), client('와 대화')],
+        label: 'Bopomofo travels with Han: it annotates Chinese',
+        parts: [client('ㄅㄆ'), dynamic('abc'), client('ㄇㄈ')],
       },
-      { label: 'Hiragana', parts: [client('ひらがな'), dynamic('ABC'), client('です')] },
-      { label: 'Bopomofo', parts: [client('ㄅㄆ'), dynamic('abc'), client('ㄇㄈ')] },
-      { label: 'Halfwidth katakana is narrow, and still kana', parts: [client('ﾊﾝｶｸ'), dynamic('abc'), client('ｶﾅ')] },
       {
         label: 'Han above U+FFFF — surrogate pairs',
         parts: [client('\u{20000}\u{20001}'), dynamic('word'), client('字')],
@@ -139,7 +134,48 @@ export const SPACING_GROUPS: readonly SpacingGroup[] = [
       { label: 'CJK punctuation is not a wide letter', parts: [client('「引用」'), dynamic('quote'), client('')] },
     ],
     id: 'wide-scripts',
-    title: 'CJK variants',
+    title: 'Han, wherever it lives',
+  },
+  {
+    /*
+     * The group that exists because the first version of this board got it
+     * wrong: it spaced Japanese and Korean too, on the grounds that kana and
+     * Hangul are wide. Typing the space is the Chinese convention, and the other
+     * two have their own answers.
+     */
+    blurb:
+      'Typing the space is a Chinese convention, not a CJK one. Japanese wants the same gap from the composition engine rather than from a character — JLReq’s 和欧文間, a quarter em in JIS X 4051, which CSS text-autospace now provides — and Korean attaches particles to whatever precedes them, so a space there is a grammatical error rather than a preference. Measured on one publisher: apple.com.cn types the space in 123 text nodes against 2, apple.com/jp is 133 flush against 10, and apple.com/kr never spaces before a particle.',
+    cases: [
+      {
+        label: 'Japanese: as apple.com/jp ships it, flush',
+        parts: [client('お近くの'), dynamic('Apple Store'), client('')],
+      },
+      {
+        label: 'A Japanese particle attaches to the Latin word',
+        parts: [client(''), dynamic('Mac'), client('を詳しく見る')],
+      },
+      { label: 'And so does the next one', parts: [client('今日は'), dynamic('Lime'), client('と話す')] },
+      {
+        label: 'Hiragana against Latin: no character inserted',
+        parts: [client('ひらがな'), dynamic('ABC'), client('です')],
+      },
+      { label: 'Halfwidth katakana is narrow, and still kana', parts: [client('ﾊﾝｶｸ'), dynamic('abc'), client('ｶﾅ')] },
+      {
+        label: 'Korean: the word boundary space is already in the copy, the particle takes none',
+        parts: [client('오늘은 '), dynamic('Lime'), client('와 대화')],
+      },
+      {
+        label: 'Korean: 으로 is a particle — apple.com/kr writes PC에서 Mac으로 갈아타기',
+        parts: [client('PC에서 '), dynamic('Mac'), client('으로 갈아타기')],
+      },
+      { label: 'Korean: 이 is a particle too', parts: [client(''), dynamic('Apple'), client('이 만든 앱')] },
+      {
+        label: 'Hangul written decomposed, still Hangul, still flush',
+        parts: [client('오늘은 '.normalize('NFD')), dynamic('Lime'), client('와 대화')],
+      },
+    ],
+    id: 'locale-policy',
+    title: 'Which locales take the space',
   },
   {
     blurb:

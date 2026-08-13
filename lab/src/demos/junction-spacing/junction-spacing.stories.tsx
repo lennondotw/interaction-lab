@@ -1,3 +1,4 @@
+import type { SpacedScript } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useArgs } from 'storybook/preview-api';
 
@@ -17,6 +18,7 @@ import { JunctionSpacingBoard, JunctionVerdicts, type JunctionSpacingOptions } f
 interface Args extends JunctionSpacingOptions {
   groupId?: string;
   isolateDynamic?: boolean;
+  scripts?: readonly SpacedScript[];
 }
 
 const meta: Meta<Args> = {
@@ -50,6 +52,7 @@ const board = (args: Args, updateArgs: (patch: Partial<Args>) => void) => (
     groups={groupsFor(args.groupId)}
     isolateDynamic={args.isolateDynamic}
     onOptionsChange={updateArgs}
+    scripts={args.scripts}
   />
 );
 
@@ -67,6 +70,24 @@ export const Basics = group('basics');
 export const SpacesTheCopyHas = group('boundary-spaces');
 
 export const WideScripts = group('wide-scripts');
+
+export const WhichLocalesTakeTheSpace = group('locale-policy');
+
+/**
+ * The same rows with kana and Hangul added to the policy, which is what treating
+ * "wide" as one category produces — and what the first version of this board
+ * shipped. Every row that changes is wrong: `Macを` and `Mac으로` take a particle,
+ * `お近くのApple Store` is flush on apple.com/jp, and Korean has already spaced
+ * its word boundaries in the copy.
+ */
+export const WhichLocalesTakeTheSpaceIfEveryWideScriptCounted: Story = {
+  args: { groupId: 'locale-policy', scripts: ['han', 'kana', 'hangul'] },
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+
+    return board(args, updateArgs);
+  },
+};
 
 export const Punctuation = group('punctuation');
 

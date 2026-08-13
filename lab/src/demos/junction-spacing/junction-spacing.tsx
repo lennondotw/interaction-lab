@@ -1,4 +1,11 @@
-import { cn, joinWithSpacing, needsSpaceBetween, segmentWithSpacing, type SpacedSegment } from '@monorepo/utils';
+import {
+  cn,
+  joinWithSpacing,
+  needsSpaceBetween,
+  segmentWithSpacing,
+  type SpacedScript,
+  type SpacedSegment,
+} from '@monorepo/utils';
 import { createContext, useContext, type FC, type ReactNode } from 'react';
 
 import { SPACING_GROUPS, type SpacingCase, type SpacingGroup, type SpacingPart } from './junction-spacing-cases.js';
@@ -123,18 +130,20 @@ const CARD = 'flex flex-col gap-1.5 rounded-lg bg-white p-3 ring-1 ring-black/5 
 const SAMPLE = 'text-lg leading-relaxed whitespace-pre-wrap';
 const CAPTION = 'text-xs text-neutral-500 dark:text-neutral-400';
 
-const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean; disableJunctionSpacing: boolean }> = ({
-  disableJunctionSpacing,
-  isolate,
-  spacingCase,
-}) => {
+const CaseCard: FC<{
+  spacingCase: SpacingCase;
+  isolate: boolean;
+  disableJunctionSpacing: boolean;
+  scripts?: readonly SpacedScript[];
+}> = ({ disableJunctionSpacing, isolate, scripts, spacingCase }) => {
   const { label, parts, rtl } = spacingCase;
   const texts = parts.map((part) => part.text);
+  const options = scripts === undefined ? undefined : { scripts };
   const segments: readonly SpacedSegment[] = disableJunctionSpacing
     ? parts.flatMap((part, partIndex) =>
         part.text === '' ? [] : [{ partIndex, text: part.text, type: 'part' } as const]
       )
-    : segmentWithSpacing(texts);
+    : segmentWithSpacing(texts, options);
 
   const present = parts.filter((part) => part.text !== '');
   const splitCluster = present.some(
@@ -156,7 +165,7 @@ const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean; disableJunction
       </p>
       {splitCluster && (
         <p className={cn(SAMPLE, 'text-neutral-500')} dir={rtl === true ? 'rtl' : undefined}>
-          {disableJunctionSpacing ? texts.join('') : joinWithSpacing(texts)}
+          {disableJunctionSpacing ? texts.join('') : joinWithSpacing(texts, options)}
           <span className="ms-2 align-middle text-xs">as one string, cluster intact</span>
         </p>
       )}
@@ -256,6 +265,8 @@ export const JunctionSpacingBoard: FC<
   JunctionSpacingOptions & {
     groups?: readonly SpacingGroup[];
     isolateDynamic?: boolean;
+    /** Which wide scripts take an inserted space. Left out, the library default (Han) applies. */
+    scripts?: readonly SpacedScript[];
     onOptionsChange?: (patch: Partial<JunctionSpacingOptions>) => void;
   }
 > = ({
@@ -264,6 +275,7 @@ export const JunctionSpacingBoard: FC<
   groups = SPACING_GROUPS,
   isolateDynamic = true,
   onOptionsChange,
+  scripts,
 }) => (
   <BoardShell onOptionsChange={onOptionsChange} options={{ disableJunctionSpacing, disableTextHighlight }}>
     {groups.map((group) => (
@@ -280,6 +292,7 @@ export const JunctionSpacingBoard: FC<
               disableJunctionSpacing={disableJunctionSpacing}
               isolate={isolateDynamic}
               key={spacingCase.label}
+              scripts={scripts}
               spacingCase={spacingCase}
             />
           ))}
