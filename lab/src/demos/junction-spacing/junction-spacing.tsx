@@ -166,7 +166,7 @@ const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean; disableJunction
 };
 
 const BUTTON_CLASS = `
-  cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1 text-xs text-black/70
+  cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1 text-black/70
   hover:bg-black/5
   active:bg-black/10
   dark:border-white/30 dark:text-white/80 dark:hover:bg-white/5 dark:active:bg-white/10
@@ -229,7 +229,9 @@ const BoardShell: FC<{
             </span>
           ))}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* The row sets the type size; the buttons inherit it, along with the
+            face, so nothing about them is stated twice. */}
+        <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
           <ToggleButton
             offLabel="disable · text highlight"
             on={options.disableTextHighlight}
