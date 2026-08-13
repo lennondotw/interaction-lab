@@ -259,6 +259,47 @@ const RevisitContent: FC<{ view: NavigationView }> = ({ view }) => {
   );
 };
 
+/** One pane of the two-stack story: pushes numbered views, so depth is visible. */
+const PaneContent: FC<{ side: string; view: NavigationView }> = ({ side, view }) => {
+  const { push, depth } = useNavigation();
+
+  return (
+    <NavigationScrollArea>
+      <p
+        className={`
+          px-3 py-2 text-[11px]/4 text-black/50
+          dark:text-white/50
+        `}
+      >
+        {view.title} · depth {depth}
+      </p>
+      <ListItem
+        label="Push"
+        onPress={() => push({ id: `${side}-${String(depth)}`, title: `${side} ${String(depth)}` })}
+      />
+    </NavigationScrollArea>
+  );
+};
+
+/**
+ * Two independent stacks on one page, which is the case that made the Escape
+ * binding a problem: the listener is on the document, so both hear every
+ * keystroke.
+ */
+const TwoStacks: FC = () => (
+  <div className="flex h-full gap-3">
+    {['Left', 'Right'].map((side) => (
+      <div key={side} className="h-full min-w-0 flex-1" data-testid={`pane-${side.toLowerCase()}`}>
+        <NavigationStack
+          rootView={{ id: `${side}-root`, title: side }}
+          renderView={(view) => <PaneContent side={side} view={view} />}
+          showBreadcrumb={false}
+        />
+      </div>
+    ))}
+  </div>
+);
+
 // The stage has to sit apart from the card on both themes, otherwise the
 // rounded frame dissolves into the page — in dark that means going
 // LIGHTER than the views, which are near-black.
@@ -287,8 +328,10 @@ const meta = {
   tags: ['autodocs'],
   argTypes: {
     showBreadcrumb: { control: 'boolean' },
+    enableKeyboardNav: { control: 'boolean' },
     headerMode: { control: 'inline-radio', options: ['inset', 'overlay'] },
     rootView: { control: false },
+    initialViews: { control: false },
     renderView: { control: false },
   },
 } satisfies Meta<typeof NavigationStack>;
@@ -364,6 +407,48 @@ export const RevisitedView: Story = {
           'A cycle, not a tree. Walk `Alpha → Beta → Alpha` and the stack holds one view twice — which is what a navigation stack is: a history, not a set. Every other fixture here encodes the path into the id, which makes ids accidentally unique and hides the question entirely.',
           'What makes it work is that nothing keys on `view.id`. Each occupancy gets an entry key when it is pushed, and the React element, the set of parked views, the set of leaving views and the map remembering where focus sat all key on that instead. Keying on the id would collapse the two into one element, and popping one of them would find nothing removed — so the departing view would simply vanish instead of animating out, because the id it would have been matched by is still on the stack.',
           'Keys are never reused, including after a pop. A popped entry can still be mid-exit when the next push lands, and handing the newcomer its key would hand it its identity as well.',
+        ].join('\n\n'),
+      },
+    },
+  },
+};
+
+export const DeepLinked: Story = {
+  args: {
+    rootView: { id: 'root', title: 'Root' },
+    // The first branch of the tree, two levels in — what a URL would restore.
+    initialViews: [
+      { id: '0', title: 'Blood Oranges' },
+      { id: '0.0', title: 'Pinto Beans' },
+    ],
+    renderView: (view: NavigationView) => <ListViewContent view={view} />,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: [
+          'Opens three levels deep, as a restored URL would. `initialViews` and `enableKeyboardNav` used to be reachable only by assembling the stack by hand — the preset called the hook with the root view and nothing else, so a deep link was impossible through it and Escape could not be turned off.',
+          'Nothing animates in: every entry present at mount is in the entrance snapshot, so it is given `initial={false}` and arrives already at rest instead of three views sliding across each other. The back button and breadcrumb are populated from the start, so this is a real position in the history rather than a root that happens to look different — measured on load, depth 3 with `Root › Blood Oranges › Pinto Beans` and a back button.',
+          '`initialViews` and `rootView` are both read once, when the stack is created. Changing either later does nothing: the stack owns its history from that point, and re-seeding it from a prop would throw away wherever the user had navigated to. Change the `key` on the component to start a new stack instead.',
+        ].join('\n\n'),
+      },
+    },
+  },
+};
+
+export const TwoIndependentStacks: Story = {
+  args: {
+    rootView: { id: 'unused', title: 'Unused' },
+    renderView: () => null,
+  },
+  render: () => <TwoStacks />,
+  parameters: {
+    docs: {
+      description: {
+        story: [
+          'Two stacks, one page. Push a few levels in each, click into one of them, and press Escape: only that one goes back. Escape has to be bound on the document — a stack must answer it from anywhere inside itself, including from chrome that is a sibling of its views — so both stacks hear every keystroke and something has to decide which one it was meant for.',
+          'That something is focus, not a nesting order or a mounting order: "which stack am I using" is a question about attention, and two sibling stacks have no meaningful order between them. `NavigationStack` wires its own frame in as the scope; a hand-assembled stack passes `scopeRef` itself, and one that will never share a page with another can leave it out and keep the global binding.',
+          'It costs exactly one case. With focus outside both stacks — clicked onto the page background — Escape now does nothing, where before it popped whichever stack felt like answering. Focus rarely sits there, because each view wrapper is focusable and clicking inert content inside one lands on it.',
         ].join('\n\n'),
       },
     },

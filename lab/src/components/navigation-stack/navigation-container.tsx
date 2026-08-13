@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import { useMemo, type CSSProperties, type FC, type ReactNode } from 'react';
+import { useMemo, type CSSProperties, type FC, type ReactNode, type Ref } from 'react';
 
 import {
   ContainerContext,
@@ -19,6 +19,11 @@ export interface NavigationContainerProps {
    * @default 'inset'
    */
   headerMode?: NavigationHeaderMode;
+  /**
+   * The frame element, for anything that needs to ask "is the user in this
+   * stack" — `useNavigationStack`'s `scopeRef` being the reason it exists.
+   */
+  ref?: Ref<HTMLDivElement>;
   className?: string;
 }
 
@@ -43,6 +48,7 @@ export const NavigationContainer: FC<NavigationContainerProps> = ({
   header,
   children,
   headerMode = 'inset',
+  ref,
   className,
 }) => {
   const { headerRef, headerHeight } = useHeaderHeight();
@@ -55,6 +61,7 @@ export const NavigationContainer: FC<NavigationContainerProps> = ({
   return (
     <ContainerContext.Provider value={layout}>
       <div
+        ref={ref}
         data-testid="navigation-container"
         data-header-mode={headerMode}
         // `contain` keeps each view's animation from invalidating layout

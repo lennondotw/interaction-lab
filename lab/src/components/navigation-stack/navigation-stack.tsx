@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react';
+import { useRef, type FC, type ReactNode } from 'react';
 
 import type { NavigationHeaderMode } from './container-context.js';
 import { NavigationContainer } from './navigation-container.js';
@@ -8,9 +8,27 @@ import { NavigationProvider } from './navigation-provider.js';
 import { useNavigationStack, type NavigationView } from './use-navigation-stack.js';
 
 export interface NavigationStackProps {
+  /**
+   * Bottom of the stack.
+   *
+   * Read once, when the stack is created. Changing it later does nothing —
+   * the stack owns its history from that point on, and re-seeding it from a
+   * prop would throw away wherever the user had navigated to. Change the
+   * `key` on this component to start a new stack instead.
+   */
   rootView: NavigationView;
   /** Renders the body of each view; the chrome is supplied for you. */
   renderView: (view: NavigationView) => ReactNode;
+  /**
+   * Views on top of the root at creation, e.g. to open on a deep link.
+   * Read once, with the same reasoning as `rootView`.
+   */
+  initialViews?: NavigationView[];
+  /**
+   * Bind Escape to `pop`, scoped to this stack.
+   * @default true
+   */
+  enableKeyboardNav?: boolean;
   /** @default true */
   showBreadcrumb?: boolean;
   /**
@@ -44,15 +62,21 @@ export interface NavigationStackProps {
 export const NavigationStack: FC<NavigationStackProps> = ({
   rootView,
   renderView,
+  initialViews,
+  enableKeyboardNav = true,
   showBreadcrumb = true,
   headerMode = 'inset',
   className,
 }) => {
-  const nav = useNavigationStack(rootView);
+  // The frame doubles as the keyboard scope, so Escape belongs to whichever
+  // stack the user is actually in.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const nav = useNavigationStack(rootView, { initialViews, enableKeyboardNav, scopeRef: frameRef });
 
   return (
     <NavigationProvider value={nav}>
       <NavigationContainer
+        ref={frameRef}
         headerMode={headerMode}
         className={className}
         header={

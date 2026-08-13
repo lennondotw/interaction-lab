@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, type RefObject } from 'react';
 
 import type { NavigationPresentation } from './navigation-presentation.js';
 
@@ -95,6 +95,28 @@ export interface UseNavigationStackOptions {
    * @default true
    */
   enableKeyboardNav?: boolean;
+  /**
+   * The element this stack lives in, so Escape can be scoped to it.
+   *
+   * Without it the binding is global: two stacks on one page — a split view
+   * with a navigator in each pane, or two stories side by side — both hear
+   * the same keystroke and both go back, and the user only asked one of them
+   * to. With it, only the stack holding focus acts.
+   *
+   * Focus is the right test rather than a nesting order or a mounting order,
+   * because "which stack am I using" is a question about attention, and two
+   * sibling stacks have no meaningful order between them. It costs one case:
+   * with focus outside every stack — clicked onto blank page background —
+   * Escape now does nothing rather than popping an arbitrary stack, which is
+   * the better of the two behaviours anyway. Focus rarely sits there, since
+   * each view wrapper is itself focusable and clicking inert content inside
+   * one lands on it.
+   *
+   * `NavigationStack` wires this to its own frame. Only hand-assembled
+   * stacks have to pass it, and one that never shares a page with another
+   * can leave it out.
+   */
+  scopeRef?: RefObject<HTMLElement | null>;
 }
 
 export type NavigationStackAction = { type: 'PUSH'; view: NavigationView } | { type: 'POP' } | { type: 'POP_TO_ROOT' };
@@ -148,7 +170,7 @@ export function useNavigationStack(
   rootView: NavigationView,
   options?: UseNavigationStackOptions
 ): NavigationStackResult {
-  const { initialViews = [], enableKeyboardNav = true } = options ?? {};
+  const { initialViews = [], enableKeyboardNav = true, scopeRef } = options ?? {};
 
   // Lazy initialiser: the root view and any deep link are read once, at mount.
   const [state, dispatch] = useReducer(navigationStackReducer, undefined, () =>
@@ -167,15 +189,22 @@ export function useNavigationStack(
     const handleKeyDown = (event: KeyboardEvent): void => {
       // Respect anything that already claimed the key — a dialog or
       // combobox nested in a view should close before we pop.
-      if (event.key === 'Escape' && !event.defaultPrevented) {
-        event.preventDefault();
-        pop();
-      }
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+
+      // The listener is on the document because a stack has to answer
+      // Escape from anywhere inside itself, including from chrome that is a
+      // sibling of the views. So every stack on the page hears every
+      // keystroke, and the one holding focus is the one this was meant for.
+      const scope = scopeRef?.current;
+      if (scope && !scope.contains(document.activeElement)) return;
+
+      event.preventDefault();
+      pop();
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [enableKeyboardNav, canGoBack, pop]);
+  }, [enableKeyboardNav, canGoBack, pop, scopeRef]);
 
   return useMemo(
     () => ({
