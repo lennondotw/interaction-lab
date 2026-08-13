@@ -22,7 +22,8 @@ export const NavBackButton: FC<NavBackButtonProps> = ({ className }) => {
       aria-label="Go back"
       className={cn(
         `
-          flex size-7 cursor-pointer items-center justify-center rounded-sm text-neutral-700 transition-colors
+          flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm text-neutral-700
+          transition-colors
           hover:bg-black/5
           dark:text-neutral-200
           dark:hover:bg-white/10
@@ -48,7 +49,7 @@ export const NavTitle: FC<NavTitleProps> = ({ className }) => {
       data-testid="nav-title"
       className={cn(
         `
-          h-7 text-sm/7 font-medium text-black
+          h-7 truncate text-sm/7 font-medium text-black
           dark:text-white
         `,
         className
@@ -63,7 +64,19 @@ export interface NavBreadcrumbProps {
   className?: string;
 }
 
-/** The whole path, root first. */
+/**
+ * The whole path, root first, on one line.
+ *
+ * Never wraps, and elides rather than clipping. Which crumb gives up its
+ * width is the design decision: the crumbs behind you shrink first and by a
+ * huge factor, so the trail loses its history from the left while the place
+ * you are actually standing stays readable. Shrinking evenly — or eliding the
+ * end, which is what a single `truncate` on the row would do — hides the one
+ * crumb the component exists to show.
+ *
+ * `min-w-0` is what makes any of it possible: a flex item will not shrink
+ * below its own min-content width without it, so the row would just overflow.
+ */
 export const NavBreadcrumb: FC<NavBreadcrumbProps> = ({ className }) => {
   const { stack } = useNavigation();
 
@@ -79,12 +92,23 @@ export const NavBreadcrumb: FC<NavBreadcrumbProps> = ({ className }) => {
         className
       )}
     >
-      {stack.map((view, i) => (
-        <span key={view.id} className="flex items-center" data-testid={`breadcrumb-item-${i}`}>
-          {i > 0 && <ChevronRight className="size-3" aria-hidden="true" />}
-          <span>{view.title}</span>
-        </span>
-      ))}
+      {stack.map((view, i) => {
+        const isCurrent = i === stack.length - 1;
+
+        return (
+          <span
+            key={view.id}
+            data-testid={`breadcrumb-item-${i}`}
+            className={cn('flex min-w-0 items-center', isCurrent ? 'shrink' : 'shrink-[999]')}
+          >
+            {i > 0 && <ChevronRight className="size-3 shrink-0" aria-hidden="true" />}
+            {/* `title` so an elided crumb is still readable on hover. */}
+            <span className="truncate" title={view.title} aria-current={isCurrent ? 'page' : undefined}>
+              {view.title}
+            </span>
+          </span>
+        );
+      })}
     </nav>
   );
 };
@@ -101,5 +125,5 @@ export const NavHeader: FC<NavHeaderProps> = ({ children, className }) => (
 
 /** Row layout for the back button and title. */
 export const NavHeaderRow: FC<NavHeaderProps> = ({ children, className }) => (
-  <div className={cn('flex items-center gap-2', className)}>{children}</div>
+  <div className={cn('flex min-w-0 items-center gap-2', className)}>{children}</div>
 );
