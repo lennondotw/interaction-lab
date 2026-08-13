@@ -70,7 +70,9 @@ function splitEdgeWhitespace(text: string): { lead: string; body: string; trail:
 
 const Tinted: FC<{ tint: string; children: ReactNode; isolate?: boolean }> = ({ children, isolate, tint }) => (
   <span
-    className={cn('rounded-xs', tint)}
+    // Square, so a one-space highlight reads as the full width of the space it
+    // marks. A radius on a 4px-wide box eats most of the box.
+    className={tint}
     // Bidi is the renderer's half of the job: an isolated run is one visual run,
     // so its logically-last character is also the one the space sits next to.
     dir={isolate === true ? 'auto' : undefined}
@@ -140,7 +142,7 @@ export const JunctionSpacingLegend: FC = () => (
     <span className="text-sm font-semibold">Legend</span>
     {LEGEND.map(({ label, tint }) => (
       <span className="flex items-center gap-2 text-sm" key={label}>
-        <span className={cn('size-4 rounded-xs', tint)} />
+        <span className={cn('size-4', tint)} />
         {label}
       </span>
     ))}
@@ -155,7 +157,9 @@ export const JunctionSpacingBoard: FC<{ groups?: readonly SpacingGroup[]; isolat
     <JunctionSpacingLegend />
     {groups.map((group) => (
       <section className="flex flex-col gap-3" key={group.id}>
-        <header className="flex flex-col gap-1">
+        {/* px-3 matches the cards' own padding, so the heading starts on the same
+            vertical as the copy it describes rather than on the card edge. */}
+        <header className="flex flex-col gap-1 px-3">
           <h2 className="text-sm font-semibold">{group.title}</h2>
           <p className="max-w-3xl text-xs text-neutral-500 dark:text-neutral-400">{group.blurb}</p>
         </header>
