@@ -229,7 +229,26 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
             // interpolate — so it stays out of `animate`, which would tween
             // it through fractional values and fight this declaration for
             // ownership of the same property.
-            style={{ zIndex: index, contain: 'layout style paint', visibility: isHidden ? 'hidden' : 'visible' }}
+            //
+            // `layout style` and deliberately *not* `paint`. Layout
+            // containment is the one that pays here: a view animating cannot
+            // invalidate layout outside itself.
+            //
+            // Paint containment buys nothing on top of that. It would not add
+            // any clipping — the frame's own `overflow: hidden` already cuts
+            // every view at its edge, and a parked view is `visibility:
+            // hidden` rather than merely off to one side — and it does not
+            // change what a `position: fixed` descendant resolves against
+            // either, because layout containment alone already makes each
+            // view a containing block for one. What it does add is a paint
+            // container per view, and therefore one more independently
+            // rasterised copy of the frame's rounded clip, which is exactly
+            // the mechanism that put a hairline on the corner
+            // (`archive/2026-08-backdrop-filter-corner-thread`). Measured
+            // before and after, the corner is unchanged — so this is one
+            // fewer thing that *could* disagree, not a fix for something that
+            // does.
+            style={{ zIndex: index, contain: 'layout style', visibility: isHidden ? 'hidden' : 'visible' }}
           >
             {renderView(view, index)}
             <motion.div
