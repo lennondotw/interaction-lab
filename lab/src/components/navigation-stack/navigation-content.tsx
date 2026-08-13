@@ -1,6 +1,6 @@
 import { cn } from '@monorepo/utils';
-import { motion } from 'motion/react';
-import { useState, type FC, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useCallback, useState, type FC, type ReactNode } from 'react';
 
 import { useNavigation } from './navigation-context.js';
 import {
@@ -9,8 +9,10 @@ import {
   isInstant,
   offscreenPose,
   presentationTransition,
+  reducedPresentation,
   resolvePresentation,
   wrapperTarget,
+  type NavigationPresentation,
 } from './navigation-presentation.js';
 import { useNavigationFocus } from './use-navigation-focus.js';
 import type { NavigationView } from './use-navigation-stack.js';
@@ -37,6 +39,12 @@ export interface NavigationContentProps {
  * under a fade, so `coveredPose` is keyed on the presentation of the
  * view above rather than on the covered view's own.
  *
+ * Under `prefers-reduced-motion` every presentation that displaces a view
+ * becomes a `fade`. That is resolved once, here, into a concrete
+ * presentation rather than threaded through the pose and transition
+ * functions — the preference changes *which* presentation is in play, so
+ * everything downstream can stay unaware of it.
+ *
  * Exactly one view is interactive: the one on top. Every other view —
  * covered or sliding out — is inert from the very paint that demotes it,
  * so it can't be tabbed into or read by a screen reader while it is
@@ -45,6 +53,15 @@ export interface NavigationContentProps {
  */
 export const NavigationContent: FC<NavigationContentProps> = ({ renderView, className }) => {
   const { stack, direction } = useNavigation();
+
+  // `null` until the query has resolved, and an unresolved query is not a
+  // request for less motion.
+  const prefersReducedMotion = useReducedMotion();
+  const effective = useCallback(
+    (presentation: NavigationPresentation | undefined): NavigationPresentation =>
+      prefersReducedMotion === true ? reducedPresentation(presentation) : resolvePresentation(presentation),
+    [prefersReducedMotion]
+  );
 
   const topView = stack[stack.length - 1];
   const activeViewId = topView?.id ?? null;
@@ -85,7 +102,7 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
       // An `instant` view has no exit to play. Dropping it here rather
       // than mounting it for one zero-duration frame is what makes it
       // genuinely instant, in both directions.
-      ...removed.filter((view) => !isInstant(view.presentation)),
+      ...removed.filter((view) => !isInstant(effective(view.presentation))),
     ]);
     const stillCovered = new Set(coveredIds);
     setHiddenViewIds((prev) => {
@@ -94,7 +111,7 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
       const next = new Set([...prev].filter((viewId) => stillCovered.has(viewId)));
       // An `instant` push never animates, so nothing will fire
       // `onAnimationComplete` to park what it covers — it has to happen here.
-      if (isInstant(topView?.presentation)) for (const viewId of stillCovered) next.add(viewId);
+      if (isInstant(effective(topView?.presentation))) for (const viewId of stillCovered) next.add(viewId);
       return next.size === prev.size && [...next].every((viewId) => prev.has(viewId)) ? prev : next;
     });
   }
@@ -119,8 +136,8 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
   // what would happen if each view used its own presentation's timing.
   const drivingPresentation =
     direction === 'pop' && leaving.length > 0
-      ? resolvePresentation(leaving[leaving.length - 1]?.presentation)
-      : resolvePresentation(topView?.presentation);
+      ? effective(leaving[leaving.length - 1]?.presentation)
+      : effective(topView?.presentation);
 
   const entries = [
     ...stack.map((view, index) => ({ view, index, isExiting: false })),
@@ -143,11 +160,13 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
 
         // Top sits at rest; an exiting view retraces its own entrance;
         // a covered view answers to the presentation of the view above it.
+        const presentation = effective(view.presentation);
+
         const pose = isExiting
-          ? offscreenPose(view.presentation)
+          ? offscreenPose(presentation)
           : isTop
             ? AT_REST
-            : coveredPose(stack[index + 1]?.presentation);
+            : coveredPose(effective(stack[index + 1]?.presentation));
 
         // A covered view only goes off the paint path once the view above
         // it has *landed* — not once it has finished its own park. Those
@@ -163,8 +182,8 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
         // An `instant` view is mounted already at rest; every other
         // entrance starts offscreen. Views present at first paint start at
         // rest too, or the whole initial stack animates in.
-        const skipEntrance = initialViewIds.has(view.id) || isInstant(view.presentation);
-        const entrancePose = isTop ? offscreenPose(view.presentation) : pose;
+        const skipEntrance = initialViewIds.has(view.id) || isInstant(presentation);
+        const entrancePose = isTop ? offscreenPose(presentation) : pose;
 
         return (
           <motion.div
@@ -183,10 +202,10 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
             data-testid={`navigation-view-${view.id}`}
             data-view-id={view.id}
             data-view-status={isTop ? 'active' : isExiting ? 'exiting' : 'background'}
-            data-view-presentation={resolvePresentation(view.presentation)}
+            data-view-presentation={presentation}
             initial={skipEntrance ? false : wrapperTarget(entrancePose)}
             animate={wrapperTarget(pose)}
-            transition={presentationTransition(isExiting ? view.presentation : drivingPresentation)}
+            transition={presentationTransition(isExiting ? presentation : drivingPresentation)}
             onAnimationComplete={() => {
               if (isExiting) dropLeaving(view.id);
               else if (isTop) hideCovered(coveredIds);

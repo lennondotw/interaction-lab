@@ -31,6 +31,7 @@ export {
   NO_TRANSITION,
   offscreenPose,
   presentationTransition,
+  reducedPresentation,
   resolvePresentation,
   wrapperTarget,
   type NavigationPresentation,

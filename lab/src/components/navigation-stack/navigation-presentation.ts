@@ -27,6 +27,32 @@ export function isInstant(presentation: NavigationPresentation | undefined): boo
   return resolvePresentation(presentation) === 'instant';
 }
 
+/**
+ * What a presentation becomes when the user has asked for reduced motion.
+ *
+ * A cross-dissolve rather than nothing, which is the one judgement call here.
+ * `prefers-reduced-motion` is about displacement — parallax, sliding, scaling
+ * — and an opacity change is the accepted substitute for it rather than
+ * another instance of it. Cutting hard between screens would also throw away
+ * the only remaining cue that a navigation happened at all, where a dissolve
+ * keeps it. It is what iOS does under Reduce Motion, and it is a deliberate
+ * divergence from `disclosureTransition`, which takes the end state instantly:
+ * a folder opening in place is self-evident, a whole screen replacing another
+ * is not.
+ *
+ * `instant` is left alone. A view whose author asked for no transition should
+ * not be given a 200ms fade by an accessibility preference — that would be
+ * adding motion in the name of removing it.
+ *
+ * Nothing else has to change, because `fade` is a first-class presentation:
+ * it holds every covered view at rest and undimmed, and its entrance and exit
+ * both animate, so the machinery that parks covered views on the top view's
+ * arrival keeps working untouched.
+ */
+export function reducedPresentation(presentation: NavigationPresentation | undefined): NavigationPresentation {
+  return resolvePresentation(presentation) === 'instant' ? 'instant' : 'fade';
+}
+
 /** How far a view covered by a `slide` parks back, as a fraction of the container. */
 const PARALLAX_OFFSET = '-30%';
 

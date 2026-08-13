@@ -18,6 +18,7 @@ import {
   NO_TRANSITION,
   offscreenPose,
   presentationTransition,
+  reducedPresentation,
   resolvePresentation,
   type NavigationPresentation,
   type ViewPose,
@@ -137,6 +138,34 @@ describe('presentationTransition', () => {
   it('gives an instant view no window at all', () => {
     expect(presentationTransition('instant')).toBe(NO_TRANSITION);
     expect(NO_TRANSITION.duration).toBe(0);
+  });
+});
+
+describe('reducedPresentation', () => {
+  it('takes the displacement out and keeps the dissolve', () => {
+    // Not `instant`: an opacity change is the accepted substitute for motion
+    // rather than another instance of it, and cutting hard between screens
+    // throws away the only cue that a navigation happened.
+    expect(reducedPresentation('slide')).toBe('fade');
+    expect(reducedPresentation('cover')).toBe('fade');
+    expect(reducedPresentation('fade')).toBe('fade');
+    expect(reducedPresentation(undefined)).toBe('fade');
+  });
+
+  it('leaves an instant view instant', () => {
+    // Giving it a 200ms fade would be adding motion in the name of removing
+    // it — the author already asked for none.
+    expect(reducedPresentation('instant')).toBe('instant');
+  });
+
+  it('only ever returns a presentation that displaces nothing', () => {
+    // The guard on the whole point: every reduced result must come to rest
+    // where it started on both axes.
+    for (const presentation of ALL) {
+      const reduced = reducedPresentation(presentation);
+      expect(offscreenPose(reduced)).toMatchObject({ x: '0%', y: '0%' });
+      expect(coveredPose(reduced)).toMatchObject({ x: '0%', y: '0%' });
+    }
   });
 });
 
