@@ -178,7 +178,8 @@ const BUTTON_CLASS = `
  * mid-click. `visibility: hidden` rather than `display: none` because only the
  * former keeps the box in flow to be measured; `h-0` and `leading-0` keep it
  * from contributing height. Same construction as the beacon stories'
- * ToggleButton, and for the same reason.
+ * ToggleButton, and for the same reason — the labels themselves are set in the
+ * surrounding UI voice rather than that demo's monospaced `action · target`.
  */
 const HIDDEN_LABELS_CLASS = 'invisible flex h-0 flex-col overflow-clip leading-0';
 
@@ -233,15 +234,15 @@ const BoardShell: FC<{
             face, so nothing about them is stated twice. */}
         <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
           <ToggleButton
-            offLabel="disable · text highlight"
+            offLabel="Disable Text Highlight"
             on={options.disableTextHighlight}
-            onLabel="enable · text highlight"
+            onLabel="Enable Text Highlight"
             onToggle={() => onOptionsChange?.({ disableTextHighlight: !options.disableTextHighlight })}
           />
           <ToggleButton
-            offLabel="disable · junction spacing"
+            offLabel="Disable Junction Spacing"
             on={options.disableJunctionSpacing}
-            onLabel="enable · junction spacing"
+            onLabel="Enable Junction Spacing"
             onToggle={() => onOptionsChange?.({ disableJunctionSpacing: !options.disableJunctionSpacing })}
           />
         </div>
