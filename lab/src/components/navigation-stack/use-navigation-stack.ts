@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 
+import type { NavigationPresentation } from './navigation-presentation.js';
+
 export type NavigationDirection = 'push' | 'pop';
 
 export interface NavigationView {
@@ -7,6 +9,18 @@ export interface NavigationView {
   id: string;
   title: string;
   subtitle?: string;
+  /**
+   * How this view arrives and leaves.
+   *
+   * Travels with the view rather than being passed to `push`, because it
+   * is needed again on the way out — a view that covered from the bottom
+   * has to leave downwards, and by then the push that decided so is long
+   * gone. On the root view it is only ever used for the transition
+   * *back* to it, since the root never animates in.
+   *
+   * @default 'slide'
+   */
+  presentation?: NavigationPresentation;
   /** Arbitrary payload the renderer can read back off the view. */
   data?: unknown;
 }
