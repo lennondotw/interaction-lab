@@ -1,0 +1,9 @@
+{
+  "name": "junction-spacing-probe",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pins the pangu.js version this investigation measured. Outside the pnpm workspace on purpose: install it with npm, per the README.",
+  "dependencies": {
+    "pangu": "9.1.0"
+  }
+}
