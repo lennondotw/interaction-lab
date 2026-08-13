@@ -218,6 +218,47 @@ const EdgeToEdgeContent: FC<{ view: NavigationView }> = ({ view }) => {
   );
 };
 
+/**
+ * A cycle rather than a tree, so the same view can be reached again from
+ * deeper in the stack.
+ *
+ * Every other fixture here encodes the path into the id, which makes ids
+ * accidentally unique and hides the question. These three nodes all link to
+ * each other, so `Alpha → Beta → Alpha` is two occupancies of one view — the
+ * case the stack has always claimed to support.
+ */
+const CYCLE: NavigationView[] = [
+  { id: 'alpha', title: 'Alpha' },
+  { id: 'beta', title: 'Beta', presentation: 'cover' },
+  { id: 'gamma', title: 'Gamma', presentation: 'fade' },
+];
+
+const RevisitContent: FC<{ view: NavigationView }> = ({ view }) => {
+  const { push, depth } = useNavigation();
+
+  return (
+    <NavigationScrollArea>
+      <p
+        className={`
+          px-4 py-3 text-xs/5 text-black/50
+          dark:text-white/50
+        `}
+      >
+        You are at <strong className="font-medium">{view.title}</strong>, depth {depth}. Go somewhere you have already
+        been and the breadcrumb repeats it — two entries, one view.
+      </p>
+      {CYCLE.map((node) => (
+        <ListItem
+          key={node.id}
+          label={`Go to ${node.title}`}
+          hint={node.id === view.id ? 'again' : node.presentation}
+          onPress={() => push(node)}
+        />
+      ))}
+    </NavigationScrollArea>
+  );
+};
+
 // The stage has to sit apart from the card on both themes, otherwise the
 // rounded frame dissolves into the page — in dark that means going
 // LIGHTER than the views, which are near-black.
@@ -305,6 +346,24 @@ export const Fullscreen: Story = {
           'The rows still start below the chrome because they inset themselves by `var(--nav-safe-top)` — the header’s measured height *plus a little*, because clearing a floating bar is not the same as sitting flush against its edge; with no rule under the bar, content that starts exactly at its underside reads as clipped by it. The raw height is published separately as `var(--nav-header-height)` for anything that wants to align *to* the bar instead. Scroll the list: the rows pass *under* the blur instead of stopping at it, which is only possible because the inset is padding inside the scroller rather than a shorter scroller. In `inset` mode both come to `0`, so the same content component is correct in both modes with no branch.',
           'The bar also overdraws itself by 1px along its top and sides, into the frame’s rounded clip. The container’s anti-aliased corner and the bar’s own edge do not land on the same subpixels, and the gap between them shows as a hairline of the page behind the frame — more so under a `backdrop-filter`, whose edge is resampled too. The overdrawn pixel is thrown away by the clip, which is the point. It is paint only: the material is out of flow, so the measured height and therefore the inset are untouched by it.',
           'This is also why the height is measured rather than declared. A floating header has no layout relationship to the content, so the number has to cross into CSS — the one case here where the engine genuinely cannot do it for us.',
+        ].join('\n\n'),
+      },
+    },
+  },
+};
+
+export const RevisitedView: Story = {
+  args: {
+    rootView: { id: 'alpha', title: 'Alpha' },
+    renderView: (view: NavigationView) => <RevisitContent view={view} />,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: [
+          'A cycle, not a tree. Walk `Alpha → Beta → Alpha` and the stack holds one view twice — which is what a navigation stack is: a history, not a set. Every other fixture here encodes the path into the id, which makes ids accidentally unique and hides the question entirely.',
+          'What makes it work is that nothing keys on `view.id`. Each occupancy gets an entry key when it is pushed, and the React element, the set of parked views, the set of leaving views and the map remembering where focus sat all key on that instead. Keying on the id would collapse the two into one element, and popping one of them would find nothing removed — so the departing view would simply vanish instead of animating out, because the id it would have been matched by is still on the stack.',
+          'Keys are never reused, including after a pop. A popped entry can still be mid-exit when the next push lands, and handing the newcomer its key would hand it its identity as well.',
         ].join('\n\n'),
       },
     },

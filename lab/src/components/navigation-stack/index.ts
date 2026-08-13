@@ -48,9 +48,11 @@ export { NavigationStack, type NavigationStackProps } from './navigation-stack.j
 export { isMeasuredHeight, useHeaderHeight, type HeaderHeightResult } from './use-header-height.js';
 export { useNavigationFocus, type NavigationFocusResult } from './use-navigation-focus.js';
 export {
+  initialNavigationState,
   navigationStackReducer,
   useNavigationStack,
   type NavigationDirection,
+  type NavigationEntry,
   type NavigationStackAction,
   type NavigationStackActions,
   type NavigationStackResult,

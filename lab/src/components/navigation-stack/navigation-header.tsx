@@ -79,7 +79,9 @@ export interface NavBreadcrumbProps {
  * below its own min-content width without it, so the row would just overflow.
  */
 export const NavBreadcrumb: FC<NavBreadcrumbProps> = ({ className }) => {
-  const { stack } = useNavigation();
+  // Entries, not `stack`: a path that revisits a view would give two crumbs
+  // the same React key.
+  const { entries } = useNavigation();
 
   return (
     <nav
@@ -93,12 +95,12 @@ export const NavBreadcrumb: FC<NavBreadcrumbProps> = ({ className }) => {
         className
       )}
     >
-      {stack.map((view, i) => {
-        const isCurrent = i === stack.length - 1;
+      {entries.map(({ key, view }, i) => {
+        const isCurrent = i === entries.length - 1;
 
         return (
           <span
-            key={view.id}
+            key={key}
             data-testid={`breadcrumb-item-${i}`}
             className={cn('flex min-w-0 items-center', isCurrent ? 'shrink' : 'shrink-[999]')}
           >

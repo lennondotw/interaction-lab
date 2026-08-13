@@ -4,8 +4,13 @@ import { useCallback, useLayoutEffect, useRef, type FocusEventHandler, type RefO
  * Attribute `NavigationContent` stamps on every view wrapper. Focus is
  * scoped by walking up to the nearest element carrying it, so the two
  * have to agree on the name.
+ *
+ * The entry key rather than the view id: the same view can be on the stack
+ * twice, and focus belongs to the visit, not to the destination. Keying this
+ * by id would restore focus into whichever occupancy happened to come first
+ * in the document.
  */
-const VIEW_ID_SELECTOR = '[data-view-id]';
+const ENTRY_KEY_SELECTOR = '[data-entry-key]';
 
 export interface NavigationFocusResult {
   /** Attach to the element that contains every view. */
@@ -33,11 +38,11 @@ export interface NavigationFocusResult {
  *   a view was covered gets it back when that view is revealed again,
  *   which is the focus counterpart of keeping the view mounted.
  */
-export function useNavigationFocus(activeViewId: string | null): NavigationFocusResult {
+export function useNavigationFocus(activeKey: string | null): NavigationFocusResult {
   const rootRef = useRef<HTMLDivElement>(null);
 
-  /** Where focus last sat inside each view, keyed by view id. */
-  const lastFocusedByView = useRef(new Map<string, HTMLElement>());
+  /** Where focus last sat inside each view, keyed by entry. */
+  const lastFocusedByEntry = useRef(new Map<string, HTMLElement>());
 
   /** Focus at mount belongs to the page; only *changes* of the top view move it. */
   const hasSettled = useRef(false);
@@ -46,18 +51,18 @@ export function useNavigationFocus(activeViewId: string | null): NavigationFocus
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
-    const viewId = target.closest<HTMLElement>(VIEW_ID_SELECTOR)?.dataset.viewId;
-    if (viewId !== undefined) lastFocusedByView.current.set(viewId, target);
+    const key = target.closest<HTMLElement>(ENTRY_KEY_SELECTOR)?.dataset.entryKey;
+    if (key !== undefined) lastFocusedByEntry.current.set(key, target);
   }, []);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
-    if (!root || activeViewId === null) return;
+    if (!root || activeKey === null) return;
 
     // Views that have unmounted for good would otherwise keep their
     // detached subtree alive through this map.
-    for (const [viewId, element] of lastFocusedByView.current) {
-      if (!element.isConnected) lastFocusedByView.current.delete(viewId);
+    for (const [key, element] of lastFocusedByEntry.current) {
+      if (!element.isConnected) lastFocusedByEntry.current.delete(key);
     }
 
     if (!hasSettled.current) {
@@ -65,7 +70,7 @@ export function useNavigationFocus(activeViewId: string | null): NavigationFocus
       return;
     }
 
-    const activeView = root.querySelector<HTMLElement>(`[data-view-id="${CSS.escape(activeViewId)}"]`);
+    const activeView = root.querySelector<HTMLElement>(`[data-entry-key="${CSS.escape(activeKey)}"]`);
     if (!activeView) return;
 
     const focused = document.activeElement;
@@ -73,13 +78,13 @@ export function useNavigationFocus(activeViewId: string | null): NavigationFocus
       focused === null || focused === document.body || (root.contains(focused) && !activeView.contains(focused));
     if (!isStale) return;
 
-    const remembered = lastFocusedByView.current.get(activeViewId);
+    const remembered = lastFocusedByEntry.current.get(activeKey);
     const target = remembered && activeView.contains(remembered) ? remembered : activeView;
 
     // The view is mid-slide, so scrolling it into view would fight the
     // transform — and there is nothing to scroll to anyway.
     target.focus({ preventScroll: true });
-  }, [activeViewId]);
+  }, [activeKey]);
 
   return { rootRef, onFocus };
 }

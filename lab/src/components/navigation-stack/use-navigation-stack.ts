@@ -25,10 +25,43 @@ export interface NavigationView {
   data?: unknown;
 }
 
+/**
+ * One occupancy of the stack: a view, plus an identity for *this* time it is
+ * on it.
+ *
+ * The stack is a history, not a set — a tree can legitimately revisit a node
+ * deeper down, and `A → B → A` is an ordinary path. So `view.id` cannot be
+ * what the renderer keys by: two occupancies of one view would collide on
+ * React's `key`, on the sets tracking which views are parked or leaving, and
+ * on the map remembering where focus sat in each. `key` is what they all use
+ * instead, and it is never reused, so a view that is popped and pushed again
+ * is a genuinely new entry rather than the old one reappearing.
+ */
+export interface NavigationEntry {
+  /** Identity of this occupancy. Not an index, and never reused. */
+  key: string;
+  view: NavigationView;
+}
+
 export interface NavigationStackState {
-  stack: NavigationView[];
+  entries: NavigationEntry[];
   /** Direction of the last navigation — drives the transition. */
   direction: NavigationDirection;
+  /** Monotonic source of entry keys. Only ever counts up. */
+  nextKey: number;
+}
+
+/** The stack a fresh `useNavigationStack` starts on. Exported for tests. */
+export function initialNavigationState(
+  rootView: NavigationView,
+  initialViews: readonly NavigationView[] = []
+): NavigationStackState {
+  const views = [rootView, ...initialViews];
+  return {
+    entries: views.map((view, i) => ({ key: String(i), view })),
+    direction: 'push',
+    nextKey: views.length,
+  };
 }
 
 export interface NavigationStackActions {
@@ -38,7 +71,14 @@ export interface NavigationStackActions {
 }
 
 export interface NavigationStackResult extends NavigationStackActions {
+  /** The views on the stack, root first — for reading titles and payloads. */
   stack: NavigationView[];
+  /**
+   * The same stack as addressable occupancies. Anything that keys, indexes or
+   * remembers something *per view on screen* has to use these, not `stack`,
+   * because the same view can be on the stack twice.
+   */
+  entries: NavigationEntry[];
   /** Top of the stack. */
   currentView: NavigationView | null;
   /** Stack depth; 1 means only the root view. */
@@ -65,6 +105,10 @@ export type NavigationStackAction = { type: 'PUSH'; view: NavigationView } | { t
  *
  * Popping at the root is a no-op that returns the same state object, so
  * it can't trigger a re-render or a spurious `direction` flip.
+ *
+ * `nextKey` only counts up, including across pops. Reusing a key would give
+ * a new entry the identity of one that may still be animating out, which is
+ * the collision the keys exist to prevent.
  */
 export function navigationStackReducer(
   state: NavigationStackState,
@@ -72,13 +116,17 @@ export function navigationStackReducer(
 ): NavigationStackState {
   switch (action.type) {
     case 'PUSH':
-      return { stack: [...state.stack, action.view], direction: 'push' };
+      return {
+        entries: [...state.entries, { key: String(state.nextKey), view: action.view }],
+        direction: 'push',
+        nextKey: state.nextKey + 1,
+      };
     case 'POP':
-      if (state.stack.length <= 1) return state;
-      return { stack: state.stack.slice(0, -1), direction: 'pop' };
+      if (state.entries.length <= 1) return state;
+      return { ...state, entries: state.entries.slice(0, -1), direction: 'pop' };
     case 'POP_TO_ROOT':
-      if (state.stack.length <= 1) return state;
-      return { stack: state.stack.slice(0, 1), direction: 'pop' };
+      if (state.entries.length <= 1) return state;
+      return { ...state, entries: state.entries.slice(0, 1), direction: 'pop' };
   }
 }
 
@@ -102,16 +150,16 @@ export function useNavigationStack(
 ): NavigationStackResult {
   const { initialViews = [], enableKeyboardNav = true } = options ?? {};
 
-  const [state, dispatch] = useReducer(navigationStackReducer, {
-    stack: [rootView, ...initialViews],
-    direction: 'push',
-  });
+  // Lazy initialiser: the root view and any deep link are read once, at mount.
+  const [state, dispatch] = useReducer(navigationStackReducer, undefined, () =>
+    initialNavigationState(rootView, initialViews)
+  );
 
   const push = useCallback((view: NavigationView) => dispatch({ type: 'PUSH', view }), []);
   const pop = useCallback(() => dispatch({ type: 'POP' }), []);
   const popToRoot = useCallback(() => dispatch({ type: 'POP_TO_ROOT' }), []);
 
-  const canGoBack = state.stack.length > 1;
+  const canGoBack = state.entries.length > 1;
 
   useEffect(() => {
     if (!enableKeyboardNav || !canGoBack) return;
@@ -131,9 +179,12 @@ export function useNavigationStack(
 
   return useMemo(
     () => ({
-      stack: state.stack,
-      currentView: state.stack[state.stack.length - 1] ?? null,
-      depth: state.stack.length,
+      // Derived from `entries` rather than stored beside it, so the two can
+      // never disagree about what is on the stack.
+      stack: state.entries.map((entry) => entry.view),
+      entries: state.entries,
+      currentView: state.entries[state.entries.length - 1]?.view ?? null,
+      depth: state.entries.length,
       canGoBack,
       direction: state.direction,
       push,

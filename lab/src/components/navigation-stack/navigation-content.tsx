@@ -15,7 +15,7 @@ import {
   type NavigationPresentation,
 } from './navigation-presentation.js';
 import { useNavigationFocus } from './use-navigation-focus.js';
-import type { NavigationView } from './use-navigation-stack.js';
+import type { NavigationEntry, NavigationView } from './use-navigation-stack.js';
 
 export interface NavigationContentProps {
   renderView: (view: NavigationView, index: number) => ReactNode;
@@ -52,7 +52,7 @@ export interface NavigationContentProps {
  * new top view, since making its old home inert is what took it away.
  */
 export const NavigationContent: FC<NavigationContentProps> = ({ renderView, className }) => {
-  const { stack, direction } = useNavigation();
+  const { entries: stack, direction } = useNavigation();
 
   // `null` until the query has resolved, and an unresolved query is not a
   // request for less motion.
@@ -63,20 +63,20 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
     [prefersReducedMotion]
   );
 
-  const topView = stack[stack.length - 1];
-  const activeViewId = topView?.id ?? null;
-  const coveredIds = stack.slice(0, -1).map((view) => view.id);
+  const topEntry = stack[stack.length - 1];
+  const activeKey = topEntry?.key ?? null;
+  const coveredKeys = stack.slice(0, -1).map((entry) => entry.key);
 
-  const { rootRef, onFocus } = useNavigationFocus(activeViewId);
+  const { rootRef, onFocus } = useNavigationFocus(activeKey);
 
   /** Popped views still playing their exit animation. */
-  const [leaving, setLeaving] = useState<NavigationView[]>([]);
+  const [leaving, setLeaving] = useState<NavigationEntry[]>([]);
 
   // Views present at mount must not animate in — otherwise the whole
   // initial stack slides across on first paint. Capturing their ids once
   // is enough: anything pushed later is absent from the set and gets the
   // entrance animation. A snapshot, not derived state, so it never updates.
-  const [initialViewIds] = useState(() => new Set(stack.map((view) => view.id)));
+  const [initialKeys] = useState(() => new Set(stack.map((entry) => entry.key)));
 
   // Covered views that can now be taken off the paint path with
   // `visibility: hidden`. Deliberately not a motion `animate` value:
@@ -84,7 +84,7 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
   // tick, one frame after the paint that promotes the view — and a hidden
   // element cannot take focus, so that one frame is enough to lose the
   // focus restore. Anything covered at mount is already parked.
-  const [hiddenViewIds, setHiddenViewIds] = useState<ReadonlySet<string>>(() => new Set(coveredIds));
+  const [hiddenKeys, setHiddenKeys] = useState<ReadonlySet<string>>(() => new Set(coveredKeys));
 
   // Diff against the previous stack during render (React's
   // adjust-state-during-render pattern) rather than in an effect, so the
@@ -92,39 +92,39 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
   // them from the stack — no blank frame between pop and animation.
   const [lastStack, setLastStack] = useState(stack);
   if (lastStack !== stack) {
-    const stackIds = new Set(stack.map((view) => view.id));
-    const removed = lastStack.filter((view) => !stackIds.has(view.id));
+    const stackKeys = new Set(stack.map((entry) => entry.key));
+    const removed = lastStack.filter((entry) => !stackKeys.has(entry.key));
     setLastStack(stack);
     setLeaving((prev) => [
-      // Re-pushing an id that is still leaving would collide on `key`, so
-      // anything back in the stack is dropped from the leaving set.
-      ...prev.filter((view) => !stackIds.has(view.id)),
+      // A key is never reused, so an entry cannot be leaving and back in the
+      // stack at once — this only drops what a re-render already settled.
+      ...prev.filter((entry) => !stackKeys.has(entry.key)),
       // An `instant` view has no exit to play. Dropping it here rather
       // than mounting it for one zero-duration frame is what makes it
       // genuinely instant, in both directions.
-      ...removed.filter((view) => !isInstant(effective(view.presentation))),
+      ...removed.filter((entry) => !isInstant(effective(entry.view.presentation))),
     ]);
-    const stillCovered = new Set(coveredIds);
-    setHiddenViewIds((prev) => {
+    const stillCovered = new Set(coveredKeys);
+    setHiddenKeys((prev) => {
       // A view that is no longer covered is visible again from this very
       // paint, so it is focusable by the time the focus hook runs.
-      const next = new Set([...prev].filter((viewId) => stillCovered.has(viewId)));
+      const next = new Set([...prev].filter((key) => stillCovered.has(key)));
       // An `instant` push never animates, so nothing will fire
       // `onAnimationComplete` to park what it covers — it has to happen here.
-      if (isInstant(effective(topView?.presentation))) for (const viewId of stillCovered) next.add(viewId);
-      return next.size === prev.size && [...next].every((viewId) => prev.has(viewId)) ? prev : next;
+      if (isInstant(effective(topEntry?.view.presentation))) for (const key of stillCovered) next.add(key);
+      return next.size === prev.size && [...next].every((key) => prev.has(key)) ? prev : next;
     });
   }
 
-  const dropLeaving = (viewId: string): void => {
-    setLeaving((prev) => prev.filter((view) => view.id !== viewId));
+  const dropLeaving = (key: string): void => {
+    setLeaving((prev) => prev.filter((entry) => entry.key !== key));
   };
 
-  const hideCovered = (viewIds: readonly string[]): void => {
-    setHiddenViewIds((prev) => {
-      if (viewIds.every((viewId) => prev.has(viewId))) return prev;
+  const hideCovered = (keys: readonly string[]): void => {
+    setHiddenKeys((prev) => {
+      if (keys.every((key) => prev.has(key))) return prev;
       const next = new Set(prev);
-      for (const viewId of viewIds) next.add(viewId);
+      for (const key of keys) next.add(key);
       return next;
     });
   };
@@ -136,13 +136,13 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
   // what would happen if each view used its own presentation's timing.
   const drivingPresentation =
     direction === 'pop' && leaving.length > 0
-      ? effective(leaving[leaving.length - 1]?.presentation)
-      : effective(topView?.presentation);
+      ? effective(leaving[leaving.length - 1]?.view.presentation)
+      : effective(topEntry?.view.presentation);
 
-  const entries = [
-    ...stack.map((view, index) => ({ view, index, isExiting: false })),
+  const rendered = [
+    ...stack.map((entry, index) => ({ entry, index, isExiting: false })),
     // Leaving views paint above everything so they cover the view they reveal.
-    ...leaving.map((view) => ({ view, index: stack.length, isExiting: true })),
+    ...leaving.map((entry) => ({ entry, index: stack.length, isExiting: true })),
   ];
 
   return (
@@ -154,7 +154,8 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
       data-testid="navigation-content"
       className={cn('relative isolate flex-1 overflow-clip', className)}
     >
-      {entries.map(({ view, index, isExiting }) => {
+      {rendered.map(({ entry, index, isExiting }) => {
+        const { key, view } = entry;
         const isTop = !isExiting && index === stack.length - 1;
         const isCovered = !isTop && !isExiting;
 
@@ -166,7 +167,7 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
           ? offscreenPose(presentation)
           : isTop
             ? AT_REST
-            : coveredPose(effective(stack[index + 1]?.presentation));
+            : coveredPose(effective(stack[index + 1]?.view.presentation));
 
         // A covered view only goes off the paint path once the view above
         // it has *landed* — not once it has finished its own park. Those
@@ -177,17 +178,17 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
         // what keeps a demoted view out of the tab order either: it is
         // still `visible` for the length of the transition. `inert` does
         // that, from the first paint.
-        const isHidden = isCovered && hiddenViewIds.has(view.id);
+        const isHidden = isCovered && hiddenKeys.has(key);
 
         // An `instant` view is mounted already at rest; every other
         // entrance starts offscreen. Views present at first paint start at
         // rest too, or the whole initial stack animates in.
-        const skipEntrance = initialViewIds.has(view.id) || isInstant(presentation);
+        const skipEntrance = initialKeys.has(key) || isInstant(presentation);
         const entrancePose = isTop ? offscreenPose(presentation) : pose;
 
         return (
           <motion.div
-            key={view.id}
+            key={key}
             // Focusable only as a target for `useNavigationFocus`, never
             // by Tab; labelled so a screen reader announces which view
             // focus just landed in.
@@ -199,16 +200,20 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
             // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
             role="group"
             aria-label={view.title}
-            data-testid={`navigation-view-${view.id}`}
+            // Keyed by the entry, not the view: a repeated view would give two
+            // elements the same handle. `data-view-id` is still there for
+            // finding a view by what it *is* rather than by which visit it is.
+            data-testid={`navigation-view-${key}`}
             data-view-id={view.id}
+            data-entry-key={key}
             data-view-status={isTop ? 'active' : isExiting ? 'exiting' : 'background'}
             data-view-presentation={presentation}
             initial={skipEntrance ? false : wrapperTarget(entrancePose)}
             animate={wrapperTarget(pose)}
             transition={presentationTransition(isExiting ? presentation : drivingPresentation)}
             onAnimationComplete={() => {
-              if (isExiting) dropLeaving(view.id);
-              else if (isTop) hideCovered(coveredIds);
+              if (isExiting) dropLeaving(key);
+              else if (isTop) hideCovered(coveredKeys);
             }}
             className={cn(
               `
