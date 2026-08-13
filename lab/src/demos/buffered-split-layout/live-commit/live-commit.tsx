@@ -71,11 +71,43 @@ const SAMPLE_TEXT = [
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+/**
+ * Below `MIN_LEADING_PX + MIN_TRAILING_PX` the two minimums cannot both hold, and
+ * these two lines are where that is arbitrated. The order is: the stage outranks
+ * the leading minimum, which outranks the trailing minimum.
+ *
+ * Measured across the bands, remembering that a pane's box is 20px narrower than
+ * the width it is handed:
+ *
+ * - `W >= 720` — an ordinary range, and the only one where both minimums hold.
+ * - `380 <= W < 720` — leading pins at 360 and keeps its 340px box. The trailing
+ *   pane goes below its own minimum, reaching 0 at 380.
+ * - `W < 380` — the trailing box computes negative, and CSS floors the used width
+ *   at 0. It is positioned by two edges rather than by a width, so there is no
+ *   width for JavaScript to clamp; the metrics derive 0 the same way, so the
+ *   panel and the DOM agree rather than the panel reporting a box that is not
+ *   there.
+ * - `W < 360` — leading gives way to the stage and becomes `W`.
+ *
+ * The ladder is deliberate in that direction rather than the other: a demo whose
+ * subject is the divider would rather keep the leading pane legible than uphold a
+ * pair of minimums the viewport cannot afford. Every band is total and monotone
+ * in `W`, which is the part that matters — there is no width at which the layout
+ * is merely undefined.
+ */
 const getLeadingBounds = (viewportWidth: number) => {
   const minPx = Math.min(MIN_LEADING_PX, viewportWidth);
   const maxPx = Math.max(minPx, viewportWidth - MIN_TRAILING_PX);
 
   return { maxPx, minPx };
+};
+
+/** True when the bounds have collapsed to a single value, so nothing the user
+ *  does can put the divider anywhere else. */
+const isLeadingPinned = (viewportWidth: number) => {
+  const { maxPx, minPx } = getLeadingBounds(viewportWidth);
+
+  return minPx >= maxPx;
 };
 
 const clampLeadingPx = (leadingPx: number, viewportWidth: number) => {
@@ -242,6 +274,16 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
    * heading for a value that was right when the debounce fired, and the viewport
    * may have narrowed since — the trailing minimum has to hold on the frame it
    * is crossed, not at the next tick.
+   *
+   * Which leaves the MotionValue free to sit outside the bounds while the DOM
+   * does not. That is one source of truth with a clamp on its way out, not two
+   * disagreeing ones, and the argument is worth stating: every retarget aims at
+   * an already-clamped value, and every resize event queues a retarget, so an
+   * out-of-bounds value is transient and self-correcting within the debounce plus
+   * the spring's flight. Since the width written is `min(value, bound)` — monotone
+   * and continuous in the value — a binding clamp can only stall the divider,
+   * never make it jump. Measured coming out of a clamped viewport: ordinary
+   * spring steps, no discontinuity.
    */
   const writeLeadingPx = (leadingPx: number) => {
     const root = rootRef.current;
@@ -372,6 +414,10 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
     const rootRect = root.getBoundingClientRect();
     const divider = event.currentTarget;
 
+    // The drag is allowed to start even where the bounds have collapsed and it
+    // cannot move anything. `cursor: col-resize` is a standing lie in that band,
+    // and this demo keeps it: making the divider inert below a threshold is a
+    // second visual state to explain, and the split is not the subject here.
     viewportWidthRef.current = rootRect.width;
     divider.setPointerCapture(pointerId);
     dragOffsetRef.current = event.clientX - rootRect.left - leadingPxRef.current;
@@ -387,7 +433,20 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
       const viewportWidth = viewportWidthRef.current;
       const nextLeadingPx = clampLeadingPx(moveEvent.clientX - rootRect.left - dragOffsetRef.current, viewportWidth);
 
-      preferredLeadingRatioRef.current = nextLeadingPx / viewportWidth;
+      // Recording the intent needs the divider to have somewhere else it could
+      // be. Where the bounds have collapsed the drag moves nothing, and writing
+      // the ratio anyway would let a gesture with no visible effect overwrite the
+      // split for every wider viewport the layout will ever see — measured at
+      // 500px wide, one drag took a stored 60% to 72% without the divider moving
+      // a pixel, and it is not recoverable afterwards.
+      //
+      // Being pinned against one wall of a band that is still open is not this
+      // case, and must keep writing: the divider is where the pointer left it, so
+      // the wall is the intent.
+      if (!isLeadingPinned(viewportWidth)) {
+        preferredLeadingRatioRef.current = nextLeadingPx / viewportWidth;
+      }
+
       // There is nowhere for the divider to be heading on this path: the pointer
       // is the target, so the ghost sits under the divider for the whole drag.
       writeTargetLeadingPx(nextLeadingPx);

@@ -47,8 +47,8 @@ only thing the delay buys is confidence that the window has settled.
 
 So for the whole length of a window drag the leading pane does no layout work
 whatsoever and the trailing pane does all of it. The divider gliding to its new
-place afterwards is that deferred work becoming visible — the same reflow the siblings spend a blur
-or a snapshot to cover.
+place afterwards is that deferred work becoming visible — the same reflow the
+siblings spend a blur or a snapshot to cover.
 
 Critical damping is not a taste choice on this path. ζ = 1, so
 `damping = 2√(km)`; every frame the divider moves is a real reflow of both
@@ -76,6 +76,51 @@ first eight held the leading pane and the remaining twelve moved it — one
 retarget for the whole gesture either way, because the clamp writes the width
 without touching the debounce.
 
+Clamping on the write leaves the MotionValue free to sit outside the bounds while
+the DOM does not, which is one source of truth with a clamp on its way out rather
+than two that disagree. Two properties make that safe, and they are the reason
+this is not a hack: every retarget aims at an already-clamped value and every
+resize event queues a retarget, so an out-of-bounds value is transient and
+self-correcting within the debounce plus the spring's flight; and the width
+written is `min(value, bound)`, monotone and continuous in the value, so a binding
+clamp can only stall the divider, never make it jump. Measured coming out of a
+clamped viewport — 760px, where the bound holds the divider at 400px, widened to
+1000px — the divider moves off in ordinary spring steps with no discontinuity.
+
+### When both minimums cannot hold
+
+Below 720px the two 360px minimums cannot both be honoured, and `getLeadingBounds`
+arbitrates it: **the stage outranks the leading minimum, which outranks the
+trailing minimum.** A pane's box is 20px narrower than the width it is handed, so
+measured across the bands:
+
+| viewport      | leading   | leading box  | trailing box                         |
+| ------------- | --------- | ------------ | ------------------------------------ |
+| ≥ 720px       | the split | ≥ 340px      | ≥ 340px                              |
+| 380px – 720px | 360px     | 340px        | below its own minimum, 0 at 380px    |
+| < 380px       | 360px     | 340px        | 0 — the used width would be negative |
+| < 360px       | the stage | stage − 20px | 0                                    |
+
+The trailing pane is positioned by two edges rather than by a width, so there is
+no width for JavaScript to clamp in the last two rows; CSS floors the used width
+at 0 on its own. The metrics derive 0 the same way, so the panel and the DOM agree
+rather than the panel reporting a box that is not there. Every band is total and
+monotone in the viewport width — the point of writing them down is that there is
+no width at which the layout is merely undefined.
+
+One consequence is not cosmetic. Where the bounds collapse to a single value the
+divider cannot move, so a drag there carries no information and must not be
+recorded as intent — otherwise a gesture with no visible effect rewrites the split
+for every wider viewport afterwards. Measured before the guard: at 500px wide, one
+drag took a stored 60% to 72% without the divider moving a pixel, and nothing
+recovers it. Being pinned against one wall of a band that is still open is a
+different case and does keep writing, because there the divider really is where
+the pointer left it.
+
+The divider still shows `cursor: col-resize` while it is pinned, which is a lie
+this demo keeps: making it inert below a threshold is a second visual state to
+explain, and the split is not the subject here.
+
 ## Target Ghost
 
 The dashed line is where the divider is heading. It sits underneath the divider
@@ -89,8 +134,9 @@ leading pane has not done yet.
 - `target`: the width that pane will have once the divider reaches the ghost.
 - `layer`: the content layer inside the pane.
 - `content`: the real content column, capped at 640px.
-- `preferred`: the stored split ratio. Only a drag rewrites it, so a viewport too
-  narrow to honour it clamps the width without losing the intent.
+- `preferred`: the stored split ratio. Only a drag rewrites it, and only where the
+  divider can move, so a viewport too narrow to honour the ratio clamps the width
+  without losing the intent.
 - `mode`: `idle`, `dragging`, `window resize` (a debounced tick is pending), or
   `settling` (the spring is running with no tick pending).
 
