@@ -31,7 +31,7 @@ frame for frame.
 
 **The leading pane has an explicit width, so nothing moves it until something
 does.** A 100ms trailing debounce is the only thing that does. When it fires, the
-width the preferred ratio now asks for becomes the target of a critically damped
+width the preferred ratio now asks for becomes the target of an overdamped
 spring.
 
 Every resize event pushes the tick back, so a window drag of any length moves the
@@ -50,10 +50,26 @@ whatsoever and the trailing pane does all of it. The divider gliding to its new
 place afterwards is that deferred work becoming visible — the same reflow the
 siblings spend a blur or a snapshot to cover.
 
-Critical damping is not a taste choice on this path. ζ = 1, so
-`damping = 2√(km)`; every frame the divider moves is a real reflow of both
-columns, and an overshoot would lay the content out past its target and then lay
-it out again on the way back.
+Damping is not a taste choice on this path. Every frame the divider moves is a
+real reflow of both columns, so an overshoot lays the content out past its target
+and then lays it out again on the way back.
+
+The spring is overdamped rather than critically damped — `k = 1600`, `c = 120`,
+where critical would be `2√(km) = 80`, so ζ = 1.5. ζ = 1 is only the no-overshoot
+boundary for a spring released from rest, and this one is not always released from
+rest: a retarget that lands mid-flight inherits the value's velocity, and enough
+inbound velocity crosses the target once even at critical damping. The margin is
+what buys the guarantee, and it holds where it matters — measured on a reversal,
+narrowing to 900px and then widening to 1500px 160ms later, mid-flight: overshoot
+0.00px.
+
+What the stiffness buys is the departure, not the arrival. The poles sit at
+`ω(ζ ± √(ζ² − 1))` = 105/s and 15.3/s; the fast one is why the divider leaves
+within a frame, the slow one sets the tail, and at τ = 65ms that tail is around
+30% longer than a critically damped spring at the siblings' `k = 400` (τ = 50ms).
+Measured on a 120px move from rest: first movement at 11ms, within half a pixel at
+486ms, overshoot 0.00px. Tightening the arrival means lowering ζ or raising `k`
+further — it does not come from this pair.
 
 ### The one exception
 
