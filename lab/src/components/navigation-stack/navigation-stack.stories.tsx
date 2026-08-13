@@ -3,7 +3,14 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ChevronRight } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
 
-import { NavigationStack, useNavigation, type NavigationView } from './index.js';
+import {
+  NavigationCenteredContent,
+  NavigationScrollArea,
+  NavigationStack,
+  useNavigation,
+  type NavigationPresentation,
+  type NavigationView,
+} from './index.js';
 
 // ---------------------------------------------------------------------------
 // Demo fixture — a deep tree to push through. Not part of the component.
@@ -55,32 +62,60 @@ function childrenOf(viewId: string): NavNode[] {
   return NODES_BY_ID.get(viewId)?.children ?? [];
 }
 
+/** Ids encode the path, so depth is a string split rather than a walk. */
+function depthOf(nodeId: string): number {
+  return nodeId.split('.').length;
+}
+
+/** One presentation per level, cycling — so a single drill-down shows all four. */
+const PRESENTATION_BY_DEPTH: NavigationPresentation[] = ['slide', 'cover', 'fade', 'instant'];
+
+function presentationForDepth(nodeId: string): NavigationPresentation {
+  return PRESENTATION_BY_DEPTH[(depthOf(nodeId) - 1) % PRESENTATION_BY_DEPTH.length] ?? 'slide';
+}
+
 // ---------------------------------------------------------------------------
 // Demo view
 // ---------------------------------------------------------------------------
 
-const ListItem: FC<{ label: string; onPress: () => void }> = ({ label, onPress }) => (
+const ListItem: FC<{ label: string; hint?: string; onPress: () => void }> = ({ label, hint, onPress }) => (
   <button
     type="button"
     onClick={onPress}
     className={`
-      flex h-10 w-full cursor-pointer items-center justify-between border-b border-black/10 px-4 text-left text-sm
+      flex h-10 w-full cursor-pointer items-center gap-2 border-b border-black/10 px-4 text-left text-sm
       hover:bg-black/5
       dark:border-white/10
       dark:hover:bg-white/5
     `}
   >
-    <span>{label}</span>
+    <span className="flex-1 truncate">{label}</span>
+    {hint !== undefined && (
+      <span
+        className={`
+          font-mono text-[10px] text-black/40
+          dark:text-white/40
+        `}
+      >
+        {hint}
+      </span>
+    )}
     <ChevronRight
       className={`
-        size-4 text-black/30
+        size-4 shrink-0 text-black/30
         dark:text-white/30
       `}
     />
   </button>
 );
 
-const ListViewContent: FC<{ view: NavigationView }> = ({ view }) => {
+interface ListViewContentProps {
+  view: NavigationView;
+  /** Omitted in the default story, so every push slides. */
+  presentationFor?: (nodeId: string) => NavigationPresentation;
+}
+
+const ListViewContent: FC<ListViewContentProps> = ({ view, presentationFor }) => {
   const { push } = useNavigation();
   const children = childrenOf(view.id);
 
@@ -88,7 +123,7 @@ const ListViewContent: FC<{ view: NavigationView }> = ({ view }) => {
   // level still reads as a destination rather than a blank panel.
   if (children.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <NavigationCenteredContent>
         <span
           className={`
             text-sm text-black/50
@@ -97,15 +132,88 @@ const ListViewContent: FC<{ view: NavigationView }> = ({ view }) => {
         >
           {view.title}
         </span>
+      </NavigationCenteredContent>
+    );
+  }
+
+  // `NavigationScrollArea` rather than a bare scroller, so the first row
+  // clears a floating header in `overlay` mode and nothing is inset twice
+  // in `inset` mode.
+  return (
+    <NavigationScrollArea>
+      {children.map((node) => {
+        const presentation = presentationFor?.(node.id);
+        return (
+          <ListItem
+            key={node.id}
+            label={node.title}
+            hint={presentation}
+            onPress={() => push({ id: node.id, title: node.title, presentation })}
+          />
+        );
+      })}
+    </NavigationScrollArea>
+  );
+};
+
+/**
+ * Content that deliberately reaches all four edges, for `overlay` mode.
+ *
+ * The gradient is the point: it runs behind the floating header, so you can
+ * see what the blur is doing and see that the rows — which inset themselves
+ * by `var(--nav-safe-top)` — start below it while the surface does not.
+ */
+const EdgeToEdgeContent: FC<{ view: NavigationView }> = ({ view }) => {
+  const { push } = useNavigation();
+  const children = childrenOf(view.id);
+
+  // Hue from the id, so each level reads as its own surface passing under the
+  // chrome rather than as the same flat panel. Indexed rather than spread:
+  // code units are all this needs, and the ids are ASCII paths anyway.
+  let hue = 0;
+  for (let i = 0; i < view.id.length; i++) hue = (hue + view.id.charCodeAt(i) * 7) % 360;
+  const surface = {
+    background: `linear-gradient(160deg, oklch(0.68 0.17 ${hue}), oklch(0.4 0.13 ${(hue + 70) % 360}))`,
+  };
+
+  if (children.length === 0) {
+    return (
+      <div className="h-full" style={surface}>
+        <NavigationCenteredContent>
+          <span className="text-sm text-white/80">{view.title}</span>
+        </NavigationCenteredContent>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      {children.map((node) => (
-        <ListItem key={node.id} label={node.title} onPress={() => push({ id: node.id, title: node.title })} />
-      ))}
+    <div className="h-full" style={surface}>
+      <NavigationScrollArea>
+        {children.map((node) => (
+          <button
+            key={node.id}
+            type="button"
+            onClick={() => push({ id: node.id, title: node.title })}
+            className={`
+              flex h-12 w-full cursor-pointer items-center justify-between border-b border-white/15 px-4 text-left
+              text-sm text-white
+              hover:bg-white/10
+            `}
+          >
+            <span className="truncate">{node.title}</span>
+            <ChevronRight className="size-4 shrink-0 text-white/50" />
+          </button>
+        ))}
+        {/* Enough copy to make the scroller actually scroll, so the claim
+            above it — that rows pass under the blur rather than stopping at
+            it — is something you can check rather than take on trust. */}
+        <p className="px-4 py-6 text-xs/6 text-white/70">
+          The surface behind the bar reaches the top of the frame; these rows do not, because the scroller insets itself
+          by <code className="font-mono">var(--nav-safe-top)</code>. Scroll and the rows travel up under the blur — the
+          inset is padding inside the scroller, not a shorter scroller. Take the breadcrumb away and the bar gets
+          shorter, the variable follows, and this list starts higher without anything here knowing why.
+        </p>
+      </NavigationScrollArea>
     </div>
   );
 };
@@ -138,7 +246,7 @@ const meta = {
   tags: ['autodocs'],
   argTypes: {
     showBreadcrumb: { control: 'boolean' },
-    headerHeight: { control: { type: 'range', min: 48, max: 140, step: 4 } },
+    headerMode: { control: 'inline-radio', options: ['inset', 'overlay'] },
     rootView: { control: false },
     renderView: { control: false },
   },
@@ -164,6 +272,44 @@ export const Default: Story = {
   },
 };
 
+export const PerLevelPresentation: Story = {
+  args: {
+    rootView: { id: 'root', title: 'Root' },
+    renderView: (view: NavigationView) => <ListViewContent view={view} presentationFor={presentationForDepth} />,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: [
+          'One presentation per level, cycling `slide → cover → fade → instant`. Each row is labelled with what it will do, so a single drill-down shows all four and the back button retraces each of them in reverse.',
+          'A presentation is a pair of poses, not an entrance. Watch the view *underneath*: it parks back and dims under a `slide`, holds still and dims under a `cover`, and neither moves nor dims under a `fade` — where it is visible through the arriving view for the whole dissolve, so parking it would read as a glitch and dimming it as the background going dark. Everything that moves because of a given navigation borrows that navigation’s curve, so the layer below can never be on a different clock from the layer above.',
+          '`instant` is shortcut in both directions rather than animated over zero seconds: the view mounts already at rest, and on the way back it is dropped without ever being mounted as a leaving view. A zero-duration transition would still cost a frame at the wrong pose in each direction.',
+        ].join('\n\n'),
+      },
+    },
+  },
+};
+
+export const Fullscreen: Story = {
+  args: {
+    rootView: { id: 'root', title: 'Root' },
+    renderView: (view: NavigationView) => <EdgeToEdgeContent view={view} />,
+    headerMode: 'overlay',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: [
+          'The header is lifted out of the column and floats, so the content area is the whole frame and each view runs edge to edge. The gradient passing behind the bar is what the mode is for; the bar earns its legibility with a translucent blurred material rather than by taking space away from the content.',
+          'The rows still start below the chrome because they inset themselves by `var(--nav-safe-top)` — the header’s measured height *plus a little*, because clearing a floating bar is not the same as sitting flush against its edge; with no rule under the bar, content that starts exactly at its underside reads as clipped by it. The raw height is published separately as `var(--nav-header-height)` for anything that wants to align *to* the bar instead. Scroll the list: the rows pass *under* the blur instead of stopping at it, which is only possible because the inset is padding inside the scroller rather than a shorter scroller. In `inset` mode both come to `0`, so the same content component is correct in both modes with no branch.',
+          'The bar also overdraws itself by 1px along its top and sides, into the frame’s rounded clip. The container’s anti-aliased corner and the bar’s own edge do not land on the same subpixels, and the gap between them shows as a hairline of the page behind the frame — more so under a `backdrop-filter`, whose edge is resampled too. The overdrawn pixel is thrown away by the clip, which is the point. It is paint only: the material is out of flow, so the measured height and therefore the inset are untouched by it.',
+          'This is also why the height is measured rather than declared. A floating header has no layout relationship to the content, so the number has to cross into CSS — the one case here where the engine genuinely cannot do it for us.',
+        ].join('\n\n'),
+      },
+    },
+  },
+};
+
 export const NoBreadcrumb: Story = {
   args: {
     rootView: { id: 'root', title: 'Root' },
@@ -173,7 +319,10 @@ export const NoBreadcrumb: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Title and back button only. The header keeps its height, so the content area does not shift.',
+        story: [
+          'Title and back button only — and the header gives the space back rather than reserving it. The content area is sized by the column, not by a declared header height, so removing the breadcrumb line moves the first row up by exactly the line that left.',
+          'Toggle `showBreadcrumb` against the `Default` story to see it: the header is 24px shorter here, and the content starts 24px higher.',
+        ].join('\n\n'),
       },
     },
   },

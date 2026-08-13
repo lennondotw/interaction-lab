@@ -1,7 +1,16 @@
 import { cn } from '@monorepo/utils';
 import type { CSSProperties, FC, ReactNode } from 'react';
 
-import { useContainerLayout } from './container-context.js';
+import { SAFE_TOP_VAR, useContainerLayout } from './container-context.js';
+
+/**
+ * The inset, taken from the custom property rather than from the context
+ * value. Both carry the same number, but the property means a header that
+ * changes height repaints these boxes without re-rendering the view tree
+ * inside them. The context is still read, so being rendered outside a
+ * `NavigationContainer` fails loudly instead of silently insetting by zero.
+ */
+const safeTopPadding: CSSProperties = { paddingTop: `var(${SAFE_TOP_VAR}, 0px)` };
 
 export interface NavigationScrollAreaProps {
   children: ReactNode;
@@ -10,14 +19,17 @@ export interface NavigationScrollAreaProps {
 }
 
 /**
- * Scrollable body that clears the fixed header. Must be rendered inside
- * a {@link NavigationContainer}.
+ * Scrollable body that keeps its content clear of the chrome.
+ *
+ * In `inset` mode that inset is zero — the column already placed this box
+ * below the header — so the same component is correct in both modes without
+ * a branch, and can never double up with a padding applied further out.
  */
 export const NavigationScrollArea: FC<NavigationScrollAreaProps> = ({ children, className, style }) => {
-  const { headerHeight } = useContainerLayout();
+  useContainerLayout();
 
   return (
-    <div className={cn('h-full overflow-y-auto', className)} style={{ paddingTop: headerHeight, ...style }}>
+    <div className={cn('h-full overflow-y-auto', className)} style={{ ...safeTopPadding, ...style }}>
       {children}
     </div>
   );
@@ -28,12 +40,12 @@ export interface NavigationCenteredContentProps {
   className?: string;
 }
 
-/** Centred body that clears the fixed header — for empty states and leaves. */
+/** Centred body that stays clear of the chrome — for empty states and leaves. */
 export const NavigationCenteredContent: FC<NavigationCenteredContentProps> = ({ children, className }) => {
-  const { headerHeight } = useContainerLayout();
+  useContainerLayout();
 
   return (
-    <div className={cn('flex h-full items-center justify-center', className)} style={{ paddingTop: headerHeight }}>
+    <div className={cn('flex h-full items-center justify-center', className)} style={safeTopPadding}>
       {children}
     </div>
   );
