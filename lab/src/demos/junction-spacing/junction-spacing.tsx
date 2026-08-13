@@ -234,15 +234,15 @@ const BoardShell: FC<{
             face, so nothing about them is stated twice. */}
         <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
           <ToggleButton
-            offLabel="Disable Text Highlight"
+            offLabel="Disable text highlight"
             on={options.disableTextHighlight}
-            onLabel="Enable Text Highlight"
+            onLabel="Enable text highlight"
             onToggle={() => onOptionsChange?.({ disableTextHighlight: !options.disableTextHighlight })}
           />
           <ToggleButton
-            offLabel="Disable Junction Spacing"
+            offLabel="Disable junction spacing"
             on={options.disableJunctionSpacing}
-            onLabel="Enable Junction Spacing"
+            onLabel="Enable junction spacing"
             onToggle={() => onOptionsChange?.({ disableJunctionSpacing: !options.disableJunctionSpacing })}
           />
         </div>
