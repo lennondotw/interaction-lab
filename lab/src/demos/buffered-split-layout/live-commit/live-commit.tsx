@@ -144,6 +144,25 @@ const cssPx = (value: number) => `${value}px`;
 
 const formatPx = (value: number) => `${Math.round(value)}px`;
 
+/** A pane's box is narrower than the width it is handed by the gaps it gives up, so
+ *  the number a minimum actually shows up as is this one. */
+const MIN_LEADING_BOX_PX = paneWidthToVisiblePx(MIN_LEADING_PX);
+const MIN_TRAILING_BOX_PX = paneWidthToVisiblePx(MIN_TRAILING_PX);
+
+/**
+ * The panel's own check on the invariant, so the demo demonstrates it rather than
+ * only claiming it: a pane resting on its floor says `(min)`, and a pane below the
+ * floor says `(under min)` — which is reachable only below 720px, where the two
+ * minimums stop being affordable at once.
+ */
+const formatPaneBox = (boxPx: number, floorPx: number) => {
+  const rounded = Math.round(boxPx);
+  if (rounded < floorPx) return `${rounded}px (under min)`;
+  if (rounded === floorPx) return `${rounded}px (min)`;
+
+  return `${rounded}px`;
+};
+
 const buildParagraphs = (prefix: string) =>
   Array.from({ length: 20 }, (_, index) => `${prefix} ${index + 1}. ${SAMPLE_TEXT[index % SAMPLE_TEXT.length]}`);
 
@@ -224,14 +243,14 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
     const mode = getInteractionMode();
 
     leftMetrics.textContent = [
-      `pane ${formatPx(leftPanePx)} | target ${formatPx(paneWidthToVisiblePx(targetLeadingPx))}`,
+      `pane ${formatPaneBox(leftPanePx, MIN_LEADING_BOX_PX)} | target ${formatPx(paneWidthToVisiblePx(targetLeadingPx))}`,
       `layer ${formatPx(leftLayerPx)} | content ${formatPx(contentLayerPxToContentPx(leftLayerPx))}`,
       `preferred ${(preferredLeadingRatioRef.current * 100).toFixed(1)}%`,
       `mode ${mode}`,
     ].join('\n');
 
     rightMetrics.textContent = [
-      `pane ${formatPx(rightPanePx)} | target ${formatPx(paneWidthToVisiblePx(viewportWidth - targetLeadingPx))}`,
+      `pane ${formatPaneBox(rightPanePx, MIN_TRAILING_BOX_PX)} | target ${formatPx(paneWidthToVisiblePx(viewportWidth - targetLeadingPx))}`,
       `layer ${formatPx(rightLayerPx)} | content ${formatPx(contentLayerPxToContentPx(rightLayerPx))}`,
       `preferred ${((1 - preferredLeadingRatioRef.current) * 100).toFixed(1)}%`,
       `mode ${mode}`,
@@ -283,20 +302,35 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
    * The only width write in the component, and the expensive one: this is the
    * width the content lays out at, so every call reflows both columns.
    *
-   * The clamp belongs here rather than at each caller. A running spring is
-   * heading for a value that was right when the debounce fired, and the viewport
-   * may have narrowed since — the trailing minimum has to hold on the frame it
-   * is crossed, not at the next tick.
+   * It is also the single enforcement point for the invariant this demo is careful
+   * about — **no painted frame shows either pane narrower than its own minimum, at
+   * any viewport that can afford both.** Holding a stale width against a shrinking
+   * viewport is precisely the shape of a violation, so being able to state why one
+   * never lands is the difference between a policy and a coincidence. It rests on
+   * three things, and this function is two of them:
    *
-   * Which leaves the MotionValue free to sit outside the bounds while the DOM
-   * does not. That is one source of truth with a clamp on its way out, not two
-   * disagreeing ones, and the argument is worth stating: every retarget aims at
-   * an already-clamped value, and every resize event queues a retarget, so an
-   * out-of-bounds value is transient and self-correcting within the debounce plus
-   * the spring's flight. Since the width written is `min(value, bound)` — monotone
-   * and continuous in the value — a binding clamp can only stall the divider,
-   * never make it jump. Measured coming out of a clamped viewport: ordinary
-   * spring steps, no discontinuity.
+   * 1. The bound is a function of the viewport alone. `maxPx = W - MIN_TRAILING_PX`
+   *    *is* "the trailing pane keeps its box", and `minPx` is the same for the
+   *    leading pane, so both minimums are one interval on one number. The trailing
+   *    pane needs no clamp of its own: positioned by two edges, its width is
+   *    `W - leading - gaps` by construction, so bounding `leading` bounds it exactly.
+   * 2. The clamp is on the output, not on the target. Every producer — mount, drag,
+   *    the spring's `onUpdate` — publishes through here, which is why a spring can
+   *    fly toward a value the viewport has since invalidated without ever putting
+   *    one on screen. What sits outside the bounds is the MotionValue, never the
+   *    published width; one source of truth with a clamp on the way out rather than
+   *    two that disagree.
+   * 3. `republishWithinBounds` moves the published value in the same task the bound
+   *    moves in. Without it the violation would survive until the debounce fired.
+   *
+   * Two consequences worth naming. Since the written width is `min(value, bound)` —
+   * monotone and continuous in the value — a binding clamp can only stall the
+   * divider, never make it jump. And an out-of-bounds MotionValue is always
+   * transient: every retarget aims at an already-clamped value and every resize
+   * event queues a retarget, so it self-corrects within the debounce plus the
+   * spring's flight.
+   *
+   * Measured in archive/2026-08-split-minimum-across-frames.
    */
   const writeLeadingPx = (leadingPx: number) => {
     const root = rootRef.current;
@@ -308,6 +342,21 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
     root.style.setProperty('--split-leading-width', cssPx(nextLeadingPx));
     renderMetricsPanels();
   };
+
+  /**
+   * Re-publishes the width the component already holds, for the sole purpose of
+   * running it past the bound again. A no-op whenever the bound is not binding, and
+   * the third leg of the invariant above whenever it is.
+   *
+   * It has to be called from the `resize` handler specifically, because that is the
+   * task the bound moves in and it runs inside the rendering update, ahead of both
+   * animation frame callbacks and ResizeObserver delivery. So the frame that first
+   * paints the new viewport already carries the corrected width. Measured: a 4ms
+   * timer landing between the viewport being applied and that update reads a 160px
+   * trailing box on a 1200 → 900 change, while rAF and ResizeObserver in the same
+   * update both read 340.
+   */
+  const republishWithinBounds = () => writeLeadingPx(leadingPxRef.current);
 
   const writeTargetLeadingPx = (targetLeadingPx: number) => {
     const root = rootRef.current;
@@ -383,11 +432,10 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
       resizeEventCountRef.current += 1;
       renderCounters();
 
-      // Nothing here moves the leading edge on purpose. Rewriting the width it
-      // already holds is what keeps the trailing clamp honest while it waits, and
-      // costs nothing when the clamp is not binding — the property is set to the
-      // value it already has.
-      writeLeadingPx(leadingPxRef.current);
+      // Nothing here moves the leading edge on purpose — except the bound, which
+      // moved with the viewport and has to be applied in this task rather than at
+      // the next tick.
+      republishWithinBounds();
       if (dragActiveRef.current) return;
 
       // Every event pushes the tick back, which is what makes the leading pane
@@ -506,6 +554,9 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
     <div
       ref={rootRef}
       data-buffered-split-layout-live-commit-demo
+      // The one thing the archive probe asks of the app: a handle on the stage, so
+      // it can measure the real story instead of a copy of it.
+      data-testid="stage"
       style={rootStyle}
       className={`
         relative h-dvh min-h-[620px] w-full overflow-hidden bg-white font-mono text-[12px] text-slate-500

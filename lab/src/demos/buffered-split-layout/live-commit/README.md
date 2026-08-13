@@ -71,44 +71,79 @@ Measured on a 120px move from rest: first movement at 11ms, within half a pixel 
 486ms, overshoot 0.00px. Tightening the arrival means lowering ζ or raising `k`
 further — it does not come from this pair.
 
-### The one exception
+## Minimum Widths
 
-A viewport can narrow past the point where the held width leaves the trailing
-pane its minimum. The clamp that catches this lives on the width write rather
-than at each caller, so it applies on the frame it is crossed, on every path,
-including a spring already in flight toward a target that was correct when the
-debounce fired. Measured at 1100px → 800px: the leading pane gives way
-on the resize event itself — the first frame this component gets — rather than
-holding a width that leaves the trailing pane 120px until the next tick.
+The policy above is a stale width held against a shrinking viewport, which is exactly
+the shape of a minimum-width violation, and it runs for 100ms of debounce plus a spring
+flight before anything corrects it. So the contract has to be stated as a frame-level
+invariant rather than as a settled one:
 
-The leading pane moving without a tick is a deviation from "the leading pane
-holds", and it is the right one. The alternative is a pane below its own minimum
-width.
+> **No painted frame shows either pane narrower than its own minimum, at any viewport
+> that can afford both.** Drag, hold, spring flight and clamp included.
 
-Keep narrowing past that point and the two panes trade places: the trailing pane
-sits pinned at its minimum and the leading pane becomes the one absorbing the
-viewport live. Measured over 1100px → 900px in twenty events 40ms apart, the
-first eight held the leading pane and the remaining twelve moved it — one
-retarget for the whole gesture either way, because the clamp writes the width
-without touching the debounce.
+Both minimums are 360px of width; a pane gives up 20px to the gaps around it, so the
+number this shows up as is a 340px box. Measured in
+[archive/2026-08-split-minimum-across-frames](../../../../../../archive/2026-08-split-minimum-across-frames/README.md),
+where a 1200px → 900px change is watched by four samplers at once: a 4ms timer task
+reads a 160px trailing box, and `rAF` plus `ResizeObserver` — both inside the rendering
+update that paints the frame — read 340px. The sub-minimum box exists in the DOM and is
+never composited.
 
-Clamping on the write leaves the MotionValue free to sit outside the bounds while
-the DOM does not, which is one source of truth with a clamp on its way out rather
-than two that disagree. Two properties make that safe, and they are the reason
-this is not a hack: every retarget aims at an already-clamped value and every
-resize event queues a retarget, so an out-of-bounds value is transient and
-self-correcting within the debounce plus the spring's flight; and the width
-written is `min(value, bound)`, monotone and continuous in the value, so a binding
-clamp can only stall the divider, never make it jump. Measured coming out of a
-clamped viewport — 760px, where the bound holds the divider at 400px, widened to
-1000px — the divider moves off in ordinary spring steps with no discontinuity.
+Three properties make it hold, and the third is the one that is easy to delete by
+accident:
+
+1. **The bound is a function of the viewport alone.** `maxPx = W - MIN_TRAILING_PX` _is_
+   the statement "the trailing pane keeps its box", and `minPx` is the same for the
+   leading pane, so both minimums are one interval on one number. The trailing pane
+   needs no clamp of its own: positioned by two edges, its width is
+   `W - leading - gaps` by construction, so bounding the leading width bounds it
+   exactly.
+2. **The clamp is on the output, not on the target.** Mount, drag and the spring's
+   `onUpdate` all publish through one function that clamps before writing, which is why
+   a spring can fly toward a value the viewport has since invalidated without ever
+   putting one on screen. What sits outside the bounds is the MotionValue, never the
+   published width — one source of truth with a clamp on the way out rather than two
+   that disagree.
+3. **The published value moves in the same task as the bound.** `republishWithinBounds`
+   re-writes the width the component already holds, for no other purpose than to run it
+   past the new bound, and it has to be called from the `resize` handler because that
+   task runs inside the rendering update, ahead of animation frame callbacks and
+   ResizeObserver delivery. It reads like a no-op and it is the invariant: without it
+   the violation would survive until the debounce fired, six frames later.
+
+Two consequences fall out of the same shape. The written width is `min(value, bound)`,
+monotone and continuous in the value, so a binding clamp can only **stall** the divider
+— never make it jump; measured coming out of a clamped 760px viewport into 1000px,
+ordinary spring steps and no discontinuity. And an out-of-bounds MotionValue is always
+transient, because every retarget aims at an already-clamped value and every resize
+event queues a retarget.
+
+The one thing this does not cover: `rAF` and `ResizeObserver` are as close as an in-page
+probe gets to the painted frame, but neither is the compositor, so a frame drawn from a
+stale main thread during a window drag is outside what was measured. Removing that
+dependency would mean a CSS floor — `min-width` on both panes — at the cost of changing
+the sub-720px behaviour from collapse to overflow. Not taken here.
+
+### Where the leading pane gives way
+
+The invariant is what makes "the leading pane holds" not quite true, and deliberately
+so. When the viewport narrows past the point where the held width would leave the
+trailing pane less than its minimum, the leading pane gives way on the resize event
+itself rather than at the next tick — measured at 1100px → 800px, rather than holding a
+width that would leave the trailing pane 120px.
+
+Keep narrowing and the two panes trade places entirely: the trailing pane sits pinned at
+its minimum and the leading pane becomes the one absorbing the viewport live. Measured
+over 1100px → 900px in twenty events 40ms apart, the first eight held the leading pane
+and the remaining twelve moved it — one retarget for the whole gesture either way,
+because the clamp writes the width without touching the debounce.
 
 ### When both minimums cannot hold
 
-Below 720px the two 360px minimums cannot both be honoured, and `getLeadingBounds`
-arbitrates it: **the stage outranks the leading minimum, which outranks the
-trailing minimum.** A pane's box is 20px narrower than the width it is handed, so
-measured across the bands:
+Above is the affordable range, and this is where it ends. Below 720px the two 360px
+minimums cannot both be honoured — two 340px boxes plus 40px of gaps is exactly 720 —
+and `getLeadingBounds` arbitrates it: **the stage outranks the leading minimum, which
+outranks the trailing minimum.** Measured across the bands:
 
 | viewport      | leading   | leading box  | trailing box                         |
 | ------------- | --------- | ------------ | ------------------------------------ |
@@ -120,9 +155,11 @@ measured across the bands:
 The trailing pane is positioned by two edges rather than by a width, so there is
 no width for JavaScript to clamp in the last two rows; CSS floors the used width
 at 0 on its own. The metrics derive 0 the same way, so the panel and the DOM agree
-rather than the panel reporting a box that is not there. Every band is total and
-monotone in the viewport width — the point of writing them down is that there is
-no width at which the layout is merely undefined.
+rather than the panel reporting a box that is not there — and the panel says so out
+loud: a pane resting on its floor reads `(min)`, and a pane below it reads
+`(under min)`, which is reachable only in this range. Every band is total and monotone
+in the viewport width — the point of writing them down is that there is no width at
+which the layout is merely undefined.
 
 One consequence is not cosmetic. Where the bounds collapse to a single value the
 divider cannot move, so a drag there carries no information and must not be
@@ -146,7 +183,8 @@ leading pane has not done yet.
 
 ## Debug Overlay
 
-- `pane`: the pane box width.
+- `pane`: the pane box width, flagged `(min)` when it is resting on its own minimum
+  and `(under min)` in the range where the two minimums cannot both hold.
 - `target`: the width that pane will have once the divider reaches the ghost.
 - `layer`: the content layer inside the pane.
 - `content`: the real content column, capped at 640px.
@@ -169,3 +207,9 @@ retarget.
   hidden behind a 6px blur.
 - [spring-commit](../spring-commit/spring-commit.tsx) — the committed container
   springs to the buffered target.
+
+## Investigation
+
+- [2026-08-split-minimum-across-frames](../../../../../../archive/2026-08-split-minimum-across-frames/README.md)
+  — whether a pane held at a stale width is ever painted below its own minimum, and
+  what stops it. Drives this story, so it cannot drift from what ships.
