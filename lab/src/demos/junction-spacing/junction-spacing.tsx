@@ -100,6 +100,17 @@ const PartSpans: FC<{ part: SpacingPart; isolate: boolean }> = ({ isolate, part 
   );
 };
 
+/*
+ * One shell for every view here. Both boards had their own copy of these and
+ * drifted apart on width, columns and padding, which read as two unrelated
+ * demos.
+ */
+const PAGE = 'mx-auto flex max-w-6xl flex-col gap-8 p-6';
+const GRID = 'grid gap-2 lg:grid-cols-2';
+const CARD = 'flex flex-col gap-1.5 rounded-lg bg-white p-3 ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10';
+const SAMPLE = 'text-lg leading-relaxed whitespace-pre-wrap';
+const CAPTION = 'text-xs text-neutral-500 dark:text-neutral-400';
+
 const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean }> = ({ isolate, spacingCase }) => {
   const { label, parts, rtl } = spacingCase;
   const texts = parts.map((part) => part.text);
@@ -111,8 +122,8 @@ const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean }> = ({ isolate,
   );
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg bg-white p-3 ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10">
-      <p className="text-lg leading-relaxed whitespace-pre-wrap" dir={rtl === true ? 'rtl' : undefined}>
+    <div className={CARD}>
+      <p className={SAMPLE} dir={rtl === true ? 'rtl' : undefined}>
         {segments.map((segment, index) =>
           segment.type === 'space' ? (
             <Tinted key={index} tint={TINT.insertedSpace}>
@@ -124,15 +135,12 @@ const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean }> = ({ isolate,
         )}
       </p>
       {splitCluster && (
-        <p
-          className="text-lg leading-relaxed text-neutral-500 whitespace-pre-wrap"
-          dir={rtl === true ? 'rtl' : undefined}
-        >
+        <p className={cn(SAMPLE, 'text-neutral-500')} dir={rtl === true ? 'rtl' : undefined}>
           {joinWithSpacing(texts)}
           <span className="ms-2 align-middle text-xs">as one string, cluster intact</span>
         </p>
       )}
-      <p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p>
+      <p className={CAPTION}>{label}</p>
     </div>
   );
 };
@@ -153,7 +161,7 @@ export const JunctionSpacingBoard: FC<{ groups?: readonly SpacingGroup[]; isolat
   groups = SPACING_GROUPS,
   isolateDynamic = true,
 }) => (
-  <div className="mx-auto flex max-w-6xl flex-col gap-8 p-6">
+  <div className={PAGE}>
     <JunctionSpacingLegend />
     {groups.map((group) => (
       <section className="flex flex-col gap-3" key={group.id}>
@@ -161,9 +169,9 @@ export const JunctionSpacingBoard: FC<{ groups?: readonly SpacingGroup[]; isolat
             vertical as the copy it describes rather than on the card edge. */}
         <header className="flex flex-col gap-1 px-3">
           <h2 className="text-sm font-semibold">{group.title}</h2>
-          <p className="max-w-3xl text-xs text-neutral-500 dark:text-neutral-400">{group.blurb}</p>
+          <p className={cn(CAPTION, 'max-w-3xl')}>{group.blurb}</p>
         </header>
-        <div className="grid gap-2 lg:grid-cols-2">
+        <div className={GRID}>
           {group.cases.map((spacingCase) => (
             <CaseCard isolate={isolateDynamic} key={spacingCase.label} spacingCase={spacingCase} />
           ))}
@@ -174,27 +182,33 @@ export const JunctionSpacingBoard: FC<{ groups?: readonly SpacingGroup[]; isolat
 );
 
 /**
- * One junction, asked directly — the smallest thing the board is made of.
+ * One junction, asked directly — the smallest thing the board is made of. Same
+ * shell as the board, so the two read as one demo: the sample on the first line,
+ * and the caption saying what was asked and what came back.
  */
 export const JunctionVerdicts: FC<{ pairs: readonly [string, string][] }> = ({ pairs }) => (
-  <div className="mx-auto flex max-w-3xl flex-col gap-1 p-6">
-    {pairs.map(([left, right]) => (
-      <div
-        className="flex items-baseline gap-3 rounded-lg bg-white px-3 py-2 ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10"
-        key={left + right}
-      >
-        <code className="text-xs text-neutral-500 dark:text-neutral-400">
-          {JSON.stringify(left)} + {JSON.stringify(right)}
-        </code>
-        <span className="text-lg whitespace-pre-wrap">
-          <Tinted tint={TINT.clientBody}>{left}</Tinted>
-          {needsSpaceBetween(left, right) && <Tinted tint={TINT.insertedSpace}> </Tinted>}
-          <Tinted tint={TINT.dynamicBody}>{right}</Tinted>
-        </span>
-        <span className="ms-auto text-xs text-neutral-500 dark:text-neutral-400">
-          {needsSpaceBetween(left, right) ? 'space' : 'flush'}
-        </span>
-      </div>
-    ))}
+  <div className={PAGE}>
+    <JunctionSpacingLegend />
+    <div className={GRID}>
+      {pairs.map(([left, right]) => {
+        const spaced = needsSpaceBetween(left, right);
+
+        return (
+          <div className={CARD} key={left + right}>
+            <p className={SAMPLE}>
+              <Tinted tint={TINT.clientBody}>{left}</Tinted>
+              {spaced && <Tinted tint={TINT.insertedSpace}> </Tinted>}
+              <Tinted tint={TINT.dynamicBody}>{right}</Tinted>
+            </p>
+            <p className={CAPTION}>
+              <code>
+                {JSON.stringify(left)} + {JSON.stringify(right)}
+              </code>{' '}
+              → {spaced ? 'space' : 'flush'}
+            </p>
+          </div>
+        );
+      })}
+    </div>
   </div>
 );
