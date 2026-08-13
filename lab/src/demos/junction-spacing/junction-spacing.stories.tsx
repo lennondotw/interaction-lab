@@ -1,9 +1,35 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useArgs } from 'storybook/preview-api';
 
 import { SPACING_GROUPS } from './junction-spacing-cases.js';
-import { JunctionSpacingBoard, JunctionVerdicts } from './junction-spacing.js';
+import { JunctionSpacingBoard, JunctionVerdicts, type JunctionSpacingOptions } from './junction-spacing.js';
 
-const meta: Meta = {
+/*
+ * Both switches live in the args, and the buttons inside the board write back
+ * through updateArgs, so the controls panel and the in-page buttons are one pair
+ * of values rather than two that drift.
+ *
+ * useArgs is a Storybook hook, not a React one: its context is only live while
+ * the story function itself runs, so it has to be called in `render` directly.
+ * Moving it into a nested component throws "Rendered more hooks than during the
+ * previous render", because by then Storybook has moved on.
+ */
+interface Args extends JunctionSpacingOptions {
+  groupId?: string;
+  isolateDynamic?: boolean;
+}
+
+const meta: Meta<Args> = {
+  args: {
+    disableJunctionSpacing: false,
+    disableTextHighlight: false,
+  },
+  argTypes: {
+    disableJunctionSpacing: { control: 'boolean' },
+    disableTextHighlight: { control: 'boolean' },
+    groupId: { control: false },
+    isolateDynamic: { control: 'boolean' },
+  },
   parameters: {
     layout: 'fullscreen',
   },
@@ -12,31 +38,41 @@ const meta: Meta = {
 
 export default meta;
 
-const group = (id: string) => SPACING_GROUPS.filter((candidate) => candidate.id === id);
+type Story = StoryObj<Args>;
 
-export const Basics: StoryObj = {
-  render: () => <JunctionSpacingBoard groups={group('basics')} />,
-};
+const groupsFor = (groupId: string | undefined) =>
+  groupId === undefined ? undefined : SPACING_GROUPS.filter((group) => group.id === groupId);
 
-export const SpacesTheCopyHas: StoryObj = {
-  render: () => <JunctionSpacingBoard groups={group('boundary-spaces')} />,
-};
+const board = (args: Args, updateArgs: (patch: Partial<Args>) => void) => (
+  <JunctionSpacingBoard
+    disableJunctionSpacing={args.disableJunctionSpacing}
+    disableTextHighlight={args.disableTextHighlight}
+    groups={groupsFor(args.groupId)}
+    isolateDynamic={args.isolateDynamic}
+    onOptionsChange={updateArgs}
+  />
+);
 
-export const WideScripts: StoryObj = {
-  render: () => <JunctionSpacingBoard groups={group('wide-scripts')} />,
-};
+const group = (groupId: string): Story => ({
+  args: { groupId },
+  render: (args) => {
+    const [, updateArgs] = useArgs();
 
-export const Punctuation: StoryObj = {
-  render: () => <JunctionSpacingBoard groups={group('punctuation')} />,
-};
+    return board(args, updateArgs);
+  },
+});
 
-export const GraphemesAndEmoji: StoryObj = {
-  render: () => <JunctionSpacingBoard groups={group('graphemes')} />,
-};
+export const Basics = group('basics');
 
-export const ScriptsAndBidi: StoryObj = {
-  render: () => <JunctionSpacingBoard groups={group('scripts-and-bidi')} />,
-};
+export const SpacesTheCopyHas = group('boundary-spaces');
+
+export const WideScripts = group('wide-scripts');
+
+export const Punctuation = group('punctuation');
+
+export const GraphemesAndEmoji = group('graphemes');
+
+export const ScriptsAndBidi = group('scripts-and-bidi');
 
 /**
  * The same cases with the dynamic run left un-isolated, which is what a caller
@@ -44,8 +80,13 @@ export const ScriptsAndBidi: StoryObj = {
  * is the bidi algorithm reordering runs the space sits between, and it is the
  * reason the RTL guidance is about the renderer rather than about this function.
  */
-export const ScriptsAndBidiWithoutIsolate: StoryObj = {
-  render: () => <JunctionSpacingBoard groups={group('scripts-and-bidi')} isolateDynamic={false} />,
+export const ScriptsAndBidiWithoutIsolate: Story = {
+  args: { groupId: 'scripts-and-bidi', isolateDynamic: false },
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+
+    return board(args, updateArgs);
+  },
 };
 
 /**
@@ -53,31 +94,43 @@ export const ScriptsAndBidiWithoutIsolate: StoryObj = {
  * quote takes its space outside the pair, and halfwidth punctuation takes its
  * space on the far side of the run it binds to.
  */
-export const SingleJunctions: StoryObj = {
-  render: () => (
-    <JunctionVerdicts
-      pairs={[
-        ['你好', 'world'],
-        ['hello', '世界'],
-        ['你好', '世界'],
-        ['hello', 'world'],
-        ['中文', '(hello)'],
-        ['(', '中文'],
-        ['(hello)', '中文'],
-        ['中文', ')'],
-        ['版本 v1.2:', '中文说明'],
-        ['中文', ',请稍候'],
-        ['他说,', 'hello'],
-        ['版本 1.', '2'],
-        ['한국', 'word'],
-        ['ＡＢＣ', '中文'],
-        ['「引用」', 'quote'],
-        ['李明', "'s profile"],
-      ]}
-    />
-  ),
+export const SingleJunctions: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+
+    return (
+      <JunctionVerdicts
+        disableJunctionSpacing={args.disableJunctionSpacing}
+        disableTextHighlight={args.disableTextHighlight}
+        onOptionsChange={updateArgs}
+        pairs={[
+          ['你好', 'world'],
+          ['hello', '世界'],
+          ['你好', '世界'],
+          ['hello', 'world'],
+          ['中文', '(hello)'],
+          ['(', '中文'],
+          ['(hello)', '中文'],
+          ['中文', ')'],
+          ['他说', '«سلام»'],
+          ['版本 v1.2:', '中文说明'],
+          ['中文', ',请稍候'],
+          ['他说,', 'hello'],
+          ['版本 1.', '2'],
+          ['한국', 'word'],
+          ['ＡＢＣ', '中文'],
+          ['「引用」', 'quote'],
+          ['李明', "'s profile"],
+        ]}
+      />
+    );
+  },
 };
 
-export const AllCases: StoryObj = {
-  render: () => <JunctionSpacingBoard />,
+export const AllCases: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+
+    return board(args, updateArgs);
+  },
 };

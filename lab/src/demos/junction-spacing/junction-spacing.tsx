@@ -1,5 +1,5 @@
-import { cn, joinWithSpacing, needsSpaceBetween, segmentWithSpacing } from '@monorepo/utils';
-import { type FC, type ReactNode } from 'react';
+import { cn, joinWithSpacing, needsSpaceBetween, segmentWithSpacing, type SpacedSegment } from '@monorepo/utils';
+import { createContext, useContext, type FC, type ReactNode } from 'react';
 
 import { SPACING_GROUPS, type SpacingCase, type SpacingGroup, type SpacingPart } from './junction-spacing-cases.js';
 
@@ -68,11 +68,23 @@ function splitEdgeWhitespace(text: string): { lead: string; body: string; trail:
   return { body: match?.[2] ?? text, lead: match?.[1] ?? '', trail: match?.[3] ?? '' };
 }
 
+/*
+ * The two switches are orthogonal on purpose. Disabling the highlight is a
+ * question about this board — does the anatomy read as ordinary copy once the
+ * tints are off. Disabling the spacing is a question about the copy — what a
+ * reader gets without the feature. All four combinations are worth looking at,
+ * so neither implies the other.
+ *
+ * Both are named for the disabled state, matching the switches, so a reader
+ * never has to invert a flag in their head between the control and its effect.
+ */
+const DisableTextHighlightContext = createContext(false);
+
 const Tinted: FC<{ tint: string; children: ReactNode; isolate?: boolean }> = ({ children, isolate, tint }) => (
   <span
     // Square, so a one-space highlight reads as the full width of the space it
     // marks. A radius on a 4px-wide box eats most of the box.
-    className={tint}
+    className={useContext(DisableTextHighlightContext) ? undefined : tint}
     // Bidi is the renderer's half of the job: an isolated run is one visual run,
     // so its logically-last character is also the one the space sits next to.
     dir={isolate === true ? 'auto' : undefined}
@@ -111,10 +123,18 @@ const CARD = 'flex flex-col gap-1.5 rounded-lg bg-white p-3 ring-1 ring-black/5 
 const SAMPLE = 'text-lg leading-relaxed whitespace-pre-wrap';
 const CAPTION = 'text-xs text-neutral-500 dark:text-neutral-400';
 
-const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean }> = ({ isolate, spacingCase }) => {
+const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean; disableJunctionSpacing: boolean }> = ({
+  disableJunctionSpacing,
+  isolate,
+  spacingCase,
+}) => {
   const { label, parts, rtl } = spacingCase;
   const texts = parts.map((part) => part.text);
-  const segments = segmentWithSpacing(texts);
+  const segments: readonly SpacedSegment[] = disableJunctionSpacing
+    ? parts.flatMap((part, partIndex) =>
+        part.text === '' ? [] : [{ partIndex, text: part.text, type: 'part' } as const]
+      )
+    : segmentWithSpacing(texts);
 
   const present = parts.filter((part) => part.text !== '');
   const splitCluster = present.some(
@@ -136,7 +156,7 @@ const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean }> = ({ isolate,
       </p>
       {splitCluster && (
         <p className={cn(SAMPLE, 'text-neutral-500')} dir={rtl === true ? 'rtl' : undefined}>
-          {joinWithSpacing(texts)}
+          {disableJunctionSpacing ? texts.join('') : joinWithSpacing(texts)}
           <span className="ms-2 align-middle text-xs">as one string, cluster intact</span>
         </p>
       )}
@@ -145,24 +165,99 @@ const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean }> = ({ isolate,
   );
 };
 
-export const JunctionSpacingLegend: FC = () => (
-  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg bg-white px-4 py-3 ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10">
-    <span className="text-sm font-semibold">Legend</span>
-    {LEGEND.map(({ label, tint }) => (
-      <span className="flex items-center gap-2 text-sm" key={label}>
-        <span className={cn('size-4', tint)} />
-        {label}
-      </span>
-    ))}
-  </div>
+const BUTTON_CLASS = `
+  cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1.5 font-mono text-[12px] text-black/70
+  hover:bg-black/5
+  active:bg-black/10
+  dark:border-white/30 dark:text-white/80 dark:hover:bg-white/5 dark:active:bg-white/10
+`;
+
+/*
+ * Both labels stay in the DOM so the button sizes to the wider of the two and
+ * does not resize on toggle, which would shove the button beside it sideways
+ * mid-click. `visibility: hidden` rather than `display: none` because only the
+ * former keeps the box in flow to be measured; `h-0` and `leading-0` keep it
+ * from contributing height. Same construction as the beacon stories'
+ * ToggleButton, and for the same reason.
+ */
+const HIDDEN_LABELS_CLASS = 'invisible flex h-0 flex-col overflow-clip leading-0';
+
+const ToggleButton: FC<{ on: boolean; onLabel: string; offLabel: string; onToggle: () => void }> = ({
+  offLabel,
+  on,
+  onLabel,
+  onToggle,
+}) => (
+  <button aria-pressed={on} className={BUTTON_CLASS} onClick={onToggle} type="button">
+    {on ? onLabel : offLabel}
+    <span className={HIDDEN_LABELS_CLASS}>
+      <span>{onLabel}</span>
+      <span>{offLabel}</span>
+    </span>
+  </button>
 );
 
-export const JunctionSpacingBoard: FC<{ groups?: readonly SpacingGroup[]; isolateDynamic?: boolean }> = ({
+export interface JunctionSpacingOptions {
+  /** Paint the tints, or leave the copy as a reader would see it. */
+  disableTextHighlight: boolean;
+  /** Insert the junction spaces, or show what the copy reads like without them. */
+  disableJunctionSpacing: boolean;
+}
+
+/*
+ * The switches are controlled rather than local state, so the in-page buttons
+ * and Storybook's own controls are the same two values and cannot disagree: the
+ * story owns them and updates its args, the args come back down as props.
+ */
+const BoardShell: FC<{
+  options: JunctionSpacingOptions;
+  onOptionsChange?: (patch: Partial<JunctionSpacingOptions>) => void;
+  children: ReactNode;
+}> = ({ children, onOptionsChange, options }) => (
+  <DisableTextHighlightContext value={options.disableTextHighlight}>
+    <div className={PAGE}>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg bg-white px-4 py-3 ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10">
+        <span className="text-sm font-semibold">Legend</span>
+        {LEGEND.map(({ label, tint }) => (
+          <span className="flex items-center gap-2 text-sm" key={label}>
+            <span className={cn('size-4', tint)} />
+            {label}
+          </span>
+        ))}
+        <div className="ms-auto flex flex-wrap items-center gap-2">
+          <ToggleButton
+            offLabel="disable · text highlight"
+            on={options.disableTextHighlight}
+            onLabel="enable · text highlight"
+            onToggle={() => onOptionsChange?.({ disableTextHighlight: !options.disableTextHighlight })}
+          />
+          <ToggleButton
+            offLabel="disable · junction spacing"
+            on={options.disableJunctionSpacing}
+            onLabel="enable · junction spacing"
+            onToggle={() => onOptionsChange?.({ disableJunctionSpacing: !options.disableJunctionSpacing })}
+          />
+        </div>
+      </div>
+      {children}
+    </div>
+  </DisableTextHighlightContext>
+);
+
+export const JunctionSpacingBoard: FC<
+  JunctionSpacingOptions & {
+    groups?: readonly SpacingGroup[];
+    isolateDynamic?: boolean;
+    onOptionsChange?: (patch: Partial<JunctionSpacingOptions>) => void;
+  }
+> = ({
+  disableJunctionSpacing,
+  disableTextHighlight,
   groups = SPACING_GROUPS,
   isolateDynamic = true,
+  onOptionsChange,
 }) => (
-  <div className={PAGE}>
-    <JunctionSpacingLegend />
+  <BoardShell onOptionsChange={onOptionsChange} options={{ disableJunctionSpacing, disableTextHighlight }}>
     {groups.map((group) => (
       <section className="flex flex-col gap-3" key={group.id}>
         {/* px-3 matches the cards' own padding, so the heading starts on the same
@@ -173,12 +268,17 @@ export const JunctionSpacingBoard: FC<{ groups?: readonly SpacingGroup[]; isolat
         </header>
         <div className={GRID}>
           {group.cases.map((spacingCase) => (
-            <CaseCard isolate={isolateDynamic} key={spacingCase.label} spacingCase={spacingCase} />
+            <CaseCard
+              disableJunctionSpacing={disableJunctionSpacing}
+              isolate={isolateDynamic}
+              key={spacingCase.label}
+              spacingCase={spacingCase}
+            />
           ))}
         </div>
       </section>
     ))}
-  </div>
+  </BoardShell>
 );
 
 /**
@@ -186,9 +286,13 @@ export const JunctionSpacingBoard: FC<{ groups?: readonly SpacingGroup[]; isolat
  * shell as the board, so the two read as one demo: the sample on the first line,
  * and the caption saying what was asked and what came back.
  */
-export const JunctionVerdicts: FC<{ pairs: readonly [string, string][] }> = ({ pairs }) => (
-  <div className={PAGE}>
-    <JunctionSpacingLegend />
+export const JunctionVerdicts: FC<
+  JunctionSpacingOptions & {
+    pairs: readonly [string, string][];
+    onOptionsChange?: (patch: Partial<JunctionSpacingOptions>) => void;
+  }
+> = ({ disableJunctionSpacing, disableTextHighlight, onOptionsChange, pairs }) => (
+  <BoardShell onOptionsChange={onOptionsChange} options={{ disableJunctionSpacing, disableTextHighlight }}>
     <div className={GRID}>
       {pairs.map(([left, right]) => {
         const spaced = needsSpaceBetween(left, right);
@@ -197,7 +301,7 @@ export const JunctionVerdicts: FC<{ pairs: readonly [string, string][] }> = ({ p
           <div className={CARD} key={left + right}>
             <p className={SAMPLE}>
               <Tinted tint={TINT.clientBody}>{left}</Tinted>
-              {spaced && <Tinted tint={TINT.insertedSpace}> </Tinted>}
+              {spaced && !disableJunctionSpacing && <Tinted tint={TINT.insertedSpace}> </Tinted>}
               <Tinted tint={TINT.dynamicBody}>{right}</Tinted>
             </p>
             <p className={CAPTION}>
@@ -205,10 +309,11 @@ export const JunctionVerdicts: FC<{ pairs: readonly [string, string][] }> = ({ p
                 {JSON.stringify(left)} + {JSON.stringify(right)}
               </code>{' '}
               → {spaced ? 'space' : 'flush'}
+              {spaced && disableJunctionSpacing && ', not applied'}
             </p>
           </div>
         );
       })}
     </div>
-  </div>
+  </BoardShell>
 );
