@@ -166,7 +166,7 @@ const CaseCard: FC<{ spacingCase: SpacingCase; isolate: boolean; disableJunction
 };
 
 const BUTTON_CLASS = `
-  cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1.5 font-mono text-[12px] text-black/70
+  cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1 font-mono text-[12px] text-black/70
   hover:bg-black/5
   active:bg-black/10
   dark:border-white/30 dark:text-white/80 dark:hover:bg-white/5 dark:active:bg-white/10
@@ -216,15 +216,20 @@ const BoardShell: FC<{
 }> = ({ children, onOptionsChange, options }) => (
   <DisableTextHighlightContext value={options.disableTextHighlight}>
     <div className={PAGE}>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg bg-white px-4 py-3 ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10">
-        <span className="text-sm font-semibold">Legend</span>
-        {LEGEND.map(({ label, tint }) => (
-          <span className="flex items-center gap-2 text-sm" key={label}>
-            <span className={cn('size-4', tint)} />
-            {label}
-          </span>
-        ))}
-        <div className="ms-auto flex flex-wrap items-center gap-2">
+      {/* The key and the switches are two separate things that happen to share a
+          card, so each owns its own row and the card only owns the gap between
+          them. */}
+      <div className="flex flex-col gap-3 rounded-lg bg-white px-4 py-3 ring-1 ring-black/5 dark:bg-neutral-900 dark:ring-white/10">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <span className="text-sm font-semibold">Legend</span>
+          {LEGEND.map(({ label, tint }) => (
+            <span className="flex items-center gap-2 text-sm" key={label}>
+              <span className={cn('size-4', tint)} />
+              {label}
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <ToggleButton
             offLabel="disable · text highlight"
             on={options.disableTextHighlight}
