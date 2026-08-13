@@ -115,6 +115,13 @@ describe('needsSpaceBetween', () => {
     expect(needsSpaceBetween('中文', ')')).toBe(false);
   });
 
+  it('reads guillemets as the quote pair they are', () => {
+    expect(needsSpaceBetween('他说', '«سلام»')).toBe(true);
+    expect(needsSpaceBetween('«سلام»', '结束')).toBe(true);
+    expect(needsSpaceBetween('«', '中文')).toBe(false);
+    expect(needsSpaceBetween('中文', '»')).toBe(false);
+  });
+
   it('binds halfwidth punctuation to the run on its left', () => {
     // The case a single-character probe cannot see: `:` against `中` says
     // nothing, the digit before it decides

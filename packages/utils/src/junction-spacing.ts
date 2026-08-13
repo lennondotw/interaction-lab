@@ -76,8 +76,15 @@ const FULLWIDTH_FORM = /[！-｠￠-￦]/u;
  * annotates, so a wide character is never really adjacent to one).
  */
 const SYMBOL = /["'`+\-*/=&%@$^\\~#<>±×÷]/;
-const OPENER = /[([{“‘]/;
-const CLOSER = /[)\]}”’]/;
+/*
+ * Brackets, plus every quote Unicode calls initial or final punctuation, which
+ * covers the curly quotes and the guillemets in one go. The category is fixed per
+ * code point, so a locale that opens with `»` (German) gets its spaces on the
+ * wrong sides — a trade for not carrying a per-locale table, and the shape barely
+ * occurs next to CJK.
+ */
+const OPENER = /[([{]|\p{Pi}/u;
+const CLOSER = /[)\]}]|\p{Pf}/u;
 /*
  * Halfwidth sentence punctuation. It binds to the run on its left, so at a
  * junction the space goes on the far side of the run and never before it — see
