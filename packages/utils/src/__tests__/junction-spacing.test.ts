@@ -22,21 +22,58 @@ describe('needsSpaceBetween', () => {
     expect(needsSpaceBetween('80%', 'files')).toBe(false);
   });
 
-  it('treats every wide script as wide, not just the blocks pangu hardcodes', () => {
+  it('spaces Han and Bopomofo by default, whatever block they live in', () => {
     expect(needsSpaceBetween('汉字', 'a')).toBe(true);
     expect(needsSpaceBetween('漢字', 'a')).toBe(true);
-    expect(needsSpaceBetween('ひらがな', 'a')).toBe(true);
-    expect(needsSpaceBetween('カタカナ', 'a')).toBe(true);
     expect(needsSpaceBetween('ㄅㄆ', 'a')).toBe(true);
-    // Hangul: pangu disagrees, its CJK class has no Hangul at all
-    expect(needsSpaceBetween('한국', 'word')).toBe(true);
-    expect(needsSpaceBetween('총', '42')).toBe(true);
-    // Hangul written decomposed, as macOS filenames are
-    expect(needsSpaceBetween('한국'.normalize('NFD'), 'word')).toBe(true);
     // Han beyond Extension A lives above U+FFFF: pangu disagrees
     expect(needsSpaceBetween('\u{20000}', 'word')).toBe(true);
-    // Halfwidth katakana is narrow but still kana: pangu disagrees
-    expect(needsSpaceBetween('ﾊﾝｶｸ', 'abc')).toBe(true);
+  });
+
+  /*
+   * Typing the space is the Chinese convention. Japanese wants the gap from the
+   * composition engine and not from a character, and Korean attaches particles
+   * to whatever precedes them — measured off apple.com's own localisations, see
+   * the module comment.
+   */
+  it('leaves kana and Hangul flush by default', () => {
+    expect(needsSpaceBetween('ひらがな', 'a')).toBe(false);
+    expect(needsSpaceBetween('カタカナ', 'a')).toBe(false);
+    expect(needsSpaceBetween('ﾊﾝｶｸ', 'abc')).toBe(false);
+    expect(needsSpaceBetween('한국', 'word')).toBe(false);
+    expect(needsSpaceBetween('총', '42')).toBe(false);
+    expect(needsSpaceBetween('한국'.normalize('NFD'), 'word')).toBe(false);
+  });
+
+  it('never puts a space before a particle', () => {
+    // Japanese: Macを詳しく見る, as apple.com/jp ships it
+    expect(needsSpaceBetween('Mac', 'を詳しく見る')).toBe(false);
+    expect(needsSpaceBetween('Lime', 'と話す')).toBe(false);
+    // Korean: Mac으로 갈아타기, Apple이 만든 앱, iPhone의 개인정보 보호
+    expect(needsSpaceBetween('Mac', '으로 갈아타기')).toBe(false);
+    expect(needsSpaceBetween('Apple', '이 만든 앱')).toBe(false);
+    expect(needsSpaceBetween('iPhone', '의 개인정보')).toBe(false);
+  });
+
+  it('spaces kana when a caller asks for it, without making kana half-width', () => {
+    const scripts = { scripts: ['han', 'kana'] } as const;
+    expect(needsSpaceBetween('ひらがな', 'a', scripts)).toBe(true);
+    expect(needsSpaceBetween('ﾊﾝｶｸ', 'abc', scripts)).toBe(true);
+    // The script left out has to read as neutral, not as half-width: a Hangul
+    // run against Han must stay flush rather than become a wide/narrow junction
+    expect(needsSpaceBetween('한국', '中文', scripts)).toBe(false);
+    expect(needsSpaceBetween('ひらがな', '中文', scripts)).toBe(false);
+    expect(needsSpaceBetween('한국', 'word', { scripts: ['han', 'kana', 'hangul'] })).toBe(true);
+  });
+
+  /*
+   * A Japanese document is full of Han, and no amount of script inspection tells
+   * it apart from a Chinese one — so a ja host turns the whole thing off rather
+   * than getting `漢字 Lime`.
+   */
+  it('inserts nothing at all for a caller that names no scripts', () => {
+    expect(needsSpaceBetween('漢字', 'Lime', { scripts: [] })).toBe(false);
+    expect(joinWithSpacing(['漢字', 'Lime', 'を使う'], { scripts: [] })).toBe('漢字Limeを使う');
   });
 
   it('leaves fullwidth forms flush, since they carry their own sidebearing', () => {

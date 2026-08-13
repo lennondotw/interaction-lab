@@ -22,13 +22,16 @@
  *   (`80%files` → `80% files`); that is a paragraph concern and it cannot be
  *   done safely without seeing the whole paragraph.
  *
- * Scripts: `wide` is decided by Script_Extensions, not by hardcoded blocks, so
- * Hangul, Han beyond Extension A (Ext B-G live above U+FFFF), halfwidth
- * katakana and compatibility ideographs all classify correctly — pangu's nine
- * ranges miss 87k code points that `\p{scx=Han|Hira|Kana|Hang|Bopo}` covers,
- * Hangul syllables among them. The other side is any letter or digit, so
- * Cyrillic, Arabic, Hebrew, Thai and Devanagari get the same treatment as Latin
- * rather than no treatment at all.
+ * Scripts are decided by Script_Extensions, not by hardcoded blocks, so Han
+ * beyond Extension A (Ext B-G live above U+FFFF), halfwidth katakana, Hangul and
+ * compatibility ideographs all classify correctly — pangu's nine ranges miss 87k
+ * code points that `\p{scx=Han|Hira|Kana|Hang|Bopo}` covers, Hangul syllables
+ * among them. The other side is any letter or digit, so Cyrillic, Arabic,
+ * Hebrew, Thai and Devanagari get the same treatment as Latin rather than no
+ * treatment at all.
+ *
+ * WHICH scripts take an inserted space is a locale question, not a Unicode one,
+ * and the default is Han and Bopomofo only. See SPACED_SCRIPTS_DEFAULT.
  *
  * Bidi: a run in the opposite direction has to be isolated by the *renderer*,
  * not here. This decides adjacency in logical order; for an RTL run the
@@ -37,6 +40,65 @@
  * `dir="auto"` and `unicode-bidi: isolate`, which makes logical adjacency and
  * visual adjacency agree again at its edges.
  */
+
+/*
+ * Inserting a U+0020 is the Chinese web convention, and only that.
+ *
+ * What the standards actually ask for is a *typographic* gap of about a quarter
+ * em, applied by the composition engine and belonging to no character: W3C
+ * CLReq calls for it between Han and Western text (Mixed Text Composition), and
+ * JLReq calls for the same thing in Japanese — 和欧文間の空き, which JIS X 4051
+ * sets at 四分アキ, a quarter em. Neither asks an author to type anything: both
+ * put the gap in the composition engine. CSS Text 4's `text-autospace` is that
+ * gap handed to a stylesheet — measured in Chrome 153 it is 1/8 em against the
+ * 1/4 em of a typed U+0020, and it suppresses itself where a space already
+ * exists rather than stacking with it. Its initial value is `no-autospace`, so
+ * it is opt-in today.
+ *
+ * Which is the standing advice: where the text stays in a browser, reach for
+ * `text-autospace` and leave the string alone. Insert a character only where the
+ * text has to leave — an API payload, an `aria-label` or `title`, the clipboard,
+ * `canvas.measureText`, an OG image or a push notification composed in Node.
+ *
+ * Who does what, measured off the three localisations of one publisher
+ * (archive/2026-08-junction-spacing has the probe):
+ *
+ * - apple.com.cn, zh-CN: 123 text nodes carry a typed space at a Han/Latin
+ *   boundary against 2 that do not, and both exceptions are filing numbers
+ *   (`京ICP备10214630号`) where a space would be wrong.
+ * - apple.com/jp, ja-JP: it is the other way round — 133 flush against 10, and
+ *   the 10 are a carousel's `項目 1 -` labels, not prose. `お近くのApple Store`
+ *   and `Macを詳しく見る` ship flush.
+ * - apple.com/kr, ko-KR: Hangul is spaced at word boundaries because Korean
+ *   orthography already spaces words, and never before a particle —
+ *   `PC에서 Mac으로 갈아타기`, `Apple이 만든 앱`, `iPhone의 개인정보 보호`.
+ *
+ * Korean is the reason this is not merely a matter of taste. A particle (조사)
+ * attaches to whatever precedes it, including a Latin word, so a space there is
+ * a grammatical error rather than a typographic preference — and no window of
+ * characters can tell `Lime와` (particle, flush) from `Lime 와` (a word, which
+ * Korean would have spaced in the copy already). Japanese particles と/は/を/が
+ * have the same shape. Hangul is therefore never spaced here, and kana is
+ * off by default; a host that wants either has to say so, because Han is
+ * shared between Chinese and Japanese and script detection cannot tell a
+ * ja document from a zh one. Only the caller knows its locale.
+ */
+export type SpacedScript = 'han' | 'kana' | 'hangul';
+
+/**
+ * Han and Bopomofo — the Chinese convention, and the only one that types the
+ * space. Bopomofo travels with Han because it annotates Chinese.
+ */
+export const SPACED_SCRIPTS_DEFAULT: readonly SpacedScript[] = ['han'];
+
+export interface JunctionSpacingOptions {
+  /**
+   * Which wide scripts take an inserted space. A script left out reads as
+   * neutral, never as half-width, so leaving kana out makes `ひらがなLime` flush
+   * without making `ひらがな中文` spaced.
+   */
+  readonly scripts?: readonly SpacedScript[];
+}
 
 /*
  * Grapheme granularity is locale-independent (UAX #29 tailors word and sentence
@@ -53,15 +115,22 @@ const GRAPHEME_SEGMENTER = new Intl.Segmenter('en', { granularity: 'grapheme' })
  */
 const WINDOW_CODE_POINTS = 32;
 
-type BoundaryClass = 'wide' | 'narrow' | 'symbol' | 'opener' | 'closer' | 'tight' | 'neutral';
+/*
+ * A wide side keeps its script until the last moment, because whether it counts
+ * as wide is the caller's policy rather than a property of the character.
+ */
+type BoundaryClass = SpacedScript | 'narrow' | 'symbol' | 'opener' | 'closer' | 'tight' | 'neutral';
 
-const WIDE_SCRIPT = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Bopo}]/u;
+const HAN_SCRIPT = /[\p{scx=Han}\p{scx=Bopo}]/u;
+const KANA_SCRIPT = /[\p{scx=Hira}\p{scx=Kana}]/u;
+const HANGUL_SCRIPT = /\p{scx=Hang}/u;
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 /*
  * Fullwidth forms occupy a full em and carry their own sidebearing, so `ＡＢＣ`
  * and `１２３` need no space against CJK even though they are letters and
  * digits. Halfwidth katakana (U+FF65-FF9F) is deliberately outside this range:
- * it is narrow, and `ﾊﾝｶｸabc` does want the space.
+ * it is narrow, so it classifies as kana and follows the kana policy rather than
+ * being excluded here on width grounds.
  */
 const FULLWIDTH_FORM = /[！-｠￠-￦]/u;
 /*
@@ -136,7 +205,16 @@ function classifyCluster(cluster: string): BoundaryClass {
     if (FULLWIDTH_FORM.test(first)) {
       return 'neutral';
     }
-    return WIDE_SCRIPT.test(first) ? 'wide' : 'narrow';
+    if (HAN_SCRIPT.test(first)) {
+      return 'han';
+    }
+    if (KANA_SCRIPT.test(first)) {
+      return 'kana';
+    }
+    if (HANGUL_SCRIPT.test(first)) {
+      return 'hangul';
+    }
+    return 'narrow';
   }
   if (TIGHT.test(first)) {
     return 'tight';
@@ -155,27 +233,41 @@ function classifyCluster(cluster: string): BoundaryClass {
   return 'neutral';
 }
 
+type ResolvedClass = Exclude<BoundaryClass, SpacedScript> | 'wide';
+
+/*
+ * A wide script the caller did not ask for reads as neutral, never as
+ * half-width. The difference matters: leaving kana out has to make `ひらがなLime`
+ * flush without making `ひらがな中文` spaced.
+ */
+function resolve(boundaryClass: BoundaryClass, scripts: readonly SpacedScript[]): ResolvedClass {
+  if (boundaryClass === 'han' || boundaryClass === 'kana' || boundaryClass === 'hangul') {
+    return scripts.includes(boundaryClass) ? 'wide' : 'neutral';
+  }
+  return boundaryClass;
+}
+
 interface LeftEdge {
-  readonly edge: BoundaryClass;
+  readonly edge: ResolvedClass;
   // What precedes a trailing run of tight punctuation. Only meaningful when
   // edge is 'tight', because that run's own class says nothing about which side
   // the space belongs on.
-  readonly beforeTightRun: BoundaryClass;
+  readonly beforeTightRun: ResolvedClass;
 }
 
-function analyzeLeftEdge(clusters: readonly string[]): LeftEdge {
+function analyzeLeftEdge(clusters: readonly string[], scripts: readonly SpacedScript[]): LeftEdge {
   let index = clusters.length - 1;
-  const edge = classifyCluster(clusters[index] ?? '');
+  const edge = resolve(classifyCluster(clusters[index] ?? ''), scripts);
   if (edge !== 'tight') {
     return { edge, beforeTightRun: 'neutral' };
   }
   while (index >= 0 && classifyCluster(clusters[index] ?? '') === 'tight') {
     index -= 1;
   }
-  return { edge, beforeTightRun: classifyCluster(clusters[index] ?? '') };
+  return { edge, beforeTightRun: resolve(classifyCluster(clusters[index] ?? ''), scripts) };
 }
 
-function decideByClass(left: LeftEdge, right: BoundaryClass): boolean {
+function decideByClass(left: LeftEdge, right: ResolvedClass): boolean {
   if (left.edge === 'neutral' || right === 'neutral') {
     return false;
   }
@@ -235,11 +327,12 @@ function isJunctionGraphemeBoundary(tail: string, head: string): boolean {
  * Neither string is modified or inspected beyond a window at the junction, so
  * this is safe to ask about runs that must survive verbatim.
  */
-export function needsSpaceBetween(left: string, right: string): boolean {
+export function needsSpaceBetween(left: string, right: string, options?: JunctionSpacingOptions): boolean {
   if (!left || !right) {
     return false;
   }
 
+  const scripts = options?.scripts ?? SPACED_SCRIPTS_DEFAULT;
   const tail = tailWindow(left);
   const head = headWindow(right);
 
@@ -251,7 +344,10 @@ export function needsSpaceBetween(left: string, right: string): boolean {
   }
 
   const headClusters = graphemesOf(head);
-  return decideByClass(analyzeLeftEdge(graphemesOf(tail)), classifyCluster(headClusters[0] ?? ''));
+  return decideByClass(
+    analyzeLeftEdge(graphemesOf(tail), scripts),
+    resolve(classifyCluster(headClusters[0] ?? ''), scripts)
+  );
 }
 
 export type SpacedSegment =
@@ -266,7 +362,7 @@ export type SpacedSegment =
  * An empty part contributes nothing and does not hide the junction it sits in:
  * `['你好', '', '世界']` is judged as `你好` against `世界`.
  */
-export function segmentWithSpacing(parts: readonly string[]): SpacedSegment[] {
+export function segmentWithSpacing(parts: readonly string[], options?: JunctionSpacingOptions): SpacedSegment[] {
   const segments: SpacedSegment[] = [];
   // The left side of each junction is everything emitted so far, not just the
   // previous part, so a token split across parts (`v1` + `.2:` + `中文`) is
@@ -277,7 +373,7 @@ export function segmentWithSpacing(parts: readonly string[]): SpacedSegment[] {
     if (!text) {
       continue;
     }
-    if (emitted && needsSpaceBetween(emitted, text)) {
+    if (emitted && needsSpaceBetween(emitted, text, options)) {
       segments.push({ type: 'space', text: ' ' });
       emitted += ' ';
     }
@@ -291,9 +387,9 @@ export function segmentWithSpacing(parts: readonly string[]): SpacedSegment[] {
 /**
  * The parts concatenated with a space at every junction that wants one.
  */
-export function joinWithSpacing(parts: readonly string[]): string {
+export function joinWithSpacing(parts: readonly string[], options?: JunctionSpacingOptions): string {
   let joined = '';
-  for (const segment of segmentWithSpacing(parts)) {
+  for (const segment of segmentWithSpacing(parts, options)) {
     joined += segment.text;
   }
   return joined;
