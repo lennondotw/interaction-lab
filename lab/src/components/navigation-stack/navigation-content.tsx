@@ -248,7 +248,16 @@ export const NavigationContent: FC<NavigationContentProps> = ({ renderView, clas
             // before and after, the corner is unchanged — so this is one
             // fewer thing that *could* disagree, not a fix for something that
             // does.
-            style={{ zIndex: index, contain: 'layout style', visibility: isHidden ? 'hidden' : 'visible' }}
+            // `visibility` is only ever forced to `hidden`, never to `visible`.
+            // It inherits, and a descendant that re-declares `visible` beats an
+            // ancestor's `hidden` — so writing `visible` here punches a hole
+            // through anything outside that hides the whole stack. A tab shell
+            // that parks an inactive tab with `visibility: hidden` got exactly
+            // that: the tab's chrome disappeared, since the header declares
+            // nothing, while every view inside kept painting and the last
+            // panel in the DOM won. Leaving it unset lets a parked view be
+            // hidden by us and the whole stack be hidden by whoever owns it.
+            style={{ zIndex: index, contain: 'layout style', visibility: isHidden ? 'hidden' : undefined }}
           >
             {renderView(view, index)}
             <motion.div
