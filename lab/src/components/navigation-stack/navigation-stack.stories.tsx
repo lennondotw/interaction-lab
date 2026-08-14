@@ -330,7 +330,13 @@ const TabContent: FC<{ tabId: string; view: NavigationView }> = ({ tabId, view }
           key={i}
           label={`${view.title} item ${String(i + 1)}`}
           onPress={() =>
-            push({ id: `${tabId}-${String(depth)}-${String(i)}`, title: `${view.title} ${String(i + 1)}` })
+            push({
+              id: `${tabId}-${String(depth)}-${String(i)}`,
+              // The title carries the path, so a deep view reads as
+              // `Settings 1 - 3 - 2`. A space before the first number and a
+              // dash between the rest, so the tab's name stays a name.
+              title: `${view.title}${depth === 1 ? ' ' : ' - '}${String(i + 1)}`,
+            })
           }
         />
       ))}
