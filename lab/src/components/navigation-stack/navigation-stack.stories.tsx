@@ -306,10 +306,24 @@ const TabPanel: FC<{
       nav={nav}
       // The outer shell owns the frame's radius; each tab fills it square.
       className="rounded-none"
+      crumbLabel={crumbOf}
       renderView={(view) => <TabContent tabId={tabId} view={view} />}
     />
   </div>
 );
+
+/**
+ * What a tab view puts in its own `data`.
+ *
+ * The stack has no idea a breadcrumb exists, so the label a crumb reads as
+ * lives here rather than on the view model, and `crumbLabel` reads it back
+ * out. One cast, in one place.
+ */
+interface TabViewData {
+  crumb: string;
+}
+
+const crumbOf = (view: NavigationView): string => (view.data as TabViewData | undefined)?.crumb ?? view.title;
 
 const TabContent: FC<{ tabId: string; view: NavigationView }> = ({ tabId, view }) => {
   const { push, depth } = useNavigation();
@@ -325,21 +339,29 @@ const TabContent: FC<{ tabId: string; view: NavigationView }> = ({ tabId, view }
         {view.title} · depth {depth}. Switch tabs and come back: the depth, the scroll position and the focused row are
         all still here.
       </p>
-      {Array.from({ length: 12 }, (_, i) => (
-        <ListItem
-          key={i}
-          label={`${view.title} item ${String(i + 1)}`}
-          onPress={() =>
-            push({
-              id: `${tabId}-${String(depth)}-${String(i)}`,
-              // The title carries the path, so a deep view reads as
-              // `Settings 1 - 3 - 2`. A space before the first number and a
-              // dash between the rest, so the tab's name stays a name.
-              title: `${view.title}${depth === 1 ? ' ' : ' - '}${String(i + 1)}`,
-            })
-          }
-        />
-      ))}
+      {Array.from({ length: 12 }, (_, i) => {
+        const n = i + 1;
+        return (
+          <ListItem
+            key={i}
+            // Rows say only what they are. The path is the header's job and the
+            // breadcrumb's; repeating it on every row made them unreadable.
+            label={`item ${String(n)}`}
+            onPress={() =>
+              push({
+                id: `${tabId}-${String(depth)}-${String(i)}`,
+                // The title accumulates, so the header reads as a full path:
+                // `Settings item 4 - 1 - 2 - 3`.
+                title: depth === 1 ? `${view.title} item ${String(n)}` : `${view.title} - ${String(n)}`,
+                // The crumb is only this level's own segment, so the breadcrumb
+                // reads as a path instead of a ladder of longer and longer
+                // copies of it.
+                data: { crumb: depth === 1 ? `item ${String(n)}` : String(n) } satisfies TabViewData,
+              })
+            }
+          />
+        );
+      })}
     </NavigationScrollArea>
   );
 };
