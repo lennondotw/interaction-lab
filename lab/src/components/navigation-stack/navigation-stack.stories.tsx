@@ -412,25 +412,35 @@ const WithTabs: FC = () => {
               data-active={isActive}
               aria-current={isActive ? 'page' : undefined}
               onClick={() => onTabPress(id)}
-              className={cn(
-                `
-                  flex flex-1 cursor-pointer flex-col items-center gap-1 py-2 text-[10px] transition-colors
-                  hover:bg-black/5
-                  dark:hover:bg-white/5
-                `,
-                isActive
-                  ? `
-                    text-black
-                    dark:text-white
-                  `
-                  : `
-                    text-black/40
-                    dark:text-white/40
-                  `
-              )}
+              // The hit target is the whole cell and does not move: no padding,
+              // gap or flex change with state, and nothing paints a background.
+              // `group` so hover reaches the icon, which is the only thing that
+              // responds — both to hover and to being the active tab. The label
+              // holds one colour throughout, so the icon carries the state on
+              // its own. `aria-current` is what actually announces it, which
+              // matters more than usual when the only visual cue is a colour.
+              className={`
+                group flex flex-1 cursor-pointer flex-col items-center gap-1 py-2 text-[10px] text-black/50
+                dark:text-white/50
+              `}
             >
               <span className="relative">
-                <Icon className="size-5" />
+                <Icon
+                  className={cn(
+                    'size-5 transition-colors',
+                    isActive
+                      ? `
+                        text-black
+                        dark:text-white
+                      `
+                      : `
+                        text-black/50
+                        group-hover:text-black/80
+                        dark:text-white/50
+                        dark:group-hover:text-white/80
+                      `
+                  )}
+                />
                 {/* Depth is the visible proof that the tab kept its place. */}
                 {depth > 1 && (
                   <span
