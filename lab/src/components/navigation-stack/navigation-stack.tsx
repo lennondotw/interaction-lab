@@ -3,7 +3,14 @@ import { useRef, type FC, type ReactNode, type Ref } from 'react';
 import type { NavigationHeaderMode } from './container-context.js';
 import { NavigationContainer } from './navigation-container.js';
 import { NavigationContent } from './navigation-content.js';
-import { NavBackButton, NavBreadcrumb, NavHeader, NavHeaderRow, NavTitle } from './navigation-header.js';
+import {
+  NavBackButton,
+  NavBreadcrumb,
+  NavHeader,
+  NavHeaderRow,
+  NavTitle,
+  type NavBreadcrumbProps,
+} from './navigation-header.js';
 import { NavigationProvider } from './navigation-provider.js';
 import { useNavigationStack, type NavigationStackResult, type NavigationView } from './use-navigation-stack.js';
 
@@ -14,6 +21,11 @@ export interface NavigationStackShellProps {
   renderView: (view: NavigationView) => ReactNode;
   /** @default true */
   showBreadcrumb?: boolean;
+  /**
+   * What each breadcrumb crumb reads as. Defaults to the view's title.
+   * Chrome's business, not the stack's — see `NavBreadcrumbProps.label`.
+   */
+  crumbLabel?: NavBreadcrumbProps['label'];
   /**
    * `inset` keeps the header in flow above the views. `overlay` floats it
    * over them and hands the whole frame to the content — wrap what you
@@ -60,6 +72,7 @@ export const NavigationStackShell: FC<NavigationStackShellProps> = ({
   nav,
   renderView,
   showBreadcrumb = true,
+  crumbLabel,
   headerMode = 'inset',
   ref,
   className,
@@ -75,7 +88,7 @@ export const NavigationStackShell: FC<NavigationStackShellProps> = ({
             <NavBackButton />
             <NavTitle />
           </NavHeaderRow>
-          {showBreadcrumb && <NavBreadcrumb />}
+          {showBreadcrumb && <NavBreadcrumb label={crumbLabel} />}
         </NavHeader>
       }
     >

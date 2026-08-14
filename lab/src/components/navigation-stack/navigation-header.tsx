@@ -4,6 +4,7 @@ import type { FC, ReactNode } from 'react';
 
 import { useContainerLayout } from './container-context.js';
 import { useNavigation } from './navigation-context.js';
+import type { NavigationView } from './use-navigation-stack.js';
 
 export interface NavBackButtonProps {
   className?: string;
@@ -62,6 +63,16 @@ export const NavTitle: FC<NavTitleProps> = ({ className }) => {
 };
 
 export interface NavBreadcrumbProps {
+  /**
+   * What each crumb reads as. Defaults to the view's title.
+   *
+   * Here rather than as a field on `NavigationView`, because a view is state
+   * and a breadcrumb is chrome: the stack has no idea one exists, and adding
+   * `crumbLabel` to the view model would make every consumer of the state
+   * carry a word about a widget it may never render. A view that wants a
+   * different label puts it in its own `data` and reads it back out here.
+   */
+  label?: (view: NavigationView, index: number) => ReactNode;
   className?: string;
 }
 
@@ -78,7 +89,7 @@ export interface NavBreadcrumbProps {
  * `min-w-0` is what makes any of it possible: a flex item will not shrink
  * below its own min-content width without it, so the row would just overflow.
  */
-export const NavBreadcrumb: FC<NavBreadcrumbProps> = ({ className }) => {
+export const NavBreadcrumb: FC<NavBreadcrumbProps> = ({ label, className }) => {
   // Entries, not `stack`: a path that revisits a view would give two crumbs
   // the same React key.
   const { entries } = useNavigation();
@@ -105,9 +116,11 @@ export const NavBreadcrumb: FC<NavBreadcrumbProps> = ({ className }) => {
             className={cn('flex min-w-0 items-center', isCurrent ? 'shrink' : 'shrink-[999]')}
           >
             {i > 0 && <ChevronRight className="size-3 shrink-0" aria-hidden="true" />}
-            {/* `title` so an elided crumb is still readable on hover. */}
+            {/* The tooltip stays the view's own title even when the crumb reads
+                as something shorter — that is the more useful of the two to
+                recover, whether the crumb was elided or was always terse. */}
             <span className="truncate" title={view.title} aria-current={isCurrent ? 'page' : undefined}>
-              {view.title}
+              {label ? label(view, i) : view.title}
             </span>
           </span>
         );
