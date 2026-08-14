@@ -1,34 +1,17 @@
-import { useRef, type FC, type ReactNode } from 'react';
+import { useRef, type FC, type ReactNode, type Ref } from 'react';
 
 import type { NavigationHeaderMode } from './container-context.js';
 import { NavigationContainer } from './navigation-container.js';
 import { NavigationContent } from './navigation-content.js';
 import { NavBackButton, NavBreadcrumb, NavHeader, NavHeaderRow, NavTitle } from './navigation-header.js';
 import { NavigationProvider } from './navigation-provider.js';
-import { useNavigationStack, type NavigationView } from './use-navigation-stack.js';
+import { useNavigationStack, type NavigationStackResult, type NavigationView } from './use-navigation-stack.js';
 
-export interface NavigationStackProps {
-  /**
-   * Bottom of the stack.
-   *
-   * Read once, when the stack is created. Changing it later does nothing —
-   * the stack owns its history from that point on, and re-seeding it from a
-   * prop would throw away wherever the user had navigated to. Change the
-   * `key` on this component to start a new stack instead.
-   */
-  rootView: NavigationView;
+export interface NavigationStackShellProps {
+  /** The stack to render. Created and owned by the caller. */
+  nav: NavigationStackResult;
   /** Renders the body of each view; the chrome is supplied for you. */
   renderView: (view: NavigationView) => ReactNode;
-  /**
-   * Views on top of the root at creation, e.g. to open on a deep link.
-   * Read once, with the same reasoning as `rootView`.
-   */
-  initialViews?: NavigationView[];
-  /**
-   * Bind Escape to `pop`, scoped to this stack.
-   * @default true
-   */
-  enableKeyboardNav?: boolean;
   /** @default true */
   showBreadcrumb?: boolean;
   /**
@@ -40,16 +23,114 @@ export interface NavigationStackProps {
    * @default 'inset'
    */
   headerMode?: NavigationHeaderMode;
+  /**
+   * The frame element. Pass the same ref you gave `useNavigationStack` as its
+   * `scopeRef`, so Escape is scoped to this stack.
+   */
+  ref?: Ref<HTMLDivElement>;
   className?: string;
+}
+
+/**
+ * The standard chrome and layout, around a stack you already own.
+ *
+ * This is `NavigationStack` with the state lifted out, and it exists because
+ * the two halves are wanted separately. A tab bar has to call `popToRoot` on
+ * whichever stack is showing and read each stack's depth for a badge, and
+ * both of those need the stack itself — but wanting the state does not mean
+ * wanting to rebuild the header, and a copy of it in a caller is a copy that
+ * drifts the first time this one changes.
+ *
+ * It is a separate component rather than an optional `nav` prop on
+ * `NavigationStack` because hooks cannot be called conditionally: a preset
+ * that accepted a supplied stack would still have to create one, and that
+ * spare stack would register its own Escape binding and pop something nobody
+ * is rendering.
+ *
+ * @example
+ * ```tsx
+ * const frameRef = useRef<HTMLDivElement>(null)
+ * const nav = useNavigationStack({ id: 'root', title: 'Home' }, { scopeRef: frameRef })
+ *
+ * <NavigationStackShell ref={frameRef} nav={nav} renderView={renderView} />
+ * <button onClick={nav.popToRoot}>Home</button>
+ * ```
+ */
+export const NavigationStackShell: FC<NavigationStackShellProps> = ({
+  nav,
+  renderView,
+  showBreadcrumb = true,
+  headerMode = 'inset',
+  ref,
+  className,
+}) => (
+  <NavigationProvider value={nav}>
+    <NavigationContainer
+      ref={ref}
+      headerMode={headerMode}
+      className={className}
+      header={
+        <NavHeader>
+          <NavHeaderRow>
+            <NavBackButton />
+            <NavTitle />
+          </NavHeaderRow>
+          {showBreadcrumb && <NavBreadcrumb />}
+        </NavHeader>
+      }
+    >
+      <NavigationContent
+        renderView={(view) => (
+          // Each view is opaque so the one it covers can't show through
+          // during the slide. No inset of its own: in `inset` mode the
+          // column has already placed the content area below the header,
+          // and in `overlay` mode the whole point is that the content
+          // reaches the edges and insets only what it chooses to.
+          <div
+            className={`
+              h-full bg-white
+              dark:bg-neutral-950
+            `}
+          >
+            {renderView(view)}
+          </div>
+        )}
+      />
+    </NavigationContainer>
+  </NavigationProvider>
+);
+
+export interface NavigationStackProps extends Omit<NavigationStackShellProps, 'nav' | 'ref'> {
+  /**
+   * Bottom of the stack.
+   *
+   * Read once, when the stack is created. Changing it later does nothing —
+   * the stack owns its history from that point on, and re-seeding it from a
+   * prop would throw away wherever the user had navigated to. Change the
+   * `key` on this component to start a new stack instead.
+   */
+  rootView: NavigationView;
+  /**
+   * Views on top of the root at creation, e.g. to open on a deep link.
+   * Read once, with the same reasoning as `rootView`.
+   */
+  initialViews?: NavigationView[];
+  /**
+   * Bind Escape to `pop`, scoped to this stack.
+   * @default true
+   */
+  enableKeyboardNav?: boolean;
 }
 
 /**
  * iOS-style navigation stack with push / pop transitions.
  *
- * Assembles the building blocks into the common arrangement: a header with
- * back button, title and breadcrumb over a content area where views slide in
- * and out. Drop down to `NavigationContainer` + `NavigationContent` directly
- * if you need a different chrome.
+ * Owns its stack and renders it with the standard chrome: a header with back
+ * button, title and breadcrumb over a content area where views slide in and
+ * out. If something outside the chrome needs to drive the stack — a tab bar
+ * popping to root on a second tap — hold it yourself with
+ * `useNavigationStack` and render `NavigationStackShell`. For different
+ * chrome entirely, drop to `NavigationContainer` + `NavigationContent`.
  *
  * @example
  * ```tsx
@@ -61,52 +142,14 @@ export interface NavigationStackProps {
  */
 export const NavigationStack: FC<NavigationStackProps> = ({
   rootView,
-  renderView,
   initialViews,
   enableKeyboardNav = true,
-  showBreadcrumb = true,
-  headerMode = 'inset',
-  className,
+  ...shell
 }) => {
   // The frame doubles as the keyboard scope, so Escape belongs to whichever
   // stack the user is actually in.
   const frameRef = useRef<HTMLDivElement>(null);
   const nav = useNavigationStack(rootView, { initialViews, enableKeyboardNav, scopeRef: frameRef });
 
-  return (
-    <NavigationProvider value={nav}>
-      <NavigationContainer
-        ref={frameRef}
-        headerMode={headerMode}
-        className={className}
-        header={
-          <NavHeader>
-            <NavHeaderRow>
-              <NavBackButton />
-              <NavTitle />
-            </NavHeaderRow>
-            {showBreadcrumb && <NavBreadcrumb />}
-          </NavHeader>
-        }
-      >
-        <NavigationContent
-          renderView={(view) => (
-            // Each view is opaque so the one it covers can't show through
-            // during the slide. No inset of its own: in `inset` mode the
-            // column has already placed the content area below the header,
-            // and in `overlay` mode the whole point is that the content
-            // reaches the edges and insets only what it chooses to.
-            <div
-              className={`
-                h-full bg-white
-                dark:bg-neutral-950
-              `}
-            >
-              {renderView(view)}
-            </div>
-          )}
-        />
-      </NavigationContainer>
-    </NavigationProvider>
-  );
+  return <NavigationStackShell ref={frameRef} nav={nav} {...shell} />;
 };

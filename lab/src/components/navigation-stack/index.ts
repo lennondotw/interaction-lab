@@ -44,7 +44,12 @@ export {
   type NavigationCenteredContentProps,
   type NavigationScrollAreaProps,
 } from './navigation-scroll-area.js';
-export { NavigationStack, type NavigationStackProps } from './navigation-stack.js';
+export {
+  NavigationStack,
+  NavigationStackShell,
+  type NavigationStackProps,
+  type NavigationStackShellProps,
+} from './navigation-stack.js';
 export { isMeasuredHeight, useHeaderHeight, type HeaderHeightResult } from './use-header-height.js';
 export { useNavigationFocus, type NavigationFocusResult } from './use-navigation-focus.js';
 export {

@@ -5,17 +5,10 @@ import { ChevronRight, Compass, Layers, Settings } from 'lucide-react';
 import { useRef, useState, type FC, type ReactNode, type RefObject } from 'react';
 
 import {
-  NavBackButton,
-  NavBreadcrumb,
-  NavHeader,
-  NavHeaderRow,
   NavigationCenteredContent,
-  NavigationContainer,
-  NavigationContent,
-  NavigationProvider,
   NavigationScrollArea,
   NavigationStack,
-  NavTitle,
+  NavigationStackShell,
   useNavigation,
   useNavigationStack,
   type NavigationPresentation,
@@ -283,12 +276,12 @@ const TABS = [
 /**
  * One tab's stack.
  *
- * Assembled from the pieces rather than using `NavigationStack`, for one
- * reason: the tab bar sits *outside* the chrome and has to call `popToRoot`
- * on whichever stack is showing. The preset owns its stack internally, so
- * nothing above it can reach one — which is exactly the case the parts are
- * separate for. `useNavigationStack` is headless, so the parent holds all
- * three results and hands each to a `NavigationProvider`.
+ * `NavigationStackShell` rather than `NavigationStack`, because the tab bar
+ * outside has to call `popToRoot` on whichever stack is showing and read each
+ * stack's depth for its badge — so the shell holds the stack and hands it
+ * down. Wanting the state is not a reason to rebuild the chrome, and a copy
+ * of the header here is a copy that drifts the first time the real one
+ * changes.
  *
  * The panel is never unmounted. It is taken off the paint path with
  * `visibility: hidden` and out of the tab order with `inert`, the same pair
@@ -308,24 +301,13 @@ const TabPanel: FC<{
     className={cn('absolute inset-0', !isActive && 'pointer-events-none')}
     style={{ visibility: isActive ? 'visible' : 'hidden' }}
   >
-    <NavigationProvider value={nav}>
-      <NavigationContainer
-        ref={scopeRef}
-        // The outer shell owns the frame's radius; each tab fills it square.
-        className="rounded-none"
-        header={
-          <NavHeader>
-            <NavHeaderRow>
-              <NavBackButton />
-              <NavTitle />
-            </NavHeaderRow>
-            <NavBreadcrumb />
-          </NavHeader>
-        }
-      >
-        <NavigationContent renderView={(view) => <TabContent tabId={tabId} view={view} />} />
-      </NavigationContainer>
-    </NavigationProvider>
+    <NavigationStackShell
+      ref={scopeRef}
+      nav={nav}
+      // The outer shell owns the frame's radius; each tab fills it square.
+      className="rounded-none"
+      renderView={(view) => <TabContent tabId={tabId} view={view} />}
+    />
   </div>
 );
 
@@ -333,12 +315,7 @@ const TabContent: FC<{ tabId: string; view: NavigationView }> = ({ tabId, view }
   const { push, depth } = useNavigation();
 
   return (
-    <NavigationScrollArea
-      className={`
-        bg-white
-        dark:bg-neutral-950
-      `}
-    >
+    <NavigationScrollArea>
       <p
         className={`
           px-4 py-3 text-xs/5 text-black/50
@@ -658,7 +635,7 @@ export const WithTabBar: Story = {
           'Three tabs, a stack each. Drill into one, switch away, come back: the depth, the scroll position and the focused row are all where you left them. The badge on each tab is its depth, so you can see the other stacks holding their place while you are not looking at them.',
           '**Tap the tab you are already on and that stack pops to its root.** It is the tab-bar behaviour people miss when it is absent — the way out of somewhere five levels deep without pressing back five times — and it has to be the *second* tap. The first is a switch, and popping on a switch would throw away the position the user is coming back to.',
           'Panels are never unmounted. They are taken off the paint path with `visibility: hidden` and out of the tab order with `inert` — the same pair a parked view uses, for the same reason. `display: none` would preserve React state just as well and destroy the layout box, taking every scroll offset in the tab with it, and those offsets are most of what "the tab kept its state" means.',
-          'This one is assembled from the parts rather than from `NavigationStack`, and the reason is the second tap: the tab bar is outside the chrome and has to call `popToRoot` on whichever stack is showing, while the preset owns its stack internally where nothing above can reach it. `useNavigationStack` is headless, so the shell holds all three results and hands each to a `NavigationProvider` — which is what the pieces are separate for.',
+          "The shell holds all three stacks itself and renders each with `NavigationStackShell`, which is `NavigationStack` with the state lifted out. The second tap is the reason: the tab bar is outside the chrome and has to call `popToRoot` on whichever stack is showing, and the badges have to read each stack's depth — but wanting the state is not a reason to rebuild the header, and a copy of it here would be a copy that drifts the first time the real one changes. `useNavigationStack` was always headless; the shell is the other half of that.",
           'It is also the case `scopeRef` was built for. Each tab passes its own panel, so Escape pops the tab you are in and not the two you are not. Being `inert` keeps focus out of the hidden panels, so their stacks never see focus inside themselves and stay put.',
         ].join('\n\n'),
       },
