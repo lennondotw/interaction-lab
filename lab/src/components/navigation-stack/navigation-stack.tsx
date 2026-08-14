@@ -17,8 +17,22 @@ import { useNavigationStack, type NavigationStackResult, type NavigationView } f
 export interface NavigationStackShellProps {
   /** The stack to render. Created and owned by the caller. */
   nav: NavigationStackResult;
-  /** Renders the body of each view; the chrome is supplied for you. */
-  renderView: (view: NavigationView) => ReactNode;
+  /**
+   * Renders the body of each view; the chrome is supplied for you.
+   *
+   * `index` is the view's position in the stack, so content can tell whether
+   * it is the one on top — `index === nav.depth - 1`. That is the fact a view
+   * needs to decide its own lifecycle: a heavy view that is cheap to rebuild
+   * can render nothing while it is covered, and one that is holding state a
+   * user would miss can stay. The stack deliberately has no policy of its own
+   * about this; it keeps every view mounted and lets the view opt out, because
+   * only the view knows what is expensive and what is worth preserving.
+   *
+   * Comparing the view against `nav.currentView` is not a substitute:
+   * `push` may be handed the same object twice, so two entries can hold one
+   * reference and the comparison is true for both.
+   */
+  renderView: (view: NavigationView, index: number) => ReactNode;
   /** @default true */
   showBreadcrumb?: boolean;
   /**
@@ -93,7 +107,7 @@ export const NavigationStackShell: FC<NavigationStackShellProps> = ({
       }
     >
       <NavigationContent
-        renderView={(view) => (
+        renderView={(view, index) => (
           // Each view is opaque so the one it covers can't show through
           // during the slide. No inset of its own: in `inset` mode the
           // column has already placed the content area below the header,
@@ -105,7 +119,7 @@ export const NavigationStackShell: FC<NavigationStackShellProps> = ({
               dark:bg-neutral-950
             `}
           >
-            {renderView(view)}
+            {renderView(view, index)}
           </div>
         )}
       />

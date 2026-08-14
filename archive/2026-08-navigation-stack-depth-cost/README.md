@@ -74,19 +74,35 @@ misdiagnose as the spring being wrong.
 
 ## What this decides
 
-**`keep` stays the default.** A stack five deep with ordinary views costs ~11ms of commit and a
-flat 9ms worst frame; there is nothing here to fix, and everything to lose — scroll offsets,
-uncontrolled inputs, in-flight work, the instant back.
+**Keep every view mounted, and add no lifecycle policy at all.** This was measured in order to
+decide the shape of a `whenCovered: 'keep' | 'unmount'` switch, and the numbers argued the switch
+out of existence rather than into it.
 
-**`whenCovered: 'unmount'` has a real payoff, and it is the right shape for this cost.** A covered
-view that renders `null` is not reconciled, so unmounting removes both halves at once: the nodes
-stop accumulating and the per-navigation render stops growing. With every covered view unmounting,
-cost is constant in depth rather than bounded by a number someone has to choose — which is why
-this measurement did _not_ end up arguing for a separate "keep the nearest N" knob, despite the
-problem being depth-shaped. The per-view switch already covers it.
+The threshold is real but nothing reaches it. Five levels of ordinary views cost ~11ms of commit
+against a flat 9ms worst frame — invisible — and the crossover is depth 8 at 50 nodes a view or
+~25 at 20. A file browser or a settings tree could get there; the deepest fixture in this repo is
+five levels of a tree, and a detail flow is two.
 
-**Where it matters: deep stacks of heavy views.** Past depth ~8 at 50 nodes a view, or ~25 at 20.
-A file browser or a settings tree can reach that; a two-level detail flow cannot.
+Unmounting also cannot ship on its own. A covered view that renders `null` is not reconciled, so
+it genuinely removes both halves of the cost — the nodes stop accumulating and the per-navigation
+render stops growing — but it silently drops every scroll offset in that view, and "the list is
+where I left it" is most of what keeping views alive buys. So the one small knob drags scroll
+restoration in behind it: two features and a new silent failure, to fix a cost that no case in
+front of us pays.
+
+And the policy belongs to the application anyway. Only it knows which views are expensive to
+rebuild and which are holding state a user would miss; a boolean on `NavigationView` is the
+component guessing on the application's behalf.
+
+**What was done instead is one line.** `renderView` now receives the view's `index`, so content
+can ask whether it is the one on top and render nothing when it is not — the same saving, decided
+by the code that knows what it costs. Reference-comparing the view against `currentView` is not a
+substitute: `push` may be handed the same object twice, so two entries can hold one reference and
+the comparison is true for both.
+
+This entry is the other half of that answer. Someone who does reach depth 8 with heavy views will
+see one hitch as the transition starts, and the thing they will reach for first is the spring —
+which is not it.
 
 ## Open
 
