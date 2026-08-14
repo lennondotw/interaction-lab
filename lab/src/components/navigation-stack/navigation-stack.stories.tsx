@@ -1,14 +1,25 @@
 import { en, Faker } from '@faker-js/faker';
+import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ChevronRight } from 'lucide-react';
-import type { FC, ReactNode } from 'react';
+import { ChevronRight, Compass, Layers, Settings } from 'lucide-react';
+import { useRef, useState, type FC, type ReactNode, type RefObject } from 'react';
 
 import {
+  NavBackButton,
+  NavBreadcrumb,
+  NavHeader,
+  NavHeaderRow,
   NavigationCenteredContent,
+  NavigationContainer,
+  NavigationContent,
+  NavigationProvider,
   NavigationScrollArea,
   NavigationStack,
+  NavTitle,
   useNavigation,
+  useNavigationStack,
   type NavigationPresentation,
+  type NavigationStackResult,
   type NavigationView,
 } from './index.js';
 
@@ -259,6 +270,204 @@ const RevisitContent: FC<{ view: NavigationView }> = ({ view }) => {
   );
 };
 
+// ---------------------------------------------------------------------------
+// Tabs — a stack per tab, assembled from the building blocks
+// ---------------------------------------------------------------------------
+
+const TABS = [
+  { id: 'browse', title: 'Browse', Icon: Compass },
+  { id: 'library', title: 'Library', Icon: Layers },
+  { id: 'settings', title: 'Settings', Icon: Settings },
+] as const;
+
+/**
+ * One tab's stack.
+ *
+ * Assembled from the pieces rather than using `NavigationStack`, for one
+ * reason: the tab bar sits *outside* the chrome and has to call `popToRoot`
+ * on whichever stack is showing. The preset owns its stack internally, so
+ * nothing above it can reach one — which is exactly the case the parts are
+ * separate for. `useNavigationStack` is headless, so the parent holds all
+ * three results and hands each to a `NavigationProvider`.
+ *
+ * The panel is never unmounted. It is taken off the paint path with
+ * `visibility: hidden` and out of the tab order with `inert`, the same pair
+ * the stack uses for a parked view, and for the same reason: `display: none`
+ * would destroy the layout box and take every scroll offset in the tab with
+ * it, and preserving those is most of what "the tab kept its state" means.
+ */
+const TabPanel: FC<{
+  nav: NavigationStackResult;
+  isActive: boolean;
+  tabId: string;
+  scopeRef: RefObject<HTMLDivElement | null>;
+}> = ({ nav, isActive, tabId, scopeRef }) => (
+  <div
+    data-testid={`tab-panel-${tabId}`}
+    inert={!isActive}
+    className={cn('absolute inset-0', !isActive && 'pointer-events-none')}
+    style={{ visibility: isActive ? 'visible' : 'hidden' }}
+  >
+    <NavigationProvider value={nav}>
+      <NavigationContainer
+        ref={scopeRef}
+        // The outer shell owns the frame's radius; each tab fills it square.
+        className="rounded-none"
+        header={
+          <NavHeader>
+            <NavHeaderRow>
+              <NavBackButton />
+              <NavTitle />
+            </NavHeaderRow>
+            <NavBreadcrumb />
+          </NavHeader>
+        }
+      >
+        <NavigationContent renderView={(view) => <TabContent tabId={tabId} view={view} />} />
+      </NavigationContainer>
+    </NavigationProvider>
+  </div>
+);
+
+const TabContent: FC<{ tabId: string; view: NavigationView }> = ({ tabId, view }) => {
+  const { push, depth } = useNavigation();
+
+  return (
+    <NavigationScrollArea
+      className={`
+        bg-white
+        dark:bg-neutral-950
+      `}
+    >
+      <p
+        className={`
+          px-4 py-3 text-xs/5 text-black/50
+          dark:text-white/50
+        `}
+      >
+        {view.title} · depth {depth}. Switch tabs and come back: the depth, the scroll position and the focused row are
+        all still here.
+      </p>
+      {Array.from({ length: 12 }, (_, i) => (
+        <ListItem
+          key={i}
+          label={`${view.title} item ${String(i + 1)}`}
+          onPress={() =>
+            push({ id: `${tabId}-${String(depth)}-${String(i)}`, title: `${view.title} ${String(i + 1)}` })
+          }
+        />
+      ))}
+    </NavigationScrollArea>
+  );
+};
+
+/**
+ * Three tabs, one stack each.
+ *
+ * Tapping the tab you are already on pops that stack to its root, which is
+ * the one tab-bar behaviour people miss when it is absent — it is how you get
+ * out of somewhere deep without pressing back five times. It has to be the
+ * *second* tap: the first is a switch, and popping on a switch would throw
+ * away the position the user is coming back to.
+ */
+const WithTabs: FC = () => {
+  const [activeTab, setActiveTab] = useState<string>(TABS[0].id);
+
+  // One stack per tab, all three alive for the life of the shell. Hooks
+  // cannot be called in a loop, so they are named rather than mapped.
+  const browseRef = useRef<HTMLDivElement>(null);
+  const libraryRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const browse = useNavigationStack({ id: 'browse-root', title: 'Browse' }, { scopeRef: browseRef });
+  const library = useNavigationStack({ id: 'library-root', title: 'Library' }, { scopeRef: libraryRef });
+  const settings = useNavigationStack({ id: 'settings-root', title: 'Settings' }, { scopeRef: settingsRef });
+
+  const stacks: Record<string, { nav: NavigationStackResult; scopeRef: RefObject<HTMLDivElement | null> }> = {
+    browse: { nav: browse, scopeRef: browseRef },
+    library: { nav: library, scopeRef: libraryRef },
+    settings: { nav: settings, scopeRef: settingsRef },
+  };
+
+  const onTabPress = (tabId: string): void => {
+    if (tabId === activeTab) stacks[tabId]?.nav.popToRoot();
+    else setActiveTab(tabId);
+  };
+
+  return (
+    <div
+      className={cn(`
+        flex h-full flex-col overflow-hidden rounded-2xl bg-neutral-200
+        dark:bg-neutral-900
+      `)}
+    >
+      {/* `relative` so the panels can stack; `min-h-0` so a tall tab is
+          clipped here rather than pushing the tab bar off the frame. */}
+      <div className="relative min-h-0 flex-1">
+        {TABS.map(({ id }) => {
+          const entry = stacks[id];
+          if (!entry) return null;
+          return <TabPanel key={id} tabId={id} nav={entry.nav} scopeRef={entry.scopeRef} isActive={id === activeTab} />;
+        })}
+      </div>
+
+      <div
+        data-testid="tab-bar"
+        className={`
+          flex shrink-0 border-t border-black/10
+          dark:border-white/10
+        `}
+      >
+        {TABS.map(({ id, title, Icon }) => {
+          const isActive = id === activeTab;
+          const depth = stacks[id]?.nav.depth ?? 1;
+
+          return (
+            <button
+              key={id}
+              type="button"
+              data-testid={`tab-${id}`}
+              data-active={isActive}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => onTabPress(id)}
+              className={cn(
+                `
+                  flex flex-1 cursor-pointer flex-col items-center gap-1 py-2 text-[10px] transition-colors
+                  hover:bg-black/5
+                  dark:hover:bg-white/5
+                `,
+                isActive
+                  ? `
+                    text-black
+                    dark:text-white
+                  `
+                  : `
+                    text-black/40
+                    dark:text-white/40
+                  `
+              )}
+            >
+              <span className="relative">
+                <Icon className="size-5" />
+                {/* Depth is the visible proof that the tab kept its place. */}
+                {depth > 1 && (
+                  <span
+                    className={`
+                      absolute -end-2 -top-1 rounded-full bg-blue-500 px-1 text-[9px]/[14px] font-medium text-white
+                    `}
+                  >
+                    {depth}
+                  </span>
+                )}
+              </span>
+              {title}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /** One pane of the two-stack story: pushes numbered views, so depth is visible. */
 const PaneContent: FC<{ side: string; view: NavigationView }> = ({ side, view }) => {
   const { push, depth } = useNavigation();
@@ -430,6 +639,27 @@ export const DeepLinked: Story = {
           'Opens three levels deep, as a restored URL would. `initialViews` and `enableKeyboardNav` used to be reachable only by assembling the stack by hand — the preset called the hook with the root view and nothing else, so a deep link was impossible through it and Escape could not be turned off.',
           'Nothing animates in: every entry present at mount is in the entrance snapshot, so it is given `initial={false}` and arrives already at rest instead of three views sliding across each other. The back button and breadcrumb are populated from the start, so this is a real position in the history rather than a root that happens to look different — measured on load, depth 3 with `Root › Blood Oranges › Pinto Beans` and a back button.',
           '`initialViews` and `rootView` are both read once, when the stack is created. Changing either later does nothing: the stack owns its history from that point, and re-seeding it from a prop would throw away wherever the user had navigated to. Change the `key` on the component to start a new stack instead.',
+        ].join('\n\n'),
+      },
+    },
+  },
+};
+
+export const WithTabBar: Story = {
+  args: {
+    rootView: { id: 'unused', title: 'Unused' },
+    renderView: () => null,
+  },
+  render: () => <WithTabs />,
+  parameters: {
+    docs: {
+      description: {
+        story: [
+          'Three tabs, a stack each. Drill into one, switch away, come back: the depth, the scroll position and the focused row are all where you left them. The badge on each tab is its depth, so you can see the other stacks holding their place while you are not looking at them.',
+          '**Tap the tab you are already on and that stack pops to its root.** It is the tab-bar behaviour people miss when it is absent — the way out of somewhere five levels deep without pressing back five times — and it has to be the *second* tap. The first is a switch, and popping on a switch would throw away the position the user is coming back to.',
+          'Panels are never unmounted. They are taken off the paint path with `visibility: hidden` and out of the tab order with `inert` — the same pair a parked view uses, for the same reason. `display: none` would preserve React state just as well and destroy the layout box, taking every scroll offset in the tab with it, and those offsets are most of what "the tab kept its state" means.',
+          'This one is assembled from the parts rather than from `NavigationStack`, and the reason is the second tap: the tab bar is outside the chrome and has to call `popToRoot` on whichever stack is showing, while the preset owns its stack internally where nothing above can reach it. `useNavigationStack` is headless, so the shell holds all three results and hands each to a `NavigationProvider` — which is what the pieces are separate for.',
+          'It is also the case `scopeRef` was built for. Each tab passes its own panel, so Escape pops the tab you are in and not the two you are not. Being `inert` keeps focus out of the hidden panels, so their stacks never see focus inside themselves and stay put.',
         ].join('\n\n'),
       },
     },
