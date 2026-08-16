@@ -45,6 +45,15 @@ const BACKDROP_TEXT = 'text-[11px] leading-[1.45] text-black/75 dark:text-white/
 const PANEL = 'absolute inset-x-8 inset-y-9 grid place-items-center rounded-2xl';
 const CHIP = 'rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white';
 const CAPTION = 'text-xs leading-relaxed text-neutral-500 dark:text-neutral-400';
+const BUTTON = `
+  cursor-pointer rounded-[4px] border border-black/20 bg-white/0 px-3 py-1 text-xs text-black/70
+  hover:bg-black/5
+  active:bg-black/10
+  dark:border-white/30 dark:text-white/80 dark:hover:bg-white/5 dark:active:bg-white/10
+`;
+
+/** How the α is handed over to a gesture. */
+export type Interaction = 'hover' | 'toggle';
 
 export interface GlassFadeOptions {
   /** Which property the fade's α is hung on. Does not touch what the material is. */
@@ -93,7 +102,23 @@ function materialProgress({
   return { blur: blurRadiusProgress ?? all, content: contentProgress ?? all, tint: tintAlphaProgress ?? all };
 }
 
-function panelStyle(options: GlassFadeOptions): CSSProperties {
+/*
+ * Every property the material is made of is transitionable, so an interaction needs no
+ * per-frame JavaScript at all: set the target and let the browser interpolate. That also
+ * keeps the demo honest — this is the path a real transition takes.
+ */
+const DURATION = 400;
+const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
+/*
+ * Spelled out per property rather than as `a, b, c 400ms ease`: in the shorthand the
+ * duration binds to the *last* item in the list only, so that form silently animates
+ * `opacity` alone and leaves the material to jump.
+ */
+const TRANSITION = ['backdrop-filter', 'background-color', 'box-shadow', 'opacity']
+  .map((property) => `${property} ${DURATION}ms ${EASE}`)
+  .join(', ');
+
+function panelStyle(options: GlassFadeOptions, animated: boolean): CSSProperties {
   const { blurPx, mode, progress, tint, tintAlphaTarget } = options;
   const at = materialProgress(options);
   const radius = blurPx * at.blur;
@@ -111,15 +136,19 @@ function panelStyle(options: GlassFadeOptions): CSSProperties {
     `rgb(from ${tint} r g b / calc(alpha * ${(tintAlphaTarget * at.tint * scale).toFixed(4)}))`;
 
   return {
-    // `blur(0px)` is still a filter — it keeps the compositing layer and the
-    // backdrop root alive. Only `none` releases them, which is what a real
-    // transition should settle to at rest.
-    backdropFilter: radius === 0 ? 'none' : `blur(${radius.toFixed(2)}px)`,
+    /*
+     * `blur(0px)` is still a filter — it keeps the compositing layer and the backdrop root
+     * alive, and only `none` releases them. So `none` is right at rest and wrong mid-flight:
+     * `none` and a filter function do not interpolate, so a transition that touches it
+     * jumps. While animating, stay on `blur(0px)` and pay for the idle layer.
+     */
+    backdropFilter: radius === 0 && !animated ? 'none' : `blur(${radius.toFixed(2)}px)`,
     backgroundColor: tintAt(1),
     boxShadow: `inset 0 0 0 1px ${tintAt(2)}`,
     maskImage:
       mode === 'mask-alpha' ? `linear-gradient(rgb(0 0 0 / ${progress}), rgb(0 0 0 / ${progress}))` : undefined,
     opacity: mode === 'layer-opacity' ? progress : 1,
+    transition: animated ? TRANSITION : undefined,
   };
 }
 
@@ -129,9 +158,15 @@ function panelStyle(options: GlassFadeOptions): CSSProperties {
  * ramps is the legitimate use of opacity here, and `material` is the only mode
  * that has to do it by hand — the others drag the label along with the layer.
  */
-const Panel: FC<GlassFadeOptions & { label: string }> = ({ label, ...options }) => (
-  <div className={PANEL} style={panelStyle(options)}>
-    <span className={CHIP} style={{ opacity: options.mode === 'material' ? materialProgress(options).content : 1 }}>
+const Panel: FC<GlassFadeOptions & { label: string; animated: boolean }> = ({ animated, label, ...options }) => (
+  <div className={PANEL} style={panelStyle(options, animated)}>
+    <span
+      className={CHIP}
+      style={{
+        opacity: options.mode === 'material' ? materialProgress(options).content : 1,
+        transition: animated ? `opacity ${DURATION}ms ${EASE}` : undefined,
+      }}
+    >
       {label}
     </span>
   </div>
@@ -218,23 +253,45 @@ const ProgressSlider: FC<{
 );
 
 export const GlassFadeStage: FC<
-  GlassFadeOptions & { className?: string; onOptionsChange?: (patch: Partial<GlassFadeOptions>) => void }
-> = ({ className, onOptionsChange, ...options }) => {
+  GlassFadeOptions & {
+    className?: string;
+    onOptionsChange?: (patch: Partial<GlassFadeOptions>) => void;
+    /**
+     * Hand the α to a gesture instead of a slider. `hover` runs between the story's
+     * `progress` and 1, so it shows a surface *strengthening* rather than appearing;
+     * `toggle` runs the full 0 → 1, which is the appearance proper.
+     */
+    interaction?: Interaction;
+  }
+> = ({ className, interaction, onOptionsChange, ...options }) => {
+  const [engaged, setEngaged] = useState(false);
   const scrub = useScrub(options, onOptionsChange);
-  // Everything below reads the live values, so a drag is visible immediately; only the
-  // commit waits for release.
-  const { backdrop, blurRadiusProgress, contentProgress, mode, progress, tintAlphaProgress } = scrub.live;
-  const at = materialProgress(scrub.live);
+  /*
+   * An interaction owns the α outright, overriding both the slider and the arg — which is
+   * why the two are hidden while one is attached. It overrides `progress` alone, and the
+   * three material axes then follow it through their own fallback, so a gesture drives the
+   * whole material without knowing the axes exist.
+   */
+  const live =
+    interaction === undefined
+      ? scrub.live
+      : { ...scrub.live, progress: engaged ? 1 : interaction === 'toggle' ? 0 : options.progress };
+  const { backdrop, blurRadiusProgress, contentProgress, mode, progress, tintAlphaProgress } = live;
+  const at = materialProgress(live);
   const split = blurRadiusProgress !== undefined || contentProgress !== undefined || tintAlphaProgress !== undefined;
   // Label what is actually driving this cell, so the number never reports a slider the mode
   // ignores. Split apart there is no single number, so it reports the tint — the axis that
   // reads as the material being there, and the one the label is sitting on.
   const shown = split ? at.tint : progress;
-  const panel = <Panel {...scrub.live} label={`${Math.round(shown * 100)}%`} />;
+  const panel = <Panel {...live} animated={interaction !== undefined} label={`${Math.round(shown * 100)}%`} />;
 
   return (
     <figure className={cn('flex w-full max-w-xl flex-col gap-2', className)}>
-      <div className={PLATE}>
+      <div
+        className={PLATE}
+        onPointerEnter={interaction === 'hover' ? () => setEngaged(true) : undefined}
+        onPointerLeave={interaction === 'hover' ? () => setEngaged(false) : undefined}
+      >
         <div aria-hidden className={BACKDROP_LAYER} style={{ background: BACKDROP_STYLE[backdrop] }}>
           {backdrop === 'text' && <p className={BACKDROP_TEXT}>{LOREM}</p>}
         </div>
@@ -248,7 +305,24 @@ export const GlassFadeStage: FC<
           panel
         )}
       </div>
-      {onOptionsChange !== undefined && (
+      {interaction === 'toggle' && (
+        <div>
+          <button className={BUTTON} onClick={() => setEngaged((previous) => !previous)} type="button">
+            {engaged ? 'Hide' : 'Show'}
+            {/* Both labels stay in the DOM so the button sizes to the wider of the two and
+                does not resize on click, which would move it out from under the pointer
+                mid-transition. */}
+            <span className="invisible flex h-0 flex-col overflow-clip leading-0">
+              <span>Hide</span>
+              <span>Show</span>
+            </span>
+          </button>
+        </div>
+      )}
+      {interaction === 'hover' && (
+        <p className={CAPTION}>Pointer over the panel to take α from {options.progress.toFixed(2)} to 1.</p>
+      )}
+      {onOptionsChange !== undefined && interaction === undefined && (
         <div className="flex flex-col gap-1.5">
           {/* One slider per live knob: the split pair appears only where a story supplies
               it, so the merged case needs no flag of its own — not supplying the two axes

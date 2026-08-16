@@ -38,6 +38,8 @@ const meta = {
     // Off by default, and re-enabled by the one story that reads them. A knob that does
     // nothing is worse than no knob, and in every other mode the material is simply done.
     blurRadiusProgress: { control: false },
+    // Structural: which gesture owns the α is what a story *is*, not something to flip.
+    interaction: { control: false },
     mode: { control: 'select', options: FADE_MODES },
     progress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
     // Colour and alpha as two controls: a dark glass is reachable without touching the
@@ -145,6 +147,39 @@ export const MaterialStrength: Story = {
 export const MaterialStrengthTogether: Story = {
   name: 'material strength · one progress',
   args: { mode: 'material' },
+};
+
+/*
+ * The two stories below are the first ones here with a time axis, and they are also the
+ * only place the defect can be judged the way a user meets it — in flight, at whatever
+ * frame rate the machine happens to give. Nothing animates in JavaScript: every property
+ * the material is made of is transitionable, so these set a target and let the browser
+ * interpolate, which is both cheaper and the path production actually takes.
+ *
+ * `mode` stays live on both. Switching it to `opacity on the layer` and running the
+ * gesture again is the shortest route to the whole point of the demo: the same motion,
+ * over the same copy, reading as dirty instead of as frosted.
+ */
+
+/**
+ * α from the story's `progress` to 1 on pointer-enter — a surface *strengthening* under
+ * the pointer rather than appearing, which is the common case for a hover state on glass.
+ * Starting at 0.5 rather than 0 also means the wrong modes are already showing their ghost
+ * at rest, and the gesture only deepens it.
+ */
+export const HoverToStrengthen: Story = {
+  name: 'interactive · hover',
+  args: { interaction: 'hover', mode: 'material', progress: 0.5 },
+};
+
+/**
+ * The appearance proper: 0 → 1 on a button, which is the transition every sheet, popover
+ * and toolbar runs. This is the one to watch with `mode` on `opacity on an ancestor` — the
+ * blur is not merely wrong mid-flight there, it is absent, and then snaps in at the end.
+ */
+export const ToggleVisibility: Story = {
+  name: 'interactive · toggle',
+  args: { interaction: 'toggle', mode: 'material' },
 };
 
 /**
