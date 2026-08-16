@@ -40,6 +40,7 @@ const meta = {
     blurRadiusProgress: { control: false },
     // Structural: which gesture owns the α is what a story *is*, not something to flip.
     interaction: { control: false },
+    mapping: { control: 'inline-radio', options: ['linear', 'perceptual'] },
     mode: { control: 'select', options: FADE_MODES },
     progress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
     // Colour and alpha as two controls: a dark glass is reachable without touching the
@@ -180,6 +181,31 @@ export const HoverToStrengthen: Story = {
 export const ToggleVisibility: Story = {
   name: 'interactive · toggle',
   args: { interaction: 'toggle', mode: 'material' },
+};
+
+/**
+ * The same toggle with α mapped through each axis's measured perceptual rate, which is where
+ * the front-loading in the story above comes from: at linear α, one eighth of the way in, the
+ * blur has already delivered 85% of the change it will ever make. The tint is left alone —
+ * measured, it is already uniform (γ = 1.00, mean error 0.009) — and only the radius is
+ * remapped, at γ = 4, which measures about three times more even.
+ *
+ * Two layers, and only the first is in play here. This story is the *mapping*: how much
+ * material a given α means. Easing is the other, and every interactive story here keeps it
+ * linear so that it cannot be mistaken for the mapping — an ease-out front-loads change on its
+ * own, and would hide exactly the effect being demonstrated. A shipping transition adds the
+ * ease back on top of this.
+ *
+ * It is still not perfectly even, and cannot be with an exponent: perceived frostiness goes as
+ * roughly the log of the radius, so the exact inverse would hold the radius under 1px until
+ * α ≈ 0.6 and then run to 20px in the last third — even by the numbers, and reads as a surface
+ * that does nothing and then snaps. Which is the more useful finding: past about 4px on this
+ * content the radius is nearly free of perceptual effect, so most of a 20px design is spent
+ * where the eye cannot see it change.
+ */
+export const ToggleVisibilityPerceptual: Story = {
+  name: 'interactive · toggle, perceptual α',
+  args: { interaction: 'toggle', mapping: 'perceptual', mode: 'material' },
 };
 
 /**

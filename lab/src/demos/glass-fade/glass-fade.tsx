@@ -55,6 +55,33 @@ const BUTTON = `
 /** How the α is handed over to a gesture. */
 export type Interaction = 'hover' | 'toggle';
 
+/**
+ * α is not what the eye reads; each axis converts it at its own rate. Measured on this
+ * backdrop, at 2× device pixels, as the loss of multi-scale detail energy inside the panel
+ * (octave-spaced neighbour differences, 2 → 64 device px, equally weighted):
+ *
+ * | axis        | perceived, α = ⅛ … 1                    | verdict            |
+ * | ----------- | --------------------------------------- | ------------------ |
+ * | tint, γ = 1 | .13 .26 .39 .51 .61 .74 .87 1.00        | already uniform    |
+ * | blur, γ = 1 | .85 .93 .96 .97 .98 .99 .99 1.00        | all of it up front |
+ * | blur, γ = 4 | .00 .05 .26 .69 .88 .95 .98 1.00        | **3× more even**   |
+ *
+ * So the tint stays linear — veiling removes backdrop contrast in proportion to (1 − α), so
+ * detail loss already *is* linear in α — and only the radius is remapped.
+ *
+ * γ = 4 is a compromise, not a solution: perceived frostiness goes as roughly the log of the
+ * radius (1px of blur already takes 65% of the way, 2px takes 82%), and no power law inverts
+ * a log. Inverting the measured curve exactly would hold the radius under 1px until α ≈ 0.6
+ * and then run 1 → 20px in the last third, which is perceptually even and reads as a surface
+ * doing nothing and then snapping. The deeper finding is the one to take away: past about
+ * 4px on this content, radius is nearly free of perceptual effect, so most of a 20px design
+ * is spent where the eye cannot see it change.
+ */
+const PERCEPTUAL_EXPONENT = { blur: 4, content: 1, tint: 1 } as const;
+
+/** Whether α drives the axes directly, or through their measured perceptual rates. */
+export type Mapping = 'linear' | 'perceptual';
+
 export interface GlassFadeOptions {
   /** Which property the fade's α is hung on. Does not touch what the material is. */
   mode: FadeMode;
@@ -87,6 +114,13 @@ export interface GlassFadeOptions {
   blurRadiusProgress?: number;
   tintAlphaProgress?: number;
   contentProgress?: number;
+  /**
+   * Whether the axes read α directly or through their measured perceptual rates. A separate
+   * layer from the transition's easing, and the two compose: this one says how much material
+   * a given α means, an ease would say when α gets there. Everything here keeps its easing
+   * linear so that the mapping is the only thing in play.
+   */
+  mapping?: Mapping;
 }
 
 /** Full strength, unless this is the mode that expresses its fade by ramping the material. */
@@ -102,13 +136,37 @@ function materialProgress({
   return { blur: blurRadiusProgress ?? all, content: contentProgress ?? all, tint: tintAlphaProgress ?? all };
 }
 
+/**
+ * The perceptual layer, applied on the way to the styles and not before: the sliders and the
+ * readouts stay in α, because α is the parameter a designer thinks in and holds across
+ * materials. Only the material sees the mapped values.
+ */
+function mapped(at: { blur: number; content: number; tint: number }, mapping: Mapping) {
+  if (mapping === 'linear') {
+    return at;
+  }
+
+  return {
+    blur: at.blur ** PERCEPTUAL_EXPONENT.blur,
+    content: at.content ** PERCEPTUAL_EXPONENT.content,
+    tint: at.tint ** PERCEPTUAL_EXPONENT.tint,
+  };
+}
+
 /*
  * Every property the material is made of is transitionable, so an interaction needs no
  * per-frame JavaScript at all: set the target and let the browser interpolate. That also
  * keeps the demo honest — this is the path a real transition takes.
  */
 const DURATION = 400;
-const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
+/*
+ * Linear, deliberately. An ease is a second layer on top of the perceptual mapping, and an
+ * ease-out — the sensible default for a real transition — front-loads change by itself, which
+ * is indistinguishable from the front-loading the blur axis causes. Keeping the time linear is
+ * what makes the mapping the only thing under test; a shipping transition would add the ease
+ * back on top.
+ */
+const EASE = 'linear';
 /*
  * Spelled out per property rather than as `a, b, c 400ms ease`: in the shorthand the
  * duration binds to the *last* item in the list only, so that form silently animates
@@ -119,8 +177,8 @@ const TRANSITION = ['backdrop-filter', 'background-color', 'box-shadow', 'opacit
   .join(', ');
 
 function panelStyle(options: GlassFadeOptions, animated: boolean): CSSProperties {
-  const { blurPx, mode, progress, tint, tintAlphaTarget } = options;
-  const at = materialProgress(options);
+  const { blurPx, mapping = 'linear', mode, progress, tint, tintAlphaTarget } = options;
+  const at = mapped(materialProgress(options), mapping);
   const radius = blurPx * at.blur;
   /*
    * Relative colour syntax rather than `color-mix(in srgb, tint x%, transparent)`, which
@@ -163,7 +221,8 @@ const Panel: FC<GlassFadeOptions & { label: string; animated: boolean }> = ({ an
     <span
       className={CHIP}
       style={{
-        opacity: options.mode === 'material' ? materialProgress(options).content : 1,
+        opacity:
+          options.mode === 'material' ? mapped(materialProgress(options), options.mapping ?? 'linear').content : 1,
         transition: animated ? `opacity ${DURATION}ms ${EASE}` : undefined,
       }}
     >
