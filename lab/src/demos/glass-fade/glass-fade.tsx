@@ -57,30 +57,34 @@ const BUTTON = `
 export type Interaction = 'hover' | 'toggle';
 
 /**
- * α is not what the eye reads; each axis converts it at its own rate. Measured on this
- * backdrop, at 2× device pixels, as the loss of multi-scale detail energy inside the panel
- * (octave-spaced neighbour differences, 2 → 64 device px, equally weighted):
+ * α is not what the eye reads; each axis converts it at its own rate. Measured on this backdrop
+ * at 2× device pixels as the loss of multi-scale detail energy inside the panel — the full
+ * instrument, and every number below, is `archive/2026-08-glass-fade-perceptual-alpha`.
  *
- * | axis        | perceived, α = ⅛ … 1                    | verdict            |
- * | ----------- | --------------------------------------- | ------------------ |
- * | tint, γ = 1 | .13 .26 .39 .51 .61 .74 .87 1.00        | already uniform    |
- * | blur, γ = 1 | .85 .93 .96 .97 .98 .99 .99 1.00        | all of it up front |
- * | blur, γ = 4 | .00 .05 .26 .69 .88 .95 .98 1.00        | **3× more even**   |
+ * | axis        | perceived, α = ⅛ … 1              | mean error vs an even ramp |
+ * | ----------- | --------------------------------- | -------------------------- |
+ * | tint, γ = 1 | .11 .20 .32 .41 .51 .68 .80 1.00  | already even (γ fits 1.00) |
+ * | blur, γ = 1 | .89 .97 1.0 1.0 1.0 1.0 1.0 1.0   | 0.422 — all of it up front |
+ * | blur, γ = 2 | .22 .75 .91 .97 1.0 1.0 1.0 1.0   | **0.295**                  |
+ * | blur, γ = 4 | .00 .06 .28 .75 .92 .99 1.0 1.0   | 0.165, and unshippable     |
  *
- * So the tint stays linear — veiling removes backdrop contrast in proportion to (1 − α), so
+ * So the tint stays linear — veiling removes backdrop contrast in proportion to (1 − α), so its
  * detail loss already *is* linear in α — and only the radius is remapped.
  *
- * The metric's own optimum is γ = 4, and it is not shippable: 0.3⁴ of 20px is 0.16px, so the
- * first third of the ramp is a visible dead zone. That is not the metric being wrong so much
- * as the tension being real — perceived frostiness goes as roughly the log of the radius (1px
- * of blur already takes 65% of the way, 2px takes 82%), so *any* mapping that evens out the
- * perceived curve has to crawl through the low end. γ = 2 is where it stops reading as dead
- * while still being about twice as even as linear, so that is the default; `blurGamma` is a
- * control because where to sit on that trade is a judgement the numbers cannot settle.
+ * γ = 4 measures best and cannot ship: 0.3⁴ of 20px is 0.16px, so the first third of the ramp is
+ * a dead zone you can watch. The tension is real rather than a flaw in the metric — perceived
+ * frostiness goes as roughly the log of the radius, one pixel of blur already delivering 71% of
+ * everything the axis will ever deliver — so any mapping that evens the curve out has to crawl
+ * through the low end. γ = 2 is about 1.4× more even than linear with nothing dead, which is the
+ * default; `blurGamma` is a control because where to sit on that trade is a judgement no
+ * measurement settles.
  *
- * The finding worth keeping is the one underneath: past about 4px on this content, radius is
- * nearly free of perceptual effect, so most of a 20px design is spent where the eye cannot
- * see it change.
+ * Two findings underneath, both worth knowing before reaching for a bigger radius. Past about
+ * 4px on this content the radius is nearly free of perceptual effect, so most of a 20px design
+ * is spent where the eye cannot see it change. And the radius is *quantised* by the compositor —
+ * a tread of 0.26px around radius 9, 0.54px around 18 — so a scrub steps rather than glides, and
+ * γ makes the high end coarse in radius terms: one 0.01 of α moves the radius by 0.4·α px, which
+ * near α = 1 crosses a whole tread.
  */
 const PERCEPTUAL_EXPONENT = { blur: 2, content: 1, tint: 1 } as const;
 
@@ -380,24 +384,31 @@ export const GlassFadeStage: FC<
    * That ordering is the point: this is the ease layer, and the mapping layer is downstream of
    * it, inside the styles.
    */
-  const resting = interaction === 'toggle' ? 0 : options.progress;
-  const alpha = useDrivenAlpha(engaged ? 1 : resting, options.timing ?? 'linear', interaction !== undefined);
-  const live = interaction === undefined ? scrub.live : { ...scrub.live, progress: alpha };
+  /*
+   * Nullish rather than `!== undefined` throughout: these arrive as Storybook args, which are
+   * untyped at runtime, and an explicit `null` is what clearing one looks like. Read strictly,
+   * `interaction: null` counts as a gesture, and the stage starts animating α towards a resting
+   * value on a story that has no gesture at all — which reads as the panel quietly drifting.
+   */
+  const gesture = interaction ?? null;
+  const resting = gesture === 'toggle' ? 0 : options.progress;
+  const alpha = useDrivenAlpha(engaged ? 1 : resting, options.timing ?? 'linear', gesture !== null);
+  const live = gesture === null ? scrub.live : { ...scrub.live, progress: alpha };
   const { backdrop, blurRadiusProgress, contentProgress, mode, progress, tintAlphaProgress } = live;
   const at = materialProgress(live);
-  const split = blurRadiusProgress !== undefined || contentProgress !== undefined || tintAlphaProgress !== undefined;
+  const split = blurRadiusProgress != null || contentProgress != null || tintAlphaProgress != null;
   // Label what is actually driving this cell, so the number never reports a slider the mode
   // ignores. Split apart there is no single number, so it reports the tint — the axis that
   // reads as the material being there, and the one the label is sitting on.
   const shown = split ? at.tint : progress;
-  const panel = <Panel {...live} driven={interaction !== undefined} label={`${Math.round(shown * 100)}%`} />;
+  const panel = <Panel {...live} driven={gesture !== null} label={`${Math.round(shown * 100)}%`} />;
 
   return (
     <figure className={cn('flex w-full max-w-xl flex-col gap-2', className)}>
       <div
         className={PLATE}
-        onPointerEnter={interaction === 'hover' ? () => setEngaged(true) : undefined}
-        onPointerLeave={interaction === 'hover' ? () => setEngaged(false) : undefined}
+        onPointerEnter={gesture === 'hover' ? () => setEngaged(true) : undefined}
+        onPointerLeave={gesture === 'hover' ? () => setEngaged(false) : undefined}
       >
         <div aria-hidden className={BACKDROP_LAYER} style={{ background: BACKDROP_STYLE[backdrop] }}>
           {backdrop === 'text' && <p className={BACKDROP_TEXT}>{LOREM}</p>}
@@ -412,7 +423,7 @@ export const GlassFadeStage: FC<
           panel
         )}
       </div>
-      {interaction === 'toggle' && (
+      {gesture === 'toggle' && (
         <div>
           <button className={BUTTON} onClick={() => setEngaged((previous) => !previous)} type="button">
             {engaged ? 'Hide' : 'Show'}
@@ -426,10 +437,10 @@ export const GlassFadeStage: FC<
           </button>
         </div>
       )}
-      {interaction === 'hover' && (
+      {gesture === 'hover' && (
         <p className={CAPTION}>Pointer over the panel to take α from {options.progress.toFixed(2)} to 1.</p>
       )}
-      {onOptionsChange !== undefined && interaction === undefined && (
+      {onOptionsChange !== undefined && gesture === null && (
         <div className="flex flex-col gap-1.5">
           {/* One slider per live knob: the split pair appears only where a story supplies
               it, so the merged case needs no flag of its own — not supplying the two axes

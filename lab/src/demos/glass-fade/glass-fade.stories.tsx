@@ -300,9 +300,14 @@ export const ToggleVisibility: Story = {
  *
  * `blurGamma` is a control because the right value is a judgement the numbers cannot settle.
  * The metric's own optimum is 4, and it is not shippable — 0.3⁴ of 20px is 0.16px, so the first
- * third reads as a dead zone. 2 is the default: about twice as even as linear, with nothing
- * dead. Nothing in between is *correct*; perceived frostiness goes as roughly the log of the
- * radius, so evening it out always means crawling through the low end.
+ * third reads as a dead zone. 2 is the default: measured, about 1.4× more even than linear, with
+ * nothing dead. Nothing in between is *correct*; perceived frostiness goes as roughly the log of
+ * the radius, so evening it out always means crawling through the low end.
+ *
+ * Sweeping γ here also shows the trade the other way: the radius is quantised by the compositor
+ * in treads of about 0.26px at radius 9 and 0.54px at 18, and γ = 2 moves the radius by 0.4·α px
+ * per 0.01 of α — so the high end crosses a whole tread per tick and steps visibly, while the low
+ * end takes many ticks to cross one. `archive/2026-08-glass-fade-perceptual-alpha` has the sweep.
  */
 export const ToggleVisibilityPerceptual: Story = {
   name: 'interactive · toggle, mapped α',
