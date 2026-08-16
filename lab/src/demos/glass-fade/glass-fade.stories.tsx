@@ -57,9 +57,13 @@ export const LayerOpacity: Story = {
 
 /**
  * The workaround that is not one. A uniform-alpha mask composites through the same
- * formula, so this is pixel-identical to `opacity`. Worth its own story because
- * `mask-image` is what people reach for after opacity disappoints — and because a
- * *gradient* mask genuinely is fine, which is what makes the flat one plausible.
+ * formula, so it is visually indistinguishable from `opacity` — though not bit-for-bit:
+ * swapping one for the other on the same layer moves 0.14% of pixels, all inside the
+ * panel, 93% of them by one 8-bit step (a mask is a quantised image, opacity is a
+ * float), and up to 19/255 on the corner arcs, where the antialiased coverage takes a
+ * second rounding. Worth its own story because `mask-image` is what people reach for
+ * after opacity disappoints — and because a *gradient* mask genuinely is fine, which is
+ * what makes the flat one plausible.
  */
 export const UniformAlphaMask: Story = {
   name: 'uniform-alpha mask',

@@ -24,7 +24,7 @@ export const FADE_MODE_NOTE: Record<FadeMode, string> = {
   'layer-opacity':
     'The defect. 1 − α of the backdrop survives at full sharpness on top of a washed copy of the frost, so the surface reads as dirty rather than as less frosted. The hairline and the corner wash out with it.',
   'mask-alpha':
-    'Identical to opacity, pixel for pixel. Mask alpha decides where the material is, not how much of it there is — which is why a narrow gradient band reads fine and a flat 50% does not.',
+    'The same operation as opacity, not a workaround: both scale the finished layer’s alpha and composite it over the unprocessed backdrop. Measured, the two frames differ on 0.14% of pixels, all of them inside the panel and 93% of them by a single 8-bit step — a mask is a quantised image where opacity is a float. Mask alpha decides where the material is, not how much of it there is, which is why a narrow gradient band reads fine and a flat 50% does not.',
   material:
     'Ship this. Every frame is real frost, just less of it. Note the radius saturates early — past the backdrop’s detail scale more radius changes nothing, so the tint carries the perceived ramp.',
 };
