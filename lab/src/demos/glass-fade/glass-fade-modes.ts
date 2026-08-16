@@ -22,7 +22,7 @@ export const FADE_MODE_NOTE: Record<FadeMode, string> = {
   'ancestor-opacity':
     'The worst of the four, and only broken mid-way: at any α below 1 the wrapper forms a backdrop root, so the blur has only the wrapper’s own (empty) content to sample and stops blurring entirely. At α = 1 it is correct again.',
   'layer-opacity':
-    'The defect. 1 − α of the backdrop survives at full sharpness on top of a washed copy of the frost, so the surface reads as dirty rather than as less frosted. The hairline and the corner wash out with it.',
+    'The defect. 1 − α of the backdrop survives at full sharpness on top of a washed copy of the frost, so the surface reads as dirty rather than as less frosted. The hairline and the corner wash out with it. Switch the backdrop to flat and none of it is visible — blurring a solid colour is a no-op, so there is no detail left to survive the blend. That is how this passes review and then falls apart over a photo.',
   'mask-alpha':
     'The same operation as opacity, not a workaround: both scale the finished layer’s alpha and composite it over the unprocessed backdrop. Measured, the two frames differ on 0.14% of pixels, all of them inside the panel and 93% of them by a single 8-bit step — a mask is a quantised image where opacity is a float. Mask alpha decides where the material is, not how much of it there is, which is why a narrow gradient band reads fine and a flat 50% does not.',
   material:

@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import type { CSSProperties, FC, ReactNode } from 'react';
+import type { CSSProperties, FC } from 'react';
 
 import {
   BACKDROP_STYLE,
@@ -54,23 +54,32 @@ export interface GlassFadeOptions {
   backdrop: BackdropKind;
   /** Blur radius of the material at full strength. */
   blurPx: number;
-  /** Tint alpha of the material at full strength. */
-  tintAlpha: number;
+  /**
+   * The material's tint at full strength, alpha included — the colour it is meant to
+   * settle on, not a starting point. Ramping scales this colour's own alpha, so a dark
+   * glass is one value away.
+   */
+  tint: string;
 }
 
-function panelStyle({ blurPx, mode, progress, tintAlpha }: GlassFadeOptions): CSSProperties {
+function panelStyle({ blurPx, mode, progress, tint }: GlassFadeOptions): CSSProperties {
   // Only `material` ramps the material itself. Every other mode holds it at full
   // strength and fades or masks the finished surface.
   const strength = mode === 'material' ? progress : 1;
   const radius = blurPx * strength;
+  // Relative colour syntax, so the tint can be given as any colour and the ramp still
+  // has its alpha to scale. The hairline is the same colour at twice the alpha, which
+  // keeps it a property of the material rather than a hard-coded white that would be
+  // wrong the moment the tint is dark.
+  const atStrength = (scale: number) => `rgb(from ${tint} r g b / calc(alpha * ${(strength * scale).toFixed(3)}))`;
 
   return {
     // `blur(0px)` is still a filter — it keeps the compositing layer and the
     // backdrop root alive. Only `none` releases them, which is what a real
     // transition should settle to at rest.
     backdropFilter: radius === 0 ? 'none' : `blur(${radius.toFixed(2)}px)`,
-    backgroundColor: `rgb(255 255 255 / ${(tintAlpha * strength).toFixed(3)})`,
-    boxShadow: `inset 0 0 0 1px rgb(255 255 255 / ${(0.35 * strength).toFixed(3)})`,
+    backgroundColor: atStrength(1),
+    boxShadow: `inset 0 0 0 1px ${atStrength(2)}`,
     maskImage:
       mode === 'mask-alpha' ? `linear-gradient(rgb(0 0 0 / ${progress}), rgb(0 0 0 / ${progress}))` : undefined,
     opacity: mode === 'layer-opacity' ? progress : 1,
@@ -91,11 +100,7 @@ const Panel: FC<GlassFadeOptions & { label: string }> = ({ label, ...options }) 
   </div>
 );
 
-export const GlassFadeStage: FC<GlassFadeOptions & { className?: string; caption?: ReactNode }> = ({
-  caption,
-  className,
-  ...options
-}) => {
+export const GlassFadeStage: FC<GlassFadeOptions & { className?: string }> = ({ className, ...options }) => {
   const { backdrop, mode, progress } = options;
   const panel = <Panel {...options} label={`${Math.round(progress * 100)}%`} />;
 
@@ -116,52 +121,23 @@ export const GlassFadeStage: FC<GlassFadeOptions & { className?: string; caption
         )}
       </div>
       <figcaption className={CAPTION}>
-        {caption ?? (
-          <>
-            <span className="font-semibold text-neutral-700 dark:text-neutral-200">{FADE_MODE_TITLE[mode]}</span>{' '}
-            {FADE_MODE_NOTE[mode]}
-          </>
-        )}
+        <span className="font-semibold text-neutral-700 dark:text-neutral-200">{FADE_MODE_TITLE[mode]}</span>{' '}
+        {FADE_MODE_NOTE[mode]}
       </figcaption>
     </figure>
   );
 };
 
 /**
- * The composed view, because α = 0.5 is only damning next to the modes that get
- * it right at the same α. Every panel here is the same material over the same
- * backdrop, half-way in.
- *
- * The last cell is the defect again over a flat backdrop, hard-coded rather than
- * taken from args: the argument this board makes is incomplete without the case
- * where none of it is visible.
+ * The composed view, because α = 0.5 is only damning next to the mode that gets it
+ * right at the same α. Every panel here is the same material over the same backdrop,
+ * half-way in — the only thing that differs between cells is which property the α is
+ * hung on.
  */
-export const GlassFadeComparison: FC<Omit<GlassFadeOptions, 'mode'> & { children?: ReactNode }> = ({
-  children,
-  ...options
-}) => (
-  <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-    {children}
-    <div className="grid gap-6 lg:grid-cols-2">
-      {FADE_MODES.map((mode) => (
-        <GlassFadeStage {...options} className="max-w-none" key={mode} mode={mode} />
-      ))}
-      <GlassFadeStage
-        {...options}
-        backdrop="flat"
-        caption={
-          <>
-            <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-              the defect again, over a flat backdrop
-            </span>{' '}
-            Undetectable — blurring a solid colour is a no-op, so there is no detail left to survive the blend. Most
-            glass sits over something flat enough to hide this, which is how an opacity fade passes review and then
-            falls apart over a photo.
-          </>
-        }
-        className="max-w-none"
-        mode="layer-opacity"
-      />
-    </div>
+export const GlassFadeComparison: FC<Omit<GlassFadeOptions, 'mode'>> = (options) => (
+  <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-2">
+    {FADE_MODES.map((mode) => (
+      <GlassFadeStage {...options} className="max-w-none" key={mode} mode={mode} />
+    ))}
   </div>
 );

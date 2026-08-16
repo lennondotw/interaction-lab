@@ -31,9 +31,11 @@ const meta = {
     blurPx: { control: { max: 48, min: 0, step: 1, type: 'range' } },
     mode: { control: 'select', options: FADE_MODES },
     progress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
-    tintAlpha: { control: { max: 0.6, min: 0, step: 0.01, type: 'range' } },
+    // A colour, not an alpha: the whole tint is the parameter, so a dark glass over
+    // light copy is reachable without touching the component.
+    tint: { control: 'color' },
   },
-  args: { backdrop: 'text', blurPx: 20, progress: 0.5, tintAlpha: 0.18 },
+  args: { backdrop: 'text', blurPx: 20, progress: 0.5, tint: 'rgb(255 255 255 / 0.18)' },
   render: (args) => (
     <div className="flex min-h-screen w-full items-center justify-center px-2">
       <GlassFadeStage {...args} />
@@ -101,5 +103,5 @@ export const MaterialStrength: Story = {
 export const AllModes: StoryObj<typeof GlassFadeComparison> = {
   name: 'all four at α = 0.5',
   parameters: { controls: { disable: true } },
-  render: () => <GlassFadeComparison backdrop="text" blurPx={20} progress={0.5} tintAlpha={0.18} />,
+  render: () => <GlassFadeComparison backdrop="text" blurPx={20} progress={0.5} tint="rgb(255 255 255 / 0.18)" />,
 };
