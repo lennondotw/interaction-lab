@@ -53,7 +53,21 @@ const meta = {
     tintAlphaProgress: { control: false },
     tintAlphaTarget: { control: { max: 0.6, min: 0, step: 0.01, type: 'range' } },
   },
-  args: { backdrop: 'text', blurPx: 20, progress: 0.5, tint: '#ffffff', tintAlphaTarget: 0.18 },
+  /*
+   * `mapping` and `timing` are spelled out rather than left to the component's defaults, so the
+   * radios show what is actually applied instead of showing nothing selected. Unmapped and
+   * constant-rate is the default everywhere: the material's own response curve first, the
+   * corrections in the stories that say so in their names.
+   */
+  args: {
+    backdrop: 'text',
+    blurPx: 20,
+    mapping: 'linear',
+    progress: 0.5,
+    timing: 'linear',
+    tint: '#ffffff',
+    tintAlphaTarget: 0.18,
+  },
   /*
    * `useArgs` is a Storybook hook, not a React one: its context is only live while the
    * story function runs, so it has to be called in `render` itself. Moving it into a
@@ -151,6 +165,53 @@ export const MaterialStrength: Story = {
 export const MaterialStrengthTogether: Story = {
   name: 'material strength · one progress',
   args: { mode: 'material' },
+};
+
+/*
+ * The two mapped scrubs below. Every story above this point is unmapped — α drives the axes
+ * directly — which is the right default: it shows what the material's own response curve is,
+ * and that curve is the thing being complained about. These two put the correction in without a
+ * time axis, which is the only way to inspect it a value at a time rather than as a feeling.
+ */
+
+/**
+ * The split scrub with the mapping on, which is the most direct way to see what it does: hold
+ * `tint alpha` wherever you like and sweep `blur radius`, and the radius follows α^γ rather than
+ * α — 0.5 buys a quarter of the radius, not half. The sliders stay in α on purpose; only the
+ * material is mapped, so what the slider says is still comparable with the unmapped story.
+ *
+ * `content` is mapped too, at γ = 1, which is to say not at all. Same for the tint. Measured,
+ * neither needs it; the radius is the only axis whose perceived rate is not already even.
+ */
+export const MaterialStrengthMapped: Story = {
+  name: 'material strength, mapped α',
+  args: {
+    blurGamma: 2,
+    blurRadiusProgress: 0.5,
+    contentProgress: 0.5,
+    mapping: 'perceptual',
+    mode: 'material',
+    tintAlphaProgress: 0.5,
+  },
+  argTypes: {
+    blurGamma: { control: { max: 4, min: 1, step: 0.1, type: 'range' } },
+    blurRadiusProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
+    contentProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
+    progress: { control: false },
+    tintAlphaProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
+  },
+};
+
+/**
+ * One knob, mapped — the scrubbable twin of the interactive stories, and the one to park on when
+ * choosing `blurGamma`. Drag α slowly with the copy behind the panel: the question the γ answers
+ * is whether equal drags of the slider feel like equal amounts of frost arriving, and a slider
+ * lets you go back and forth over the same tenth, which a 400ms transition does not.
+ */
+export const MaterialStrengthTogetherMapped: Story = {
+  name: 'material strength · one progress, mapped α',
+  args: { blurGamma: 2, mapping: 'perceptual', mode: 'material' },
+  argTypes: { blurGamma: { control: { max: 4, min: 1, step: 0.1, type: 'range' } } },
 };
 
 /*
