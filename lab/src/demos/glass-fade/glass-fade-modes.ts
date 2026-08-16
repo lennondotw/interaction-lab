@@ -52,9 +52,10 @@ const LOREM_SOURCE =
 
 /**
  * One unbroken paragraph — a texture, not a document, so no paragraph break ever
- * lands behind the panel as a band of blank backdrop. Doubled, because the 80px of
- * side overscan makes the measure wide enough that one pass no longer reaches the
- * bottom of the stage, and blank backdrop under the panel is backdrop the frost
- * cannot be judged against.
+ * lands behind the panel as a band of blank backdrop. Repeated four times, because
+ * the 80px of side overscan makes the measure wide enough that a single pass falls
+ * well short of the bottom of the stage, and blank backdrop under the panel is
+ * backdrop the frost cannot be judged against. Overshooting costs nothing: the
+ * surplus is clipped, and the stage is narrower in a one-column layout.
  */
-export const LOREM = `${LOREM_SOURCE} ${LOREM_SOURCE}`;
+export const LOREM = Array.from({ length: 4 }, () => LOREM_SOURCE).join(' ');

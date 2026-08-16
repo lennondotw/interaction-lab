@@ -27,7 +27,7 @@ import {
  * to hold up against real content rather than against a test chart. A hairline in
  * the canvas's own ink at low alpha is the whole edge treatment.
  *
- * `overflow-clip` plus overscan — 80px at the sides, 20px on top — is what keeps the
+ * `overflow-clip` plus overscan — 80px at the sides, 24px on top — is what keeps the
  * copy reading as an infinite page: the block's first line, left margin and ragged
  * right are all outside the frame, so every edge of the backdrop is a cut through a
  * glyph rather than the end of a paragraph. The sides get much more than the top
@@ -40,7 +40,7 @@ import {
  * free — it forms nothing.
  */
 const PLATE = 'relative h-56 w-full overflow-clip border border-black/15 dark:border-white/20';
-const BACKDROP_LAYER = 'pointer-events-none absolute -inset-x-20 -top-5 bottom-0 select-none';
+const BACKDROP_LAYER = 'pointer-events-none absolute -inset-x-20 -top-6 bottom-0 select-none';
 const BACKDROP_TEXT = 'text-[11px] leading-[1.45] text-black/75 dark:text-white/75';
 const PANEL = 'absolute inset-x-8 inset-y-9 grid place-items-center rounded-2xl';
 const CHIP = 'rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white';
