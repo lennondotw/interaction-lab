@@ -21,19 +21,39 @@ import {
  */
 
 /*
- * Square corners and a two-tone 1px + 1px frame: the stage is an instrument, not a card.
- * The stripes reach both #f5f5f5 and #0a0a0a, so a single-colour frame is always
- * the same ink as one of the stripes it is supposed to bound — hence one ring of
- * each, the inner one matching the canvas and the outer one opposing it, so the
- * edge holds against either stripe and against either theme's page.
+ * A substrate opposing the page — black on a light canvas, white on a dark one —
+ * with one mid-grey keyline, and the stripes dissolving into it at all four edges.
+ * The stripes reach both #0a0a0a and #f5f5f5, so any ink frame drawn against them is
+ * the same ink as one of the stripes it is meant to bound; letting them fall off
+ * into the substrate bounds both without competing with either. The keyline is one
+ * grey rather than two, since a mid grey is the only ink that reads against black
+ * plate, white plate, and both canvases.
  *
- * `border` for the inner ring and `outline` for the outer: the border is inside
- * the box and the outline outside it with no offset, so the two are contiguous and
- * only the border participates in the box. A radius here would also put a second,
- * unrelated curve beside the panel's — and the panel's corner is what the demo is
- * asking you to look at.
+ * The mask goes on a layer that only paints. It is a **sibling** of the glass, not
+ * an ancestor of it: `mask-image` on an ancestor would make that ancestor a backdrop
+ * root and the demo would be doing in its own chrome the thing the third cell is
+ * about. Painted as a sibling it is simply part of the backdrop, which is what the
+ * glass is supposed to sample — including the white it fades into.
  */
-const STAGE = 'relative h-56 w-full border border-white outline outline-black dark:border-black dark:outline-white';
+const PLATE = 'relative h-56 w-full border border-neutral-500 bg-black dark:bg-white';
+const BACKDROP_LAYER = 'absolute inset-0';
+
+/*
+ * The fade bands stay narrower than the panel's own inset (32px / 36px), so the
+ * stripes are at full amplitude everywhere the panel's blur reaches. A band wide
+ * enough to look generous would put a brightness ramp under the panel's edge —
+ * exactly where the artefact this board is about shows up.
+ *
+ * `mask-composite: intersect` is what makes two one-axis gradients into a four-edge
+ * mask; Chromium only, like the rest of the numbers here.
+ */
+const BACKDROP_MASK = {
+  maskComposite: 'intersect',
+  maskImage: [
+    'linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent)',
+    'linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 20px), transparent)',
+  ].join(', '),
+} satisfies CSSProperties;
 const PANEL = 'absolute inset-x-8 inset-y-9 grid place-items-center rounded-2xl';
 const CHIP = 'rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white';
 const CAPTION = 'text-xs leading-relaxed text-neutral-500 dark:text-neutral-400';
@@ -93,7 +113,8 @@ export const GlassFadeStage: FC<GlassFadeOptions & { className?: string; caption
 
   return (
     <figure className={cn('flex w-full max-w-xl flex-col gap-2', className)}>
-      <div className={STAGE} style={{ background: BACKDROP_STYLE[backdrop] }}>
+      <div className={PLATE}>
+        <div className={BACKDROP_LAYER} style={{ background: BACKDROP_STYLE[backdrop], ...BACKDROP_MASK }} />
         {mode === 'ancestor-opacity' ? (
           // A wrapper holding nothing but the glass — the shape `AnimatePresence`
           // produces when a motion element is given the fade instead of the card.
