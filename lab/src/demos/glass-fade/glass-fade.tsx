@@ -39,7 +39,7 @@ export interface GlassFadeOptions {
 
 function panelStyle({ blurPx, mode, progress, tintAlpha }: GlassFadeOptions): CSSProperties {
   // Only `material` ramps the material itself. Every other mode holds it at full
-  // strength and fades, masks, or moves the finished surface.
+  // strength and fades or masks the finished surface.
   const strength = mode === 'material' ? progress : 1;
   const radius = blurPx * strength;
 
@@ -53,7 +53,6 @@ function panelStyle({ blurPx, mode, progress, tintAlpha }: GlassFadeOptions): CS
     maskImage:
       mode === 'mask-alpha' ? `linear-gradient(rgb(0 0 0 / ${progress}), rgb(0 0 0 / ${progress}))` : undefined,
     opacity: mode === 'layer-opacity' ? progress : 1,
-    transform: mode === 'geometry' ? `translateY(${((1 - progress) * 145).toFixed(1)}%)` : undefined,
   };
 }
 
@@ -109,7 +108,7 @@ export const GlassFadeStage: FC<GlassFadeOptions & { className?: string; caption
  * it right at the same α. Every panel here is the same material over the same
  * backdrop, half-way in.
  *
- * The sixth cell is the defect again over a flat backdrop, hard-coded rather than
+ * The last cell is the defect again over a flat backdrop, hard-coded rather than
  * taken from args: the argument this board makes is incomplete without the case
  * where none of it is visible.
  */

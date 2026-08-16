@@ -78,11 +78,11 @@ export const AncestorOpacity: Story = {
 };
 
 /**
- * The fix for a surface that has to materialise in place: `opacity` untouched,
- * blur radius and tint alpha ramping together. Stripes stay flat grey at every
- * value. Two things to notice — the radius saturates early, so above roughly 0.3
- * the tint alone carries the ramp; and the label needs its own opacity, because
- * nothing is fading the layer for it any more.
+ * The fix: `opacity` untouched, blur radius and tint alpha ramping together.
+ * Stripes stay flat grey at every value. Two things to notice — the radius
+ * saturates early, so above roughly 0.3 the tint alone carries the ramp; and the
+ * label needs its own opacity, because nothing is fading the layer for it any
+ * more.
  */
 export const MaterialStrength: Story = {
   name: 'material strength',
@@ -90,22 +90,11 @@ export const MaterialStrength: Story = {
 };
 
 /**
- * The fix to prefer. The material is at full strength the whole way and only its
- * position changes, which is what a native sheet does — and the only mode here
- * with a physical analogue. Nothing to get wrong, and nothing to re-blur per
- * frame either.
- */
-export const Geometry: Story = {
-  name: 'geometry',
-  args: { mode: 'geometry' },
-};
-
-/**
- * All five at the same α, because 0.5 is only damning beside the modes that get it
+ * All four at the same α, because 0.5 is only damning beside the mode that gets it
  * right there. Controls are off: this story hard-codes the α it is about.
  */
 export const AllModes: StoryObj<typeof GlassFadeComparison> = {
-  name: 'all five at α = 0.5',
+  name: 'all four at α = 0.5',
   parameters: { controls: { disable: true } },
   render: () => <GlassFadeComparison backdrop="stripes" blurPx={20} progress={0.5} tintAlpha={0.18} />,
 };
