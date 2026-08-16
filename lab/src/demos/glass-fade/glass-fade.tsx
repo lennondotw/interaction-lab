@@ -66,19 +66,31 @@ export interface GlassFadeOptions {
    */
   tintAlphaTarget: number;
   /**
-   * Where along each ramp the material currently is. Left out — which is every mode but
-   * `material` — the material is simply at full strength; `material` is the one mode
-   * whose fade *is* these two, so there they follow `progress` unless split apart.
+   * Where along each ramp the surface currently is. Left out — which is every mode but
+   * `material` — the material is simply at full strength; `material` is the one mode whose
+   * fade *is* these, so there they follow `progress` unless split apart.
+   *
+   * `contentProgress` is a third axis rather than a consequence of the tint, because in
+   * production the content's own fade is its own curve — usually trailing the material,
+   * sometimes not fading at all. The other modes cannot have it: fading the finished layer
+   * takes the content with it, which is part of why they are wrong.
    */
   blurRadiusProgress?: number;
   tintAlphaProgress?: number;
+  contentProgress?: number;
 }
 
 /** Full strength, unless this is the mode that expresses its fade by ramping the material. */
-function materialProgress({ blurRadiusProgress, mode, progress, tintAlphaProgress }: GlassFadeOptions) {
-  const both = mode === 'material' ? progress : 1;
+function materialProgress({
+  blurRadiusProgress,
+  contentProgress,
+  mode,
+  progress,
+  tintAlphaProgress,
+}: GlassFadeOptions) {
+  const all = mode === 'material' ? progress : 1;
 
-  return { blur: blurRadiusProgress ?? both, tint: tintAlphaProgress ?? both };
+  return { blur: blurRadiusProgress ?? all, content: contentProgress ?? all, tint: tintAlphaProgress ?? all };
 }
 
 function panelStyle(options: GlassFadeOptions): CSSProperties {
@@ -116,13 +128,10 @@ function panelStyle(options: GlassFadeOptions): CSSProperties {
  * cannot reach the parent's backdrop. Fading the content while the material
  * ramps is the legitimate use of opacity here, and `material` is the only mode
  * that has to do it by hand — the others drag the label along with the layer.
- *
- * It follows the tint rather than the radius, because the tint is what reads as the
- * material being there; content over a blur with no tint still needs to be legible.
  */
 const Panel: FC<GlassFadeOptions & { label: string }> = ({ label, ...options }) => (
   <div className={PANEL} style={panelStyle(options)}>
-    <span className={CHIP} style={{ opacity: options.mode === 'material' ? materialProgress(options).tint : 1 }}>
+    <span className={CHIP} style={{ opacity: options.mode === 'material' ? materialProgress(options).content : 1 }}>
       {label}
     </span>
   </div>
@@ -158,7 +167,9 @@ function useScrub(options: GlassFadeOptions, commit?: (patch: Partial<GlassFadeO
   const [patch, setPatch] = useState<Partial<GlassFadeOptions> | null>(null);
   // Only the scrubbable values, joined, because `options` is a fresh object every render
   // and identity cannot answer "did the committed value change".
-  const committed = `${options.progress}/${options.blurRadiusProgress ?? ''}/${options.tintAlphaProgress ?? ''}`;
+  const committed = [options.progress, options.blurRadiusProgress, options.tintAlphaProgress, options.contentProgress]
+    .map((value) => value ?? '')
+    .join('/');
   const [seen, setSeen] = useState(committed);
 
   if (seen !== committed) {
@@ -212,11 +223,12 @@ export const GlassFadeStage: FC<
   const scrub = useScrub(options, onOptionsChange);
   // Everything below reads the live values, so a drag is visible immediately; only the
   // commit waits for release.
-  const { backdrop, blurRadiusProgress, mode, progress, tintAlphaProgress } = scrub.live;
+  const { backdrop, blurRadiusProgress, contentProgress, mode, progress, tintAlphaProgress } = scrub.live;
   const at = materialProgress(scrub.live);
-  const split = blurRadiusProgress !== undefined || tintAlphaProgress !== undefined;
-  // Label what is actually driving this cell, so the number never reports a slider the
-  // mode ignores — and in the split case, the axis whose slider is not the radius.
+  const split = blurRadiusProgress !== undefined || contentProgress !== undefined || tintAlphaProgress !== undefined;
+  // Label what is actually driving this cell, so the number never reports a slider the mode
+  // ignores. Split apart there is no single number, so it reports the tint — the axis that
+  // reads as the material being there, and the one the label is sitting on.
   const shown = split ? at.tint : progress;
   const panel = <Panel {...scrub.live} label={`${Math.round(shown * 100)}%`} />;
 
@@ -254,6 +266,12 @@ export const GlassFadeStage: FC<
                 onInput={(tintAlphaProgress) => scrub.onInput({ tintAlphaProgress })}
                 onRelease={scrub.onRelease}
                 value={at.tint}
+              />
+              <ProgressSlider
+                label="content"
+                onInput={(contentProgress) => scrub.onInput({ contentProgress })}
+                onRelease={scrub.onRelease}
+                value={at.content}
               />
             </>
           ) : (

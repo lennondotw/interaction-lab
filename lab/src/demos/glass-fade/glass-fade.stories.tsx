@@ -109,20 +109,25 @@ export const AncestorOpacity: Story = {
  * The fix: `opacity` untouched, blur radius and tint alpha ramping together. The copy
  * stays unreadable at every value.
  *
- * The only story with two sliders, because it is the only mode whose fade *is* the ramp,
- * and the two halves of that ramp are worth separating. Drag `tint alpha` to 0 and sweep
- * `blur radius`: past roughly a third the copy is already illegible and more radius
- * changes nothing, which is what "the radius saturates early" means — from there on the
- * tint carries the whole perceived ramp. `progress` is off here; these two are it.
+ * The only story that takes the ramp apart, because it is the only mode whose fade *is*
+ * the ramp. Three axes, each worth a look on its own:
  *
- * Note also that the label needs its own opacity, because nothing is fading the layer for
- * it any more.
+ *  - `tint alpha` to 0, then sweep `blur radius` — past roughly a third the copy is
+ *    already illegible and more radius changes nothing. That is what "the radius saturates
+ *    early" means: from there on the tint carries the whole perceived ramp.
+ *  - `content` to 1 with the other two at 0 — the label hangs in mid-air with no surface
+ *    under it, which is what happens when the content's fade is forgotten.
+ *  - `content` to 0 with the material up — the surface arrives empty, which is the
+ *    trailing-content shape most transitions actually want.
+ *
+ * `progress` is off here; these three are it.
  */
 export const MaterialStrength: Story = {
   name: 'material strength',
-  args: { blurRadiusProgress: 0.5, mode: 'material', tintAlphaProgress: 0.5 },
+  args: { blurRadiusProgress: 0.5, contentProgress: 0.5, mode: 'material', tintAlphaProgress: 0.5 },
   argTypes: {
     blurRadiusProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
+    contentProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
     progress: { control: false },
     tintAlphaProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
   },
@@ -130,11 +135,11 @@ export const MaterialStrength: Story = {
 
 /**
  * The same material on one knob, which is what a real transition has: a single timeline
- * spending its α on both axes at once. Worth its own story rather than a mode of the one
- * above, because this is the shape to copy and the split pair is only an instrument for
- * understanding what the two halves contribute.
+ * spending its α on radius, tint and content at once. Worth its own story rather than a
+ * mode of the one above, because this is the shape to copy and the three axes are only an
+ * instrument for understanding what each contributes.
  *
- * Nothing switches it: not supplying the two axes *is* the merged case, so both fall back
+ * Nothing switches it: not supplying the axes *is* the bound case, so all three fall back
  * to `progress`.
  */
 export const MaterialStrengthTogether: Story = {
