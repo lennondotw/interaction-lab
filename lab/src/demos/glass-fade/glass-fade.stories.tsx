@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useArgs } from 'storybook/preview-api';
 
 import { BACKDROP_KINDS, FADE_MODES } from './glass-fade-modes.js';
 import { GlassFadeComparison, GlassFadeStage } from './glass-fade.js';
@@ -13,9 +14,14 @@ import { GlassFadeComparison, GlassFadeStage } from './glass-fade.js';
  * ```
  *
  * So a half-transparent glass layer is not half-frosted, it is a double exposure.
- * Each story drives the same 0 → 1 through a different property; scrub `progress`
- * and try to read the copy through the panel. You should not be able to, at any
- * value.
+ * Each story drives the same 0 → 1 through a different property; scrub it — in the page
+ * or in Controls, they are the same value — and try to read the copy through the panel.
+ * You should not be able to, at any value.
+ *
+ * `blurPx` and `tintAlphaTarget` are where each ramp *ends*; the sliders are where along
+ * it the material currently is. Only `material strength` splits them in two, because it
+ * is the only mode whose fade is the ramp itself; the others have a single α, and giving
+ * them two knobs would mean two knobs that cannot disagree.
  *
  * Keep `backdrop` on `text` while judging: a legible word inside the panel is proof
  * the frost is not working, and it needs no calibration to see. `flat` is there to
@@ -29,18 +35,33 @@ const meta = {
   argTypes: {
     backdrop: { control: 'inline-radio', options: BACKDROP_KINDS },
     blurPx: { control: { max: 48, min: 0, step: 1, type: 'range' } },
+    // Off by default, and re-enabled by the one story that reads them. A knob that does
+    // nothing is worse than no knob, and in every other mode the material is simply done.
+    blurRadiusProgress: { control: false },
     mode: { control: 'select', options: FADE_MODES },
     progress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
-    // A colour, not an alpha: the whole tint is the parameter, so a dark glass over
-    // light copy is reachable without touching the component.
+    // Colour and alpha as two controls: a dark glass is reachable without touching the
+    // component, and the alpha stays a slider, which is how you find the value where
+    // the tint stops carrying the ramp.
     tint: { control: 'color' },
+    tintAlphaProgress: { control: false },
+    tintAlphaTarget: { control: { max: 0.6, min: 0, step: 0.01, type: 'range' } },
   },
-  args: { backdrop: 'text', blurPx: 20, progress: 0.5, tint: 'rgb(255 255 255 / 0.18)' },
-  render: (args) => (
-    <div className="flex min-h-screen w-full items-center justify-center px-2">
-      <GlassFadeStage {...args} />
-    </div>
-  ),
+  args: { backdrop: 'text', blurPx: 20, progress: 0.5, tint: '#ffffff', tintAlphaTarget: 0.18 },
+  /*
+   * `useArgs` is a Storybook hook, not a React one: its context is only live while the
+   * story function runs, so it has to be called in `render` itself. Moving it into a
+   * component throws "Rendered more hooks than during the previous render".
+   */
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center px-2">
+        <GlassFadeStage {...args} onOptionsChange={updateArgs} />
+      </div>
+    );
+  },
 } satisfies Meta<typeof GlassFadeStage>;
 
 export default meta;
@@ -85,15 +106,26 @@ export const AncestorOpacity: Story = {
 };
 
 /**
- * The fix: `opacity` untouched, blur radius and tint alpha ramping together.
- * The copy stays unreadable at every value. Two things to notice — the radius
- * saturates early, so above roughly 0.3 the tint alone carries the ramp; and the
- * label needs its own opacity, because nothing is fading the layer for it any
- * more.
+ * The fix: `opacity` untouched, blur radius and tint alpha ramping together. The copy
+ * stays unreadable at every value.
+ *
+ * The only story with two sliders, because it is the only mode whose fade *is* the ramp,
+ * and the two halves of that ramp are worth separating. Drag `tint alpha` to 0 and sweep
+ * `blur radius`: past roughly a third the copy is already illegible and more radius
+ * changes nothing, which is what "the radius saturates early" means — from there on the
+ * tint carries the whole perceived ramp. `progress` is off here; these two are it.
+ *
+ * Note also that the label needs its own opacity, because nothing is fading the layer for
+ * it any more.
  */
 export const MaterialStrength: Story = {
   name: 'material strength',
-  args: { mode: 'material' },
+  args: { blurRadiusProgress: 0.5, mode: 'material', tintAlphaProgress: 0.5 },
+  argTypes: {
+    blurRadiusProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
+    progress: { control: false },
+    tintAlphaProgress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
+  },
 };
 
 /**
@@ -103,5 +135,7 @@ export const MaterialStrength: Story = {
 export const AllModes: StoryObj<typeof GlassFadeComparison> = {
   name: 'all four at α = 0.5',
   parameters: { controls: { disable: true } },
-  render: () => <GlassFadeComparison backdrop="text" blurPx={20} progress={0.5} tint="rgb(255 255 255 / 0.18)" />,
+  render: () => (
+    <GlassFadeComparison backdrop="text" blurPx={20} progress={0.5} tint="#ffffff" tintAlphaTarget={0.18} />
+  ),
 };

@@ -47,39 +47,64 @@ const CHIP = 'rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white
 const CAPTION = 'text-xs leading-relaxed text-neutral-500 dark:text-neutral-400';
 
 export interface GlassFadeOptions {
-  /** Which property the 0 → 1 drives. */
+  /** Which property the fade's α is hung on. Does not touch what the material is. */
   mode: FadeMode;
-  /** How far along the appearance is. The interesting values are strictly between 0 and 1. */
+  /**
+   * The fade's α. Read by every mode except `material`, which has no separate α — moving
+   * the material *is* its fade, so there the two progresses below are the parameters.
+   */
   progress: number;
   backdrop: BackdropKind;
-  /** Blur radius of the material at full strength. */
+  /** Blur radius of the material at full strength — the end of the radius ramp. */
   blurPx: number;
-  /**
-   * The material's tint at full strength, alpha included — the colour it is meant to
-   * settle on, not a starting point. Ramping scales this colour's own alpha, so a dark
-   * glass is one value away.
-   */
+  /** The colour of the material's tint. A dark glass is one value away. */
   tint: string;
+  /**
+   * The tint's alpha at full strength — the end of the alpha ramp. Kept out of `tint` so
+   * it stays a slider rather than a page in a colour picker, and multiplied with whatever
+   * alpha `tint` carries, so neither control is dead.
+   */
+  tintAlphaTarget: number;
+  /**
+   * Where along each ramp the material currently is. Left out — which is every mode but
+   * `material` — the material is simply at full strength; `material` is the one mode
+   * whose fade *is* these two, so there they follow `progress` unless split apart.
+   */
+  blurRadiusProgress?: number;
+  tintAlphaProgress?: number;
 }
 
-function panelStyle({ blurPx, mode, progress, tint }: GlassFadeOptions): CSSProperties {
-  // Only `material` ramps the material itself. Every other mode holds it at full
-  // strength and fades or masks the finished surface.
-  const strength = mode === 'material' ? progress : 1;
-  const radius = blurPx * strength;
-  // Relative colour syntax, so the tint can be given as any colour and the ramp still
-  // has its alpha to scale. The hairline is the same colour at twice the alpha, which
-  // keeps it a property of the material rather than a hard-coded white that would be
-  // wrong the moment the tint is dark.
-  const atStrength = (scale: number) => `rgb(from ${tint} r g b / calc(alpha * ${(strength * scale).toFixed(3)}))`;
+/** Full strength, unless this is the mode that expresses its fade by ramping the material. */
+function materialProgress({ blurRadiusProgress, mode, progress, tintAlphaProgress }: GlassFadeOptions) {
+  const both = mode === 'material' ? progress : 1;
+
+  return { blur: blurRadiusProgress ?? both, tint: tintAlphaProgress ?? both };
+}
+
+function panelStyle(options: GlassFadeOptions): CSSProperties {
+  const { blurPx, mode, progress, tint, tintAlphaTarget } = options;
+  const at = materialProgress(options);
+  const radius = blurPx * at.blur;
+  /*
+   * Relative colour syntax rather than `color-mix(in srgb, tint x%, transparent)`, which
+   * would read better and does scale a colour's alpha correctly (mixing is premultiplied,
+   * so the hue survives). It loses on the hairline: mixing towards `transparent` can only
+   * ever move alpha *down* to the tint's own, and the hairline has to sit at twice it to
+   * stay visible at the alphas glass actually uses. `calc(alpha * k)` with k > 1 is the
+   * only one-expression way to say that, and mixing an opaque copy of the tint back in
+   * needs arithmetic on the tint's alpha to hit a target — which lands on `calc(alpha …)`
+   * again anyway.
+   */
+  const tintAt = (scale: number) =>
+    `rgb(from ${tint} r g b / calc(alpha * ${(tintAlphaTarget * at.tint * scale).toFixed(4)}))`;
 
   return {
     // `blur(0px)` is still a filter — it keeps the compositing layer and the
     // backdrop root alive. Only `none` releases them, which is what a real
     // transition should settle to at rest.
     backdropFilter: radius === 0 ? 'none' : `blur(${radius.toFixed(2)}px)`,
-    backgroundColor: atStrength(1),
-    boxShadow: `inset 0 0 0 1px ${atStrength(2)}`,
+    backgroundColor: tintAt(1),
+    boxShadow: `inset 0 0 0 1px ${tintAt(2)}`,
     maskImage:
       mode === 'mask-alpha' ? `linear-gradient(rgb(0 0 0 / ${progress}), rgb(0 0 0 / ${progress}))` : undefined,
     opacity: mode === 'layer-opacity' ? progress : 1,
@@ -91,18 +116,61 @@ function panelStyle({ blurPx, mode, progress, tint }: GlassFadeOptions): CSSProp
  * cannot reach the parent's backdrop. Fading the content while the material
  * ramps is the legitimate use of opacity here, and `material` is the only mode
  * that has to do it by hand — the others drag the label along with the layer.
+ *
+ * It follows the tint rather than the radius, because the tint is what reads as the
+ * material being there; content over a blur with no tint still needs to be legible.
  */
 const Panel: FC<GlassFadeOptions & { label: string }> = ({ label, ...options }) => (
   <div className={PANEL} style={panelStyle(options)}>
-    <span className={CHIP} style={{ opacity: options.mode === 'material' ? options.progress : 1 }}>
+    <span className={CHIP} style={{ opacity: options.mode === 'material' ? materialProgress(options).tint : 1 }}>
       {label}
     </span>
   </div>
 );
 
-export const GlassFadeStage: FC<GlassFadeOptions & { className?: string }> = ({ className, ...options }) => {
+/*
+ * The sliders sit in the page as well as in Controls, because the whole demo is a scrub
+ * and reaching for a panel to do it puts the pointer somewhere other than under the eye.
+ * They are controlled from args and write back through `onOptionsChange`, so the two are
+ * one value rather than two that drift — the pattern the JunctionSpacing board uses.
+ *
+ * Only progress-shaped values appear here. Which ones are live depends on the mode, so
+ * the row never shows a slider the mode ignores.
+ */
+const RANGE =
+  'h-1 w-full grow cursor-pointer appearance-none rounded-full bg-black/15 accent-black dark:bg-white/20 dark:accent-white';
+
+const ProgressSlider: FC<{ label: string; value: number; onChange: (value: number) => void }> = ({
+  label,
+  onChange,
+  value,
+}) => (
+  <label className="flex items-center gap-2 text-[11px] text-neutral-500 dark:text-neutral-400">
+    {/* Fixed widths on both the name and the readout: neither may resize as the value
+        changes, or dragging one slider nudges the other sideways. */}
+    <span className="w-24 shrink-0">{label}</span>
+    <input
+      className={RANGE}
+      max={1}
+      min={0}
+      onChange={(event) => onChange(event.target.valueAsNumber)}
+      step={0.01}
+      type="range"
+      value={value}
+    />
+    <span className="w-8 shrink-0 text-right tabular-nums">{value.toFixed(2)}</span>
+  </label>
+);
+
+export const GlassFadeStage: FC<
+  GlassFadeOptions & { className?: string; onOptionsChange?: (patch: Partial<GlassFadeOptions>) => void }
+> = ({ className, onOptionsChange, ...options }) => {
   const { backdrop, mode, progress } = options;
-  const panel = <Panel {...options} label={`${Math.round(progress * 100)}%`} />;
+  const at = materialProgress(options);
+  // Label what is actually driving this cell, so the number never reports a slider the
+  // mode ignores.
+  const shown = mode === 'material' ? at.tint : progress;
+  const panel = <Panel {...options} label={`${Math.round(shown * 100)}%`} />;
 
   return (
     <figure className={cn('flex w-full max-w-xl flex-col gap-2', className)}>
@@ -120,6 +188,26 @@ export const GlassFadeStage: FC<GlassFadeOptions & { className?: string }> = ({ 
           panel
         )}
       </div>
+      {onOptionsChange !== undefined && (
+        <div className="flex flex-col gap-1.5">
+          {mode === 'material' ? (
+            <>
+              <ProgressSlider
+                label="blur radius"
+                onChange={(blurRadiusProgress) => onOptionsChange({ blurRadiusProgress })}
+                value={at.blur}
+              />
+              <ProgressSlider
+                label="tint alpha"
+                onChange={(tintAlphaProgress) => onOptionsChange({ tintAlphaProgress })}
+                value={at.tint}
+              />
+            </>
+          ) : (
+            <ProgressSlider label="α" onChange={(next) => onOptionsChange({ progress: next })} value={progress} />
+          )}
+        </div>
+      )}
       <figcaption className={CAPTION}>
         <span className="font-semibold text-neutral-700 dark:text-neutral-200">{FADE_MODE_TITLE[mode]}</span>{' '}
         {FADE_MODE_NOTE[mode]}
@@ -130,13 +218,18 @@ export const GlassFadeStage: FC<GlassFadeOptions & { className?: string }> = ({ 
 
 /**
  * The composed view, because α = 0.5 is only damning next to the mode that gets it
- * right at the same α. Every panel here is the same material over the same backdrop,
- * half-way in — the only thing that differs between cells is which property the α is
- * hung on.
+ * right at the same α. One α drives every cell here: the three fade modes hang it on
+ * their own property over a full-strength material, and `material` spends it on both of
+ * its axes at once. Decoupling those two is what the material story's own sliders are
+ * for; on this board they would only make the cells incomparable.
  */
-export const GlassFadeComparison: FC<Omit<GlassFadeOptions, 'mode'>> = (options) => (
+export const GlassFadeComparison: FC<Omit<GlassFadeOptions, 'blurRadiusProgress' | 'mode' | 'tintAlphaProgress'>> = (
+  options
+) => (
   <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-2">
     {FADE_MODES.map((mode) => (
+      // Leaving both material progresses unset is what makes the cells comparable: each
+      // one then reads the single α, and no cell can be scrubbed away from the others.
       <GlassFadeStage {...options} className="max-w-none" key={mode} mode={mode} />
     ))}
   </div>
