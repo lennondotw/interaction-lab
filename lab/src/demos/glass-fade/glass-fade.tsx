@@ -1,5 +1,6 @@
 import { cn } from '@monorepo/utils';
-import { useState, type CSSProperties, type FC } from 'react';
+import { animate, useReducedMotion } from 'motion/react';
+import { useEffect, useRef, useState, type CSSProperties, type FC } from 'react';
 
 import {
   BACKDROP_STYLE,
@@ -69,18 +70,25 @@ export type Interaction = 'hover' | 'toggle';
  * So the tint stays linear — veiling removes backdrop contrast in proportion to (1 − α), so
  * detail loss already *is* linear in α — and only the radius is remapped.
  *
- * γ = 4 is a compromise, not a solution: perceived frostiness goes as roughly the log of the
- * radius (1px of blur already takes 65% of the way, 2px takes 82%), and no power law inverts
- * a log. Inverting the measured curve exactly would hold the radius under 1px until α ≈ 0.6
- * and then run 1 → 20px in the last third, which is perceptually even and reads as a surface
- * doing nothing and then snapping. The deeper finding is the one to take away: past about
- * 4px on this content, radius is nearly free of perceptual effect, so most of a 20px design
- * is spent where the eye cannot see it change.
+ * The metric's own optimum is γ = 4, and it is not shippable: 0.3⁴ of 20px is 0.16px, so the
+ * first third of the ramp is a visible dead zone. That is not the metric being wrong so much
+ * as the tension being real — perceived frostiness goes as roughly the log of the radius (1px
+ * of blur already takes 65% of the way, 2px takes 82%), so *any* mapping that evens out the
+ * perceived curve has to crawl through the low end. γ = 2 is where it stops reading as dead
+ * while still being about twice as even as linear, so that is the default; `blurGamma` is a
+ * control because where to sit on that trade is a judgement the numbers cannot settle.
+ *
+ * The finding worth keeping is the one underneath: past about 4px on this content, radius is
+ * nearly free of perceptual effect, so most of a 20px design is spent where the eye cannot
+ * see it change.
  */
-const PERCEPTUAL_EXPONENT = { blur: 4, content: 1, tint: 1 } as const;
+const PERCEPTUAL_EXPONENT = { blur: 2, content: 1, tint: 1 } as const;
 
 /** Whether α drives the axes directly, or through their measured perceptual rates. */
 export type Mapping = 'linear' | 'perceptual';
+
+/** Whether α itself moves at a constant rate over time, or is eased. */
+export type Timing = 'ease' | 'linear';
 
 export interface GlassFadeOptions {
   /** Which property the fade's α is hung on. Does not touch what the material is. */
@@ -116,11 +124,15 @@ export interface GlassFadeOptions {
   contentProgress?: number;
   /**
    * Whether the axes read α directly or through their measured perceptual rates. A separate
-   * layer from the transition's easing, and the two compose: this one says how much material
-   * a given α means, an ease would say when α gets there. Everything here keeps its easing
-   * linear so that the mapping is the only thing in play.
+   * layer from easing, and the order is fixed: time → ease → **α** → mapping → axis value.
+   * The ease decides *when* α gets somewhere; the mapping decides *how much material* being
+   * there means. Only the tint's rate is 1, so in practice this remaps the radius alone.
    */
   mapping?: Mapping;
+  /** The radius's perceptual exponent, exposed because the right value is a judgement. */
+  blurGamma?: number;
+  /** Whether the gesture's α is eased or runs at a constant rate. */
+  timing?: Timing;
 }
 
 /** Full strength, unless this is the mode that expresses its fade by ramping the material. */
@@ -141,44 +153,75 @@ function materialProgress({
  * readouts stay in α, because α is the parameter a designer thinks in and holds across
  * materials. Only the material sees the mapped values.
  */
-function mapped(at: { blur: number; content: number; tint: number }, mapping: Mapping) {
+function mapped(at: { blur: number; content: number; tint: number }, mapping: Mapping, blurGamma: number) {
   if (mapping === 'linear') {
     return at;
   }
 
   return {
-    blur: at.blur ** PERCEPTUAL_EXPONENT.blur,
+    blur: at.blur ** blurGamma,
     content: at.content ** PERCEPTUAL_EXPONENT.content,
     tint: at.tint ** PERCEPTUAL_EXPONENT.tint,
   };
 }
 
+const DURATION = 0.4;
 /*
- * Every property the material is made of is transitionable, so an interaction needs no
- * per-frame JavaScript at all: set the target and let the browser interpolate. That also
- * keeps the demo honest — this is the path a real transition takes.
+ * The stock "standard" curve, for the story that puts the easing layer back on. Worth naming
+ * accurately: it is not an ease-out. Measured frame by frame it is an S — α sits at 0 for the
+ * first two frames, reaches 0.35 by halfway, and decelerates into the end — so it *delays* the
+ * start rather than front-loading it, and stacks with the mapping's own slow low end.
  */
-const DURATION = 400;
-/*
- * Linear, deliberately. An ease is a second layer on top of the perceptual mapping, and an
- * ease-out — the sensible default for a real transition — front-loads change by itself, which
- * is indistinguishable from the front-loading the blur axis causes. Keeping the time linear is
- * what makes the mapping the only thing under test; a shipping transition would add the ease
- * back on top.
- */
-const EASE = 'linear';
-/*
- * Spelled out per property rather than as `a, b, c 400ms ease`: in the shorthand the
- * duration binds to the *last* item in the list only, so that form silently animates
- * `opacity` alone and leaves the material to jump.
- */
-const TRANSITION = ['backdrop-filter', 'background-color', 'box-shadow', 'opacity']
-  .map((property) => `${property} ${DURATION}ms ${EASE}`)
-  .join(', ');
+const EASE_STANDARD = [0.4, 0, 0.2, 1] as const;
 
-function panelStyle(options: GlassFadeOptions, animated: boolean): CSSProperties {
-  const { blurPx, mapping = 'linear', mode, progress, tint, tintAlphaTarget } = options;
-  const at = mapped(materialProgress(options), mapping);
+/*
+ * Every property the material is made of is transitionable, so the cheap way to animate this
+ * is to set the target and let the browser interpolate — no per-frame JavaScript at all. It
+ * is also the way that cannot express a perceptual mapping, and the reason is worth keeping:
+ * a transition interpolates the *endpoint values* of each property and never evaluates the α
+ * in between. Both endpoints are the same under any mapping — 0 and 1 map to 0 and 1 — so the
+ * mapping has nothing to act on and a transition-driven toggle silently ignores it.
+ *
+ * So α is driven here instead, one value per frame, and the two layers apply in order:
+ * ease shapes α over time, then the mapping turns α into material. The cost is a React render
+ * per frame, which for one panel over static copy is cheap; the alternative is transitioning a
+ * registered `@property` custom α and writing the mapping in CSS `pow()`, which buys back the
+ * frames but moves the mapping somewhere it cannot be measured from here.
+ */
+function useDrivenAlpha(target: number, timing: Timing, enabled: boolean) {
+  const [alpha, setAlpha] = useState(target);
+  // The animation starts from wherever the last one got to, so an interrupted gesture
+  // reverses from the current frame rather than snapping to an end.
+  const current = useRef(target);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    const controls = animate(current.current, target, {
+      duration: reduceMotion === true ? 0 : DURATION,
+      ease: timing === 'ease' ? [...EASE_STANDARD] : 'linear',
+      onUpdate: (value) => {
+        current.current = value;
+        setAlpha(value);
+      },
+    });
+
+    return () => controls.stop();
+  }, [enabled, reduceMotion, target, timing]);
+
+  return enabled ? alpha : target;
+}
+
+/** The material's axes after both layers, which is what every style below is built from. */
+function axesOf(options: GlassFadeOptions) {
+  return mapped(materialProgress(options), options.mapping ?? 'linear', options.blurGamma ?? PERCEPTUAL_EXPONENT.blur);
+}
+
+function panelStyle(options: GlassFadeOptions, driven: boolean): CSSProperties {
+  const { blurPx, mode, progress, tint, tintAlphaTarget } = options;
+  const at = axesOf(options);
   const radius = blurPx * at.blur;
   /*
    * Relative colour syntax rather than `color-mix(in srgb, tint x%, transparent)`, which
@@ -196,17 +239,16 @@ function panelStyle(options: GlassFadeOptions, animated: boolean): CSSProperties
   return {
     /*
      * `blur(0px)` is still a filter — it keeps the compositing layer and the backdrop root
-     * alive, and only `none` releases them. So `none` is right at rest and wrong mid-flight:
-     * `none` and a filter function do not interpolate, so a transition that touches it
-     * jumps. While animating, stay on `blur(0px)` and pay for the idle layer.
+     * alive, and only `none` releases them. So `none` is right at rest and wrong in flight:
+     * a gesture that lands on 0 should release the layer, but one passing through 0 should
+     * not create and destroy it per frame.
      */
-    backdropFilter: radius === 0 && !animated ? 'none' : `blur(${radius.toFixed(2)}px)`,
+    backdropFilter: radius === 0 && !driven ? 'none' : `blur(${radius.toFixed(2)}px)`,
     backgroundColor: tintAt(1),
     boxShadow: `inset 0 0 0 1px ${tintAt(2)}`,
     maskImage:
       mode === 'mask-alpha' ? `linear-gradient(rgb(0 0 0 / ${progress}), rgb(0 0 0 / ${progress}))` : undefined,
     opacity: mode === 'layer-opacity' ? progress : 1,
-    transition: animated ? TRANSITION : undefined,
   };
 }
 
@@ -216,16 +258,9 @@ function panelStyle(options: GlassFadeOptions, animated: boolean): CSSProperties
  * ramps is the legitimate use of opacity here, and `material` is the only mode
  * that has to do it by hand — the others drag the label along with the layer.
  */
-const Panel: FC<GlassFadeOptions & { label: string; animated: boolean }> = ({ animated, label, ...options }) => (
-  <div className={PANEL} style={panelStyle(options, animated)}>
-    <span
-      className={CHIP}
-      style={{
-        opacity:
-          options.mode === 'material' ? mapped(materialProgress(options), options.mapping ?? 'linear').content : 1,
-        transition: animated ? `opacity ${DURATION}ms ${EASE}` : undefined,
-      }}
-    >
+const Panel: FC<GlassFadeOptions & { label: string; driven: boolean }> = ({ driven, label, ...options }) => (
+  <div className={PANEL} style={panelStyle(options, driven)}>
+    <span className={CHIP} style={{ opacity: options.mode === 'material' ? axesOf(options).content : 1 }}>
       {label}
     </span>
   </div>
@@ -326,15 +361,18 @@ export const GlassFadeStage: FC<
   const [engaged, setEngaged] = useState(false);
   const scrub = useScrub(options, onOptionsChange);
   /*
-   * An interaction owns the α outright, overriding both the slider and the arg — which is
-   * why the two are hidden while one is attached. It overrides `progress` alone, and the
-   * three material axes then follow it through their own fallback, so a gesture drives the
-   * whole material without knowing the axes exist.
+   * An interaction owns the α outright, overriding both the slider and the arg — which is why
+   * the two are hidden while one is attached. It overrides `progress` alone, and the three
+   * material axes then follow it through their own fallback, so a gesture drives the whole
+   * material without knowing the axes exist.
+   *
+   * The gesture names a target; `useDrivenAlpha` walks α there over time, easing it if asked.
+   * That ordering is the point: this is the ease layer, and the mapping layer is downstream of
+   * it, inside the styles.
    */
-  const live =
-    interaction === undefined
-      ? scrub.live
-      : { ...scrub.live, progress: engaged ? 1 : interaction === 'toggle' ? 0 : options.progress };
+  const resting = interaction === 'toggle' ? 0 : options.progress;
+  const alpha = useDrivenAlpha(engaged ? 1 : resting, options.timing ?? 'linear', interaction !== undefined);
+  const live = interaction === undefined ? scrub.live : { ...scrub.live, progress: alpha };
   const { backdrop, blurRadiusProgress, contentProgress, mode, progress, tintAlphaProgress } = live;
   const at = materialProgress(live);
   const split = blurRadiusProgress !== undefined || contentProgress !== undefined || tintAlphaProgress !== undefined;
@@ -342,7 +380,7 @@ export const GlassFadeStage: FC<
   // ignores. Split apart there is no single number, so it reports the tint — the axis that
   // reads as the material being there, and the one the label is sitting on.
   const shown = split ? at.tint : progress;
-  const panel = <Panel {...live} animated={interaction !== undefined} label={`${Math.round(shown * 100)}%`} />;
+  const panel = <Panel {...live} driven={interaction !== undefined} label={`${Math.round(shown * 100)}%`} />;
 
   return (
     <figure className={cn('flex w-full max-w-xl flex-col gap-2', className)}>

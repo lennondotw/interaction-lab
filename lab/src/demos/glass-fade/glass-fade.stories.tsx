@@ -38,10 +38,13 @@ const meta = {
     // Off by default, and re-enabled by the one story that reads them. A knob that does
     // nothing is worse than no knob, and in every other mode the material is simply done.
     blurRadiusProgress: { control: false },
+    // Off unless a story reads it: only the mapped stories have a γ to move.
+    blurGamma: { control: false },
     // Structural: which gesture owns the α is what a story *is*, not something to flip.
     interaction: { control: false },
     mapping: { control: 'inline-radio', options: ['linear', 'perceptual'] },
     mode: { control: 'select', options: FADE_MODES },
+    timing: { control: 'inline-radio', options: ['linear', 'ease'] },
     progress: { control: { max: 1, min: 0, step: 0.01, type: 'range' } },
     // Colour and alpha as two controls: a dark glass is reachable without touching the
     // component, and the alpha stays a slider, which is how you find the value where
@@ -151,22 +154,34 @@ export const MaterialStrengthTogether: Story = {
 };
 
 /*
- * The two stories below are the first ones here with a time axis, and they are also the
- * only place the defect can be judged the way a user meets it — in flight, at whatever
- * frame rate the machine happens to give. Nothing animates in JavaScript: every property
- * the material is made of is transitionable, so these set a target and let the browser
- * interpolate, which is both cheaper and the path production actually takes.
+ * The stories below are the first ones here with a time axis, and the only place the defect
+ * can be judged the way a user meets it — in flight.
  *
- * `mode` stays live on both. Switching it to `opacity on the layer` and running the
- * gesture again is the shortest route to the whole point of the demo: the same motion,
- * over the same copy, reading as dirty instead of as frosted.
+ * There are three layers between a gesture and a pixel, and they apply in this order:
+ *
+ *   1. gesture      the target α, 0 or 1
+ *   2. easing       how α travels there over time
+ *   3. mapping      what a given α means in radius, tint alpha and content opacity
+ *
+ * Each story's name says which of 2 and 3 are switched on. Order matters and is not
+ * commutative: easing reshapes time, the mapping reshapes the material, and swapping them
+ * gives a different curve. It is also why these drive α per frame rather than handing the job
+ * to a CSS `transition` — a transition interpolates each property's *endpoint values* and
+ * never evaluates the α in between, and since 0 and 1 map to 0 and 1 under any mapping, a
+ * transition-driven toggle silently ignores layer 3 entirely.
+ *
+ * `mode` stays live on all of them. Switching it to `opacity on the layer` and running the
+ * gesture again is the shortest route to the whole point of the demo: the same motion, over
+ * the same copy, reading as dirty instead of as frosted.
  */
 
 /**
- * α from the story's `progress` to 1 on pointer-enter — a surface *strengthening* under
- * the pointer rather than appearing, which is the common case for a hover state on glass.
- * Starting at 0.5 rather than 0 also means the wrong modes are already showing their ghost
- * at rest, and the gesture only deepens it.
+ * **Layers: gesture → linear α → no mapping.**
+ *
+ * α from the story's `progress` to 1 on pointer-enter — a surface *strengthening* under the
+ * pointer rather than appearing, which is the common case for a hover state on glass. Starting
+ * at 0.5 rather than 0 also means the wrong modes are already showing their ghost at rest, and
+ * the gesture only deepens it.
  */
 export const HoverToStrengthen: Story = {
   name: 'interactive · hover',
@@ -174,9 +189,15 @@ export const HoverToStrengthen: Story = {
 };
 
 /**
- * The appearance proper: 0 → 1 on a button, which is the transition every sheet, popover
- * and toolbar runs. This is the one to watch with `mode` on `opacity on an ancestor` — the
- * blur is not merely wrong mid-flight there, it is absent, and then snaps in at the end.
+ * **Layers: gesture → linear α → no mapping.** The baseline.
+ *
+ * The appearance proper: 0 → 1 on a button, which is the transition every sheet, popover and
+ * toolbar runs. Constant-rate α with no mapping, so what you feel is the material's own
+ * response curve and nothing else — and it front-loads badly, because one eighth of the way in
+ * the blur has already delivered 85% of the change it will ever make.
+ *
+ * This is also the one to watch with `mode` on `opacity on an ancestor` — the blur is not
+ * merely wrong mid-flight there, it is absent, and then snaps in at the end.
  */
 export const ToggleVisibility: Story = {
   name: 'interactive · toggle',
@@ -184,28 +205,42 @@ export const ToggleVisibility: Story = {
 };
 
 /**
- * The same toggle with α mapped through each axis's measured perceptual rate, which is where
- * the front-loading in the story above comes from: at linear α, one eighth of the way in, the
- * blur has already delivered 85% of the change it will ever make. The tint is left alone —
- * measured, it is already uniform (γ = 1.00, mean error 0.009) — and only the radius is
- * remapped, at γ = 4, which measures about three times more even.
+ * **Layers: gesture → linear α → perceptual mapping.**
  *
- * Two layers, and only the first is in play here. This story is the *mapping*: how much
- * material a given α means. Easing is the other, and every interactive story here keeps it
- * linear so that it cannot be mistaken for the mapping — an ease-out front-loads change on its
- * own, and would hide exactly the effect being demonstrated. A shipping transition adds the
- * ease back on top of this.
+ * The mapping layer alone, with time still constant-rate so the two cannot be confused. Only
+ * the radius is remapped: measured, the tint's rate is already 1 (mean error 0.009), so there
+ * is nothing to correct there, and the content's is left at 1 by the same argument.
  *
- * It is still not perfectly even, and cannot be with an exponent: perceived frostiness goes as
- * roughly the log of the radius, so the exact inverse would hold the radius under 1px until
- * α ≈ 0.6 and then run to 20px in the last third — even by the numbers, and reads as a surface
- * that does nothing and then snaps. Which is the more useful finding: past about 4px on this
- * content the radius is nearly free of perceptual effect, so most of a 20px design is spent
- * where the eye cannot see it change.
+ * `blurGamma` is a control because the right value is a judgement the numbers cannot settle.
+ * The metric's own optimum is 4, and it is not shippable — 0.3⁴ of 20px is 0.16px, so the first
+ * third reads as a dead zone. 2 is the default: about twice as even as linear, with nothing
+ * dead. Nothing in between is *correct*; perceived frostiness goes as roughly the log of the
+ * radius, so evening it out always means crawling through the low end.
  */
 export const ToggleVisibilityPerceptual: Story = {
-  name: 'interactive · toggle, perceptual α',
-  args: { interaction: 'toggle', mapping: 'perceptual', mode: 'material' },
+  name: 'interactive · toggle, mapped α',
+  args: { blurGamma: 2, interaction: 'toggle', mapping: 'perceptual', mode: 'material' },
+  argTypes: { blurGamma: { control: { max: 4, min: 1, step: 0.1, type: 'range' } } },
+};
+
+/**
+ * **Layers: gesture → eased α → perceptual mapping.** All three, in order.
+ *
+ * The shipping shape, and the one place where the two curves multiply. `cubic-bezier(0.4, 0,
+ * 0.2, 1)` is the stock "standard" curve and it is worth being accurate about what it does:
+ * measured frame by frame, α is still 0 after two frames, 0.35 at halfway, and decelerates
+ * into the end. It is an S, not an ease-out — it *delays* the start.
+ *
+ * Which is exactly what to watch for here: the mapping is already slow through its low end,
+ * and an S-curve delays the start again, so the two stack into a longer nothing before the
+ * material appears. Compare with `mapped α` to feel the easing alone. If it drags, that is the
+ * argument for pairing a perceptual mapping with an ease-*out* rather than an S — the mapping
+ * has already taken care of not dumping all the change up front.
+ */
+export const ToggleVisibilityEased: Story = {
+  name: 'interactive · toggle, mapped α + ease',
+  args: { blurGamma: 2, interaction: 'toggle', mapping: 'perceptual', mode: 'material', timing: 'ease' },
+  argTypes: { blurGamma: { control: { max: 4, min: 1, step: 0.1, type: 'range' } } },
 };
 
 /**
