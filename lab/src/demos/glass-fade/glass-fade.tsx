@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import type { CSSProperties, FC } from 'react';
+import { useState, type CSSProperties, type FC } from 'react';
 
 import {
   BACKDROP_STYLE,
@@ -140,11 +140,49 @@ const Panel: FC<GlassFadeOptions & { label: string }> = ({ label, ...options }) 
 const RANGE =
   'h-1 w-full grow cursor-pointer appearance-none rounded-full bg-black/15 accent-black dark:bg-white/20 dark:accent-white';
 
-const ProgressSlider: FC<{ label: string; value: number; onChange: (value: number) => void }> = ({
-  label,
-  onChange,
-  value,
-}) => (
+/**
+ * An arg write is not a `setState`: it crosses Storybook's channel and re-renders the
+ * Controls panel along with the story, which is far too much to do per pointer-move. So a
+ * scrub is local while the pointer is down and commits once on release.
+ *
+ * The local patch has to live *here*, above the panel, not inside the slider — the panel
+ * is the thing being scrubbed, so it has to read the live value too. A slider owning its
+ * own live state moves its own readout and leaves the glass frozen at the last commit.
+ *
+ * The patch is dropped the moment any committed value changes: that is the signal that the
+ * commit has landed, or that Controls has overridden us. Adjusting the state during render
+ * rather than in an effect is what avoids the frame in between, where the panel would snap
+ * back to the pre-drag value before the new one arrives.
+ */
+function useScrub(options: GlassFadeOptions, commit?: (patch: Partial<GlassFadeOptions>) => void) {
+  const [patch, setPatch] = useState<Partial<GlassFadeOptions> | null>(null);
+  // Only the scrubbable values, joined, because `options` is a fresh object every render
+  // and identity cannot answer "did the committed value change".
+  const committed = `${options.progress}/${options.blurRadiusProgress ?? ''}/${options.tintAlphaProgress ?? ''}`;
+  const [seen, setSeen] = useState(committed);
+
+  if (seen !== committed) {
+    setSeen(committed);
+    setPatch(null);
+  }
+
+  return {
+    live: patch === null ? options : { ...options, ...patch },
+    onInput: (next: Partial<GlassFadeOptions>) => setPatch((previous) => ({ ...previous, ...next })),
+    onRelease: () => {
+      if (patch !== null) {
+        commit?.(patch);
+      }
+    },
+  };
+}
+
+const ProgressSlider: FC<{
+  label: string;
+  value: number;
+  onInput: (value: number) => void;
+  onRelease: () => void;
+}> = ({ label, onInput, onRelease, value }) => (
   <label className="flex items-center gap-2 text-[11px] text-neutral-500 dark:text-neutral-400">
     {/* Fixed widths on both the name and the readout: neither may resize as the value
         changes, or dragging one slider nudges the other sideways. */}
@@ -153,7 +191,13 @@ const ProgressSlider: FC<{ label: string; value: number; onChange: (value: numbe
       className={RANGE}
       max={1}
       min={0}
-      onChange={(event) => onChange(event.target.valueAsNumber)}
+      // React maps `onChange` to the DOM's `input`, so that is the live one and the commit
+      // needs the pointer and key events. `onBlur` is the backstop for a release that
+      // lands outside the control.
+      onBlur={onRelease}
+      onChange={(event) => onInput(event.target.valueAsNumber)}
+      onKeyUp={onRelease}
+      onPointerUp={onRelease}
       step={0.01}
       type="range"
       value={value}
@@ -165,12 +209,16 @@ const ProgressSlider: FC<{ label: string; value: number; onChange: (value: numbe
 export const GlassFadeStage: FC<
   GlassFadeOptions & { className?: string; onOptionsChange?: (patch: Partial<GlassFadeOptions>) => void }
 > = ({ className, onOptionsChange, ...options }) => {
-  const { backdrop, mode, progress } = options;
-  const at = materialProgress(options);
+  const scrub = useScrub(options, onOptionsChange);
+  // Everything below reads the live values, so a drag is visible immediately; only the
+  // commit waits for release.
+  const { backdrop, blurRadiusProgress, mode, progress, tintAlphaProgress } = scrub.live;
+  const at = materialProgress(scrub.live);
+  const split = blurRadiusProgress !== undefined || tintAlphaProgress !== undefined;
   // Label what is actually driving this cell, so the number never reports a slider the
-  // mode ignores.
-  const shown = mode === 'material' ? at.tint : progress;
-  const panel = <Panel {...options} label={`${Math.round(shown * 100)}%`} />;
+  // mode ignores — and in the split case, the axis whose slider is not the radius.
+  const shown = split ? at.tint : progress;
+  const panel = <Panel {...scrub.live} label={`${Math.round(shown * 100)}%`} />;
 
   return (
     <figure className={cn('flex w-full max-w-xl flex-col gap-2', className)}>
@@ -190,21 +238,31 @@ export const GlassFadeStage: FC<
       </div>
       {onOptionsChange !== undefined && (
         <div className="flex flex-col gap-1.5">
-          {mode === 'material' ? (
+          {/* One slider per live knob: the split pair appears only where a story supplies
+              it, so the merged case needs no flag of its own — not supplying the two axes
+              *is* the merged case. */}
+          {split ? (
             <>
               <ProgressSlider
                 label="blur radius"
-                onChange={(blurRadiusProgress) => onOptionsChange({ blurRadiusProgress })}
+                onInput={(blurRadiusProgress) => scrub.onInput({ blurRadiusProgress })}
+                onRelease={scrub.onRelease}
                 value={at.blur}
               />
               <ProgressSlider
                 label="tint alpha"
-                onChange={(tintAlphaProgress) => onOptionsChange({ tintAlphaProgress })}
+                onInput={(tintAlphaProgress) => scrub.onInput({ tintAlphaProgress })}
+                onRelease={scrub.onRelease}
                 value={at.tint}
               />
             </>
           ) : (
-            <ProgressSlider label="α" onChange={(next) => onOptionsChange({ progress: next })} value={progress} />
+            <ProgressSlider
+              label="α"
+              onInput={(next) => scrub.onInput({ progress: next })}
+              onRelease={scrub.onRelease}
+              value={progress}
+            />
           )}
         </div>
       )}

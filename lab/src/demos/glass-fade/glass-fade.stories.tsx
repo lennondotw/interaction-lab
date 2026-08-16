@@ -129,6 +129,20 @@ export const MaterialStrength: Story = {
 };
 
 /**
+ * The same material on one knob, which is what a real transition has: a single timeline
+ * spending its α on both axes at once. Worth its own story rather than a mode of the one
+ * above, because this is the shape to copy and the split pair is only an instrument for
+ * understanding what the two halves contribute.
+ *
+ * Nothing switches it: not supplying the two axes *is* the merged case, so both fall back
+ * to `progress`.
+ */
+export const MaterialStrengthTogether: Story = {
+  name: 'material strength · one progress',
+  args: { mode: 'material' },
+};
+
+/**
  * All four at the same α, because 0.5 is only damning beside the mode that gets it
  * right there. Controls are off: this story hard-codes the α it is about.
  */
