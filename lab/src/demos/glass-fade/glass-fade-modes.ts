@@ -29,22 +29,39 @@ export const FADE_MODE_NOTE: Record<FadeMode, string> = {
     'Ship this. Every frame is real frost, just less of it. Note the radius saturates early — past the backdrop’s detail scale more radius changes nothing, so the tint carries the perceived ramp.',
 };
 
-/**
- * `text` is the instrument, and the question it answers needs no calibration: can
- * you still read it. Blur at any usable radius turns 11px copy into smear, so a
- * legible word inside a panel proves the frost is not doing its job — and it is
- * also the honest case, since the backdrop production glass sits over is usually
- * somebody's paragraph. `checker` is the same test at a coarser scale, where the
- * defect reads as doubled edges instead. `flat` is the case that excuses
- * everything: blurring a solid colour is a no-op, so no fade can be wrong over it.
+/*
+ * Colour fields under the copy. A blur is a low-pass filter, so copy alone only ever
+ * shows what it destroys; these show what it keeps. At blur(20px) a 90px disc is
+ * still a disc with a recognisable edge, which is the half of the picture that
+ * carries the ghost: inside a correct frost that edge is soft, and any hard edge
+ * crossing the panel boundary is 1 − α of the original leaking through.
  *
- * Only the last two are CSS backgrounds; `text` paints DOM, and gets `transparent`
- * here so the canvas shows through behind the copy.
+ * Placed so at least one disc edge crosses the panel's boundary on each axis — an
+ * edge wholly inside or wholly outside the panel has nothing to be compared against.
+ * Alpha 0.5 rather than solid, so the copy stays legible over them and the other
+ * instrument keeps working; and mid-saturation hues, so the white tint's
+ * desaturation is visible as the material ramps.
+ */
+const COLOUR_FIELDS = [
+  'radial-gradient(circle 92px at 14% 26%, rgb(244 63 94 / 0.5) 99%, transparent 100%)',
+  'radial-gradient(circle 74px at 38% 88%, rgb(245 158 11 / 0.5) 99%, transparent 100%)',
+  'radial-gradient(circle 108px at 62% 18%, rgb(16 185 129 / 0.5) 99%, transparent 100%)',
+  'radial-gradient(circle 84px at 86% 72%, rgb(139 92 246 / 0.5) 99%, transparent 100%)',
+].join(', ');
+
+/**
+ * `text` is the instrument, and the question it answers needs no calibration: can you
+ * still read it. Blur at any usable radius turns 11px copy into smear, so a legible
+ * word inside a panel proves the frost is not doing its job — and it is also the
+ * honest case, since what production glass sits over is usually somebody's paragraph
+ * over somebody's brand colour. `checker` is the same test at one coarse scale only,
+ * where the defect reads as doubled edges instead. `flat` is the case that excuses
+ * everything: blurring a solid colour is a no-op, so no fade can be wrong over it.
  */
 export const BACKDROP_STYLE: Record<BackdropKind, string> = {
   checker: 'repeating-conic-gradient(from 45deg, #f472b6 0% 25%, #38bdf8 0% 50%) 0 0 / 44px 44px',
   flat: '#6a6a6a',
-  text: 'transparent',
+  text: COLOUR_FIELDS,
 };
 
 const LOREM_SOURCE =
