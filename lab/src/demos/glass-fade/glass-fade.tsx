@@ -20,7 +20,20 @@ import {
  * The slider is also the parameter, which is what Controls is for.
  */
 
-const STAGE = 'relative h-56 w-full overflow-hidden rounded-xl';
+/*
+ * Square corners and a two-tone 2px frame: the stage is an instrument, not a card.
+ * The stripes reach both #f5f5f5 and #0a0a0a, so a single-colour frame is always
+ * the same ink as one of the stripes it is supposed to bound — hence one ring of
+ * each, the inner one matching the canvas and the outer one opposing it, so the
+ * edge holds against either stripe and against either theme's page.
+ *
+ * `border` for the inner ring and `outline` for the outer: the border is inside
+ * the box and the outline outside it with no offset, so the two are contiguous and
+ * only the border participates in the box. A radius here would also put a second,
+ * unrelated curve beside the panel's — and the panel's corner is what the demo is
+ * asking you to look at.
+ */
+const STAGE = 'relative h-56 w-full border-2 border-white outline-2 outline-black dark:border-black dark:outline-white';
 const PANEL = 'absolute inset-x-8 inset-y-9 grid place-items-center rounded-2xl';
 const CHIP = 'rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white';
 const CAPTION = 'text-xs leading-relaxed text-neutral-500 dark:text-neutral-400';
