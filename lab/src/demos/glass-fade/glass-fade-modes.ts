@@ -5,11 +5,11 @@
 
 export type FadeMode = 'ancestor-opacity' | 'layer-opacity' | 'mask-alpha' | 'material';
 
-export type BackdropKind = 'checker' | 'flat' | 'stripes';
+export type BackdropKind = 'checker' | 'flat' | 'text';
 
 export const FADE_MODES: readonly FadeMode[] = ['layer-opacity', 'mask-alpha', 'ancestor-opacity', 'material'];
 
-export const BACKDROP_KINDS: readonly BackdropKind[] = ['stripes', 'checker', 'flat'];
+export const BACKDROP_KINDS: readonly BackdropKind[] = ['text', 'checker', 'flat'];
 
 export const FADE_MODE_TITLE: Record<FadeMode, string> = {
   'ancestor-opacity': 'opacity on an ancestor',
@@ -30,14 +30,31 @@ export const FADE_MODE_NOTE: Record<FadeMode, string> = {
 };
 
 /**
- * `stripes` is the instrument: 3px hard stripes blur to flat grey, so any crisp
- * stripe inside a panel proves the frost is not doing its job. `checker` is the
- * realistic case at a coarser scale, where the same defect reads as doubled
- * edges. `flat` is the case that excuses everything — blurring a solid colour is
- * a no-op, so a wrong fade is undetectable over it.
+ * `text` is the instrument, and the question it answers needs no calibration: can
+ * you still read it. Blur at any usable radius turns 11px copy into smear, so a
+ * legible word inside a panel proves the frost is not doing its job — and it is
+ * also the honest case, since the backdrop production glass sits over is usually
+ * somebody's paragraph. `checker` is the same test at a coarser scale, where the
+ * defect reads as doubled edges instead. `flat` is the case that excuses
+ * everything: blurring a solid colour is a no-op, so no fade can be wrong over it.
+ *
+ * Only the last two are CSS backgrounds; `text` paints DOM, and gets `transparent`
+ * here so the canvas shows through behind the copy.
  */
 export const BACKDROP_STYLE: Record<BackdropKind, string> = {
   checker: 'repeating-conic-gradient(from 45deg, #f472b6 0% 25%, #38bdf8 0% 50%) 0 0 / 44px 44px',
   flat: '#6a6a6a',
-  stripes: 'repeating-linear-gradient(90deg, #0a0a0a 0 3px, #f5f5f5 3px 6px)',
+  text: 'transparent',
 };
+
+const LOREM_SOURCE =
+  'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur.';
+
+/**
+ * One unbroken paragraph — a texture, not a document, so no paragraph break ever
+ * lands behind the panel as a band of blank backdrop. Doubled, because the 80px of
+ * side overscan makes the measure wide enough that one pass no longer reaches the
+ * bottom of the stage, and blank backdrop under the panel is backdrop the frost
+ * cannot be judged against.
+ */
+export const LOREM = `${LOREM_SOURCE} ${LOREM_SOURCE}`;

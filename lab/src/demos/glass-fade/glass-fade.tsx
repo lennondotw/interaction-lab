@@ -6,6 +6,7 @@ import {
   FADE_MODE_NOTE,
   FADE_MODE_TITLE,
   FADE_MODES,
+  LOREM,
   type BackdropKind,
   type FadeMode,
 } from './glass-fade-modes.js';
@@ -21,39 +22,26 @@ import {
  */
 
 /*
- * A substrate opposing the page — black on a light canvas, white on a dark one —
- * with one mid-grey keyline, and the stripes dissolving into it at all four edges.
- * The stripes reach both #0a0a0a and #f5f5f5, so any ink frame drawn against them is
- * the same ink as one of the stripes it is meant to bound; letting them fall off
- * into the substrate bounds both without competing with either. The keyline is one
- * grey rather than two, since a mid grey is the only ink that reads against black
- * plate, white plate, and both canvases.
+ * No substrate of its own: the stage keeps the canvas's own background, so the copy
+ * behind the glass sits on the same page the rest of the demo does and the frost has
+ * to hold up against real content rather than against a test chart. A hairline in
+ * the canvas's own ink at low alpha is the whole edge treatment.
  *
- * The mask goes on a layer that only paints. It is a **sibling** of the glass, not
- * an ancestor of it: `mask-image` on an ancestor would make that ancestor a backdrop
- * root and the demo would be doing in its own chrome the thing the third cell is
- * about. Painted as a sibling it is simply part of the backdrop, which is what the
- * glass is supposed to sample — including the white it fades into.
- */
-const PLATE = 'relative h-56 w-full border border-neutral-500 bg-black dark:bg-white';
-const BACKDROP_LAYER = 'absolute inset-0';
-
-/*
- * The fade bands stay narrower than the panel's own inset (32px / 36px), so the
- * stripes are at full amplitude everywhere the panel's blur reaches. A band wide
- * enough to look generous would put a brightness ramp under the panel's edge —
- * exactly where the artefact this board is about shows up.
+ * `overflow-clip` plus overscan — 80px at the sides, 20px on top — is what keeps the
+ * copy reading as an infinite page: the block's first line, left margin and ragged
+ * right are all outside the frame, so every edge of the backdrop is a cut through a
+ * glyph rather than the end of a paragraph. The sides get much more than the top
+ * because a ragged right edge is a shape the eye reads as "column", and 80px is
+ * enough that no line ends inside the frame. The bottom needs no overscan — there is
+ * more copy than height, so it clips mid-line on its own.
  *
- * `mask-composite: intersect` is what makes two one-axis gradients into a four-edge
- * mask; Chromium only, like the rest of the numbers here.
+ * Deliberately not a mask: `mask-image` here would make this a backdrop root, and the
+ * demo would be doing in its own chrome the thing the third cell is about. A clip is
+ * free — it forms nothing.
  */
-const BACKDROP_MASK = {
-  maskComposite: 'intersect',
-  maskImage: [
-    'linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent)',
-    'linear-gradient(to bottom, transparent, #000 20px, #000 calc(100% - 20px), transparent)',
-  ].join(', '),
-} satisfies CSSProperties;
+const PLATE = 'relative h-56 w-full overflow-clip border border-black/15 dark:border-white/20';
+const BACKDROP_LAYER = 'pointer-events-none absolute -inset-x-20 -top-5 bottom-0 select-none';
+const BACKDROP_TEXT = 'text-[11px] leading-[1.45] text-black/75 dark:text-white/75';
 const PANEL = 'absolute inset-x-8 inset-y-9 grid place-items-center rounded-2xl';
 const CHIP = 'rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white';
 const CAPTION = 'text-xs leading-relaxed text-neutral-500 dark:text-neutral-400';
@@ -114,7 +102,9 @@ export const GlassFadeStage: FC<GlassFadeOptions & { className?: string; caption
   return (
     <figure className={cn('flex w-full max-w-xl flex-col gap-2', className)}>
       <div className={PLATE}>
-        <div className={BACKDROP_LAYER} style={{ background: BACKDROP_STYLE[backdrop], ...BACKDROP_MASK }} />
+        <div aria-hidden className={BACKDROP_LAYER} style={{ background: BACKDROP_STYLE[backdrop] }}>
+          {backdrop === 'text' && <p className={BACKDROP_TEXT}>{LOREM}</p>}
+        </div>
         {mode === 'ancestor-opacity' ? (
           // A wrapper holding nothing but the glass — the shape `AnimatePresence`
           // produces when a motion element is given the fade instead of the card.
