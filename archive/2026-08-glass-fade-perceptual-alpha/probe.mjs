@@ -70,6 +70,8 @@ const QUANTA_WINDOWS = [
   [17.9, 18.6],
 ];
 const QUANTUM_FRAMES = [4.12, 4.14];
+// The α ticks a 0.01-step slider produces, around where a jump was reported by eye.
+const TICKS = { from: 88, to: 100 };
 const TINT_ALPHAS = Array.from({ length: 11 }, (_, i) => Number(((TINT_ALPHA * i) / 10).toFixed(4)));
 
 const LOREM_SOURCE =
@@ -115,6 +117,30 @@ const PAGE = `<!DOCTYPE html>
     panel.style.backdropFilter = 'blur(' + radius + 'px)';
     panel.style.backgroundColor = 'rgb(255 255 255 / ' + tintAlpha + ')';
     panel.style.boxShadow = 'inset 0 0 0 1px rgb(255 255 255 / ' + Math.min(1, tintAlpha * 2) + ')';
+  };
+
+  window.diff = async (a, b) => {
+    const load = async (base64) => {
+      const image = new Image();
+      image.src = 'data:image/png;base64,' + base64;
+      await image.decode();
+      const canvas = new OffscreenCanvas(image.width, image.height);
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(image, 0, 0);
+      return context.getImageData(0, 0, image.width, image.height);
+    };
+    const [A, B] = [await load(a), await load(b)];
+    let changed = 0;
+    let max = 0;
+    for (let i = 0; i < A.data.length; i += 4) {
+      const d = Math.max(
+        Math.abs(A.data[i] - B.data[i]),
+        Math.abs(A.data[i + 1] - B.data[i + 1]),
+        Math.abs(A.data[i + 2] - B.data[i + 2])
+      );
+      if (d > 0) { changed++; if (d > max) max = d; }
+    }
+    return { pctChanged: (100 * changed) / (A.data.length / 4), max };
   };
 
   // Node has no PNG decoder, and the artefact is a paint result no geometry API reports, so
@@ -309,8 +335,51 @@ async function main() {
   }
   console.log(`wrote __screenshots__/quantum-radius-${QUANTUM_FRAMES.join('.png and -')}.png`);
 
+  await runTickPhase(browser);
   await runStoryPhase(browser);
   await browser.close();
+}
+
+/*
+ * Phase D asks the question a slider actually poses: does *this* 1% tick change anything? Phase
+ * B answers a different one and is easy to over-read — its detail-energy metric calls a tick
+ * unchanged when the sum moves under 0.05%, and at 2× every tick moves 36-61% of the pixels by
+ * 1-3 luma, which is a real change that the sum cannot see. So the treads phase B reports are the
+ * metric's threshold, not the compositor's.
+ *
+ * Measured per pixel instead, and across device pixel ratios, because that is what decides it: at
+ * 1× some ticks come back *identical*, in a repeating pattern of roughly every third one. At 2×
+ * and 3× none do. A dead tick beside a live one is what reads as a jump, so a scrub feels steppy
+ * at 1× and smooth at 2× for the same story and the same α.
+ */
+async function runTickPhase(browser) {
+  console.log('\n== D · does each 1% tick of α change any pixels? per-DPR, γ = 2, radius = 20·α²');
+  for (const dpr of [1, 2, 3]) {
+    const page = await browser.newPage({ deviceScaleFactor: dpr, viewport: { width: 900, height: 400 } });
+    await page.setContent(PAGE);
+    await page.waitForFunction(() => document.fonts.status === 'loaded');
+    console.log(`\n   DPR ${dpr}`);
+    console.log('   tick          radius            px changed   max delta');
+    let previous = null;
+    for (let tick = TICKS.from; tick <= TICKS.to; tick++) {
+      const alpha = tick / 100;
+      const radius = Number((BLUR_PX * alpha ** 2).toFixed(4));
+      await page.evaluate((m) => window.setMaterial(m), { radius, tintAlpha: TINT_ALPHA });
+      const shot = (await page.screenshot({ clip: READ_BOX })).toString('base64');
+      if (previous !== null) {
+        const diff = await page.evaluate(([a, b]) => window.diff(a, b), [previous.shot, shot]);
+        console.log(
+          `   ${previous.alpha.toFixed(2)} → ${alpha.toFixed(2)}   ${previous.radius.toFixed(2)} → ${radius.toFixed(2)}`.padEnd(
+            36
+          ),
+          `${diff.pctChanged.toFixed(1).padStart(6)}%      ${String(diff.max).padStart(4)}`,
+          diff.pctChanged === 0 ? '  <-- identical' : ''
+        );
+      }
+      previous = { alpha, radius, shot };
+    }
+    await page.close();
+  }
 }
 
 /*

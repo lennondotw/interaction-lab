@@ -48,22 +48,36 @@ cannot invert a log:
 is a dead zone you can watch. γ = 2 is about 1.4× more even than linear with nothing dead, which
 is why it is the default and why the exponent is a slider rather than a constant.
 
-### The radius is quantised
+### The radius steps, and how much depends on the device pixel ratio
 
-One element, restyled in 0.02px steps, holding position fixed. Most steps change **nothing at
-all**; every second or third step changes something:
+Holding position fixed and restyling one element in 0.02px steps, the detail sum only moves every
+second or third step — every 0.26px around radius 9, 0.54px around 18, and the move costs 2–3% of
+detail down at 4px against 0.3% at 18px. It is tempting to read that as the compositor quantising
+the radius, and phase B's numbers alone cannot tell you whether it is.
 
-| radius    | changes at       | period | magnitude    |
-| --------- | ---------------- | ------ | ------------ |
-| 3.6–4.3   | 3.86, 4.14       | 0.28px | **2.2–3.3%** |
-| 8.6–9.3   | 8.66, 8.92, 9.18 | 0.26px | 0.3–0.4%     |
-| 17.9–18.6 | 17.96, 18.50     | 0.54px | 0.3%         |
+They are not enough, because the metric's floor is 0.05% of a sum over half a million pixels.
+Phase D asks the question a slider actually poses — does _this_ 1% tick change any pixels at all —
+and the answer depends on the device pixel ratio:
 
-So the axis is a staircase, the tread roughly doubles with the radius, and each step _costs_ less
-as the radius grows. Which explains a scrub that jumps at specific α rather than moving smoothly,
-and where it jumps: with γ = 2, one 0.01 tick of α moves the radius by 0.4·α px, so near α = 1 a
-tick crosses a whole tread while near α = 0 many ticks fall inside one. **The mapping makes the
-high end coarse in radius terms** — γ trades a dead low end for a steppy high end.
+| tick, γ = 2 | radius        |     1× |  2× |  3× |
+| ----------- | ------------- | -----: | --: | --: |
+| 0.88 → 0.89 | 15.49 → 15.84 |    61% | 60% | 48% |
+| 0.89 → 0.90 | 15.84 → 16.20 | **0%** | 37% | 49% |
+| 0.93 → 0.94 | 17.30 → 17.67 | **0%** | 47% | 48% |
+| 0.94 → 0.95 | 17.67 → 18.05 |    62% | 60% | 51% |
+| 0.96 → 0.97 | 18.43 → 18.82 | **0%** | 60% | 52% |
+
+At **1×** roughly every third tick comes back _pixel-identical_, and the rest move 38–62% of the
+pixels. At 2× and 3× nothing is identical. So the axis is genuinely quantised, but finely enough
+that more device pixels dissolve it — and a dead tick sitting beside a live one is what reads as a
+jump. `0.94 → 0.95` is a live tick between two dead ones at 1×, which is exactly the report that
+started this.
+
+Two things follow. Per-tick amplitude is small either way — 1 to 3 luma out of 255 — so what is
+noticeable is the _pattern_ (stall, stall, move) rather than the size of any one move. And the
+mapping decides where the pattern lands: with γ = 2 one tick moves the radius by 0.4·α px, so the
+high end takes strides comparable to a tread while the low end takes many ticks to cross one. γ
+trades a dead low end for a steppy high end.
 
 Also visible in the first table: `share` peaks slightly above 1 around 12px and comes back down.
 Past ~10px the blur is pulling in clamped content from outside the panel faster than it is
@@ -116,14 +130,17 @@ content: 1, tint: 1 }` in `lab/src/demos/glass-fade/glass-fade.tsx`.
 - Keep the mapping out of the sliders. They read α; only the material is mapped, so a value is
   comparable across mappings.
 - Drive α per frame for gestures, and pair the mapping with a _decelerating_ ease, not an S.
-- Do not chase the staircase. It is the compositor's, its worst tread costs ~3% of detail down at
-  4px, and the only way to hide it would be to stop moving the radius at all.
+- Do not chase the staircase. It is the compositor's, it dissolves above 1×, and the only way to
+  hide it at 1× would be to stop moving the radius at all.
 
 ## Caveats
 
 Chromium only, at 2× device pixels, over this backdrop. Quantisation treads and their magnitudes
 are implementation detail and should be expected to move between versions and engines; the
-shapes — tint linear, radius logarithmic, radius quantised — are what the decisions rest on.
+shapes — tint linear, radius logarithmic, radius finely quantised — are what the decisions rest
+on. Anything phrased as "this tick changes nothing" is a claim about pixels and needs a pixel
+diff: the detail-energy metric of phase A and B has a floor, and reading its zeros as identical
+frames is how the first pass here overstated the treads.
 `perceived` is a detail-energy proxy, not a psychophysical measurement: it says how much
 structure a blur removed, which is not the same as how frosted a person would call it. Where the
 two might disagree, the probe reports the curve rather than a single number, so a reader can
