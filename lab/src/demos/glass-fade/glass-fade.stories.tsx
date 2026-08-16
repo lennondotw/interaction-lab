@@ -189,8 +189,28 @@ export const MaterialStrengthTogether: Story = {
  * half of the gesture goes flat — by then the radius is far past where more of it shows.
  */
 export const HoverToStrengthen: Story = {
-  name: 'interactive · hover, mapped α + ease',
+  name: 'interactive · hover 0.5 → 1, mapped α + ease',
   args: { blurGamma: 2, interaction: 'hover', mapping: 'perceptual', mode: 'material', progress: 0.5, timing: 'ease' },
+  argTypes: { blurGamma: { control: { max: 4, min: 1, step: 0.1, type: 'range' } } },
+};
+
+/**
+ * **Layers: gesture → decelerating α → perceptual mapping.** The same hover from nothing.
+ *
+ * Worth having both, because the range travelled is what decides whether the mapping matters at
+ * all. Strengthening from 0.5 never enters the low end, so γ barely shows; appearing from 0
+ * crosses all of it, and this is the story where `blurGamma` earns its slider — sweep it to 4
+ * and the surface hesitates under the pointer, drop it to 1 and everything arrives in the first
+ * two frames with the rest of the gesture going nowhere.
+ *
+ * One cost this story makes visible: a hover target sits at α = 0 almost all of its life, and
+ * mid-gesture the radius must stay `blur(0px)` rather than `none`, since the two do not
+ * interpolate. So the panel holds a compositing layer permanently for a material that is not
+ * there — fine for one, worth settling back to `none` on rest for a list of them.
+ */
+export const HoverFromNothing: Story = {
+  name: 'interactive · hover 0 → 1, mapped α + ease',
+  args: { blurGamma: 2, interaction: 'hover', mapping: 'perceptual', mode: 'material', progress: 0, timing: 'ease' },
   argTypes: { blurGamma: { control: { max: 4, min: 1, step: 0.1, type: 'range' } } },
 };
 
