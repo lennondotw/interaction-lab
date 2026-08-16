@@ -176,16 +176,22 @@ export const MaterialStrengthTogether: Story = {
  */
 
 /**
- * **Layers: gesture → linear α → no mapping.**
+ * **Layers: gesture → decelerating α → perceptual mapping.** All three.
  *
  * α from the story's `progress` to 1 on pointer-enter — a surface *strengthening* under the
  * pointer rather than appearing, which is the common case for a hover state on glass. Starting
  * at 0.5 rather than 0 also means the wrong modes are already showing their ghost at rest, and
  * the gesture only deepens it.
+ *
+ * Both layers on, because a hover has no patience: it has to answer on the first frame, which
+ * is what the deceleration curve buys, and it starts from half strength, so the mapping's slow
+ * low end is not even in the range being travelled. Drop `mapping` to `linear` and the second
+ * half of the gesture goes flat — by then the radius is far past where more of it shows.
  */
 export const HoverToStrengthen: Story = {
-  name: 'interactive · hover',
-  args: { interaction: 'hover', mode: 'material', progress: 0.5 },
+  name: 'interactive · hover, mapped α + ease',
+  args: { blurGamma: 2, interaction: 'hover', mapping: 'perceptual', mode: 'material', progress: 0.5, timing: 'ease' },
+  argTypes: { blurGamma: { control: { max: 4, min: 1, step: 0.1, type: 'range' } } },
 };
 
 /**
@@ -224,18 +230,22 @@ export const ToggleVisibilityPerceptual: Story = {
 };
 
 /**
- * **Layers: gesture → eased α → perceptual mapping.** All three, in order.
+ * **Layers: gesture → decelerating α → perceptual mapping.** All three, in order.
  *
- * The shipping shape, and the one place where the two curves multiply. `cubic-bezier(0.4, 0,
- * 0.2, 1)` is the stock "standard" curve and it is worth being accurate about what it does:
- * measured frame by frame, α is still 0 after two frames, 0.35 at halfway, and decelerates
- * into the end. It is an S, not an ease-out — it *delays* the start.
+ * The shipping shape, and the one place where the two curves multiply. `cubic-bezier(0, 0, 0.2,
+ * 1)`: full speed from the first frame, decelerating into the end, which is the convention for
+ * something entering.
  *
- * Which is exactly what to watch for here: the mapping is already slow through its low end,
- * and an S-curve delays the start again, so the two stack into a longer nothing before the
- * material appears. Compare with `mapped α` to feel the easing alone. If it drags, that is the
- * argument for pairing a perceptual mapping with an ease-*out* rather than an S — the mapping
- * has already taken care of not dumping all the change up front.
+ * The two layers pull against each other here, and that is the point. The ease spends α early,
+ * where the mapping is stingy with material, so the surface commits on the first frame without
+ * the mapping's low end reading as a dead zone — and it decelerates through the range where
+ * more radius stops showing anyway. The stock `cubic-bezier(0.4, 0, 0.2, 1)` is the wrong
+ * partner for exactly the same reason: measured, it is an S that leaves α at 0 for two frames,
+ * and that delay stacks with the mapping's into a visible nothing.
+ *
+ * Compare with `mapped α` to feel the easing alone, and flip `mapping` to `linear` to see the
+ * pairing that ships by default: a decelerating curve over an unmapped material, which puts
+ * nearly all of the perceived change in the first few frames.
  */
 export const ToggleVisibilityEased: Story = {
   name: 'interactive · toggle, mapped α + ease',

@@ -167,12 +167,22 @@ function mapped(at: { blur: number; content: number; tint: number }, mapping: Ma
 
 const DURATION = 0.4;
 /*
- * The stock "standard" curve, for the story that puts the easing layer back on. Worth naming
- * accurately: it is not an ease-out. Measured frame by frame it is an S — α sits at 0 for the
- * first two frames, reaches 0.35 by halfway, and decelerates into the end — so it *delays* the
- * start rather than front-loading it, and stacks with the mapping's own slow low end.
+ * A deceleration curve — full speed from the first frame, decelerating into the end, which is
+ * the convention for something entering. α at eighths of the duration, against the stock
+ * `cubic-bezier(0.4, 0, 0.2, 1)` it replaces:
+ *
+ * | curve                  | α at 0 … 1 of the duration               |
+ * | ---------------------- | ---------------------------------------- |
+ * | standard (0.4,0,0.2,1) | .00 .04 .24 .56 .78 .89 .96 .99 1.00     |
+ * | decelerate (0,0,0.2,1) | .00 .36 .58 .73 .84 .91 .96 .99 1.00     |
+ *
+ * The standard curve spends its first eighth going nowhere, and delaying the start is the one
+ * thing this material cannot afford: the perceptual mapping is already slow through its low end,
+ * so the two delays stack into a visible nothing. Decelerating makes the layers pull against
+ * each other on purpose — the ease spends α early, exactly where the mapping is stingy with
+ * material, so the surface commits on the first frame and still arrives without a snap.
  */
-const EASE_STANDARD = [0.4, 0, 0.2, 1] as const;
+const EASE_DECELERATE = [0, 0, 0.2, 1] as const;
 
 /*
  * Every property the material is made of is transitionable, so the cheap way to animate this
@@ -201,7 +211,7 @@ function useDrivenAlpha(target: number, timing: Timing, enabled: boolean) {
     }
     const controls = animate(current.current, target, {
       duration: reduceMotion === true ? 0 : DURATION,
-      ease: timing === 'ease' ? [...EASE_STANDARD] : 'linear',
+      ease: timing === 'ease' ? [...EASE_DECELERATE] : 'linear',
       onUpdate: (value) => {
         current.current = value;
         setAlpha(value);
