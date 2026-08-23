@@ -32,7 +32,32 @@ import { animate, useMotionValue, useMotionValueEvent, useReducedMotion, type Mo
 import { useCallback, useEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 
 import { pushSample, trackVelocity, type PointerSample } from './pointer-velocity.js';
-import { indexFromOffset, nearestDetentOffset, nearestOffsetForIndex, rebaseOffset } from './wheel-geometry.js';
+import {
+  indexFromOffset,
+  nearestDetentOffset,
+  nearestOffsetForIndex,
+  pastDragThreshold,
+  rebaseOffset,
+  tapTargetOffset,
+} from './wheel-geometry.js';
+
+/**
+ * How a row tells the gesture which slot it is.
+ *
+ * A tap has to resolve to a row, and hit-testing the DOM is the only way to do that
+ * which is correct for both looks: the flat wheel's rows are at a uniform pitch and
+ * invert trivially, but the drum's are spread around an arc and then divided by a
+ * perspective, and inverting *that* from a pointer's `clientY` means solving an
+ * equation rather than an `asin`. Asking the element which slot it is skips the
+ * whole problem, and skips it in a way that cannot drift from the row's own idea of
+ * what it is displaying.
+ *
+ * Exported so `WheelColumn` sets the same name this reads.
+ */
+export const WHEEL_SLOT_ATTRIBUTE = 'data-wheel-slot';
+
+/** Set on the column while a gesture is a drag rather than a tap. Drives the cursor. */
+export const WHEEL_DRAGGING_ATTRIBUTE = 'data-dragging';
 
 /** Matches Motion's own default. Higher throws further for the same flick. */
 const INERTIA_POWER = 0.8;
@@ -86,7 +111,22 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
   const elementRef = useRef<HTMLDivElement>(null);
 
   const pointerIdRef = useRef<number | null>(null);
-  const startRef = useRef<{ pointerY: number; offset: number } | null>(null);
+  /**
+   * Everything about the gesture that has to be read as it was when the finger went
+   * down rather than as it is now.
+   *
+   * `slot` and `offset` are both aimed-at values: the wheel follows the pointer from
+   * its very first pixel, so by the time a tap is released the rows have moved under
+   * it and the row now beneath the pointer may not be the one that was tapped.
+   */
+  const startRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    offset: number;
+    slot: number | null;
+  } | null>(null);
+  /** Whether this gesture has ever been a drag. Sticky on purpose — see `pastDragThreshold`. */
+  const draggedRef = useRef(false);
   const samplesRef = useRef<PointerSample[]>([]);
   const animationRef = useRef<{ stop: () => void } | null>(null);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,6 +214,27 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
     [finishGesture, itemHeight, offset, prefersReducedMotion, stopAnimation]
   );
 
+  /**
+   * Marks the gesture as a drag, once and for the rest of it.
+   *
+   * The cursor cannot be done with `:active`, which is why this writes an attribute:
+   * `:active` begins at `pointerdown`, so it closes the hand for a tap too, which is
+   * the one thing this distinction exists to stop. `body` gets the cursor as well
+   * because the pointer is captured and may leave the column, and without it the
+   * hand springs open over whatever it passes.
+   */
+  const beginDragging = useCallback(() => {
+    if (draggedRef.current) return;
+    draggedRef.current = true;
+    elementRef.current?.setAttribute(WHEEL_DRAGGING_ATTRIBUTE, 'true');
+    document.body.style.cursor = 'grabbing';
+  }, []);
+
+  const endDragging = useCallback(() => {
+    elementRef.current?.removeAttribute(WHEEL_DRAGGING_ATTRIBUTE);
+    document.body.style.removeProperty('cursor');
+  }, []);
+
   const onPointerDown = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       // One pointer owns the gesture. Admitting a second finger would hand the
@@ -185,10 +246,27 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
       // A drag takes the wheel over from the arrow keys, so whatever they had
       // queued up stops being the thing to count from.
       keyTargetRef.current = null;
+      draggedRef.current = false;
       pointerIdRef.current = event.pointerId;
-      startRef.current = { pointerY: event.clientY, offset: offset.get() };
+
+      // Which row was aimed at, asked of the DOM rather than computed from the
+      // pointer's y — see `WHEEL_SLOT_ATTRIBUTE`. Read now, because the rows begin
+      // moving on the very next event.
+      const row = (event.target as Element | null)?.closest(`[${WHEEL_SLOT_ATTRIBUTE}]`);
+      const slot = row === null || row === undefined ? null : Number(row.getAttribute(WHEEL_SLOT_ATTRIBUTE));
+
+      startRef.current = {
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        offset: offset.get(),
+        slot: slot === null || Number.isNaN(slot) ? null : slot,
+      };
       samplesRef.current = [{ time: performance.now(), y: event.clientY }];
       event.currentTarget.setPointerCapture(event.pointerId);
+      // Focus explicitly, because the `preventDefault` below suppresses the
+      // `mousedown` that would otherwise have done it — without this, clicking a
+      // column and then pressing an arrow key does nothing.
+      event.currentTarget.focus();
       // Stops the native text-selection and drag-and-drop gestures, either of
       // which would take the pointer stream away before the release arrives.
       event.preventDefault();
@@ -196,25 +274,41 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
     [offset, stopAnimation]
   );
 
-  const releaseCapture = useCallback((event: PointerEvent<HTMLElement>) => {
-    pointerIdRef.current = null;
-    startRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }, []);
+  const releaseCapture = useCallback(
+    (event: PointerEvent<HTMLElement>) => {
+      pointerIdRef.current = null;
+      startRef.current = null;
+      endDragging();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    },
+    [endDragging]
+  );
 
   const onPointerUp = useCallback(
     (event: PointerEvent<HTMLElement>) => {
       if (event.pointerId !== pointerIdRef.current) return;
+      const start = startRef.current;
+      const wasDrag = draggedRef.current;
       const velocity = -trackVelocity({ samples: samplesRef.current, now: performance.now() });
       samplesRef.current = [];
       releaseCapture(event);
+
+      // A tap on a row brings that row to the centre. Both `slot` and `offset` come
+      // from the moment of the press: the wheel has been following the pointer, so a
+      // tap that drifted two pixels has moved the rows, and the offset now could sit
+      // the other side of an integer from the one the row's label was chosen with.
+      if (!wasDrag && start !== null && start.slot !== null) {
+        springTo(tapTargetOffset({ offsetAtTap: start.offset, slot: start.slot, itemHeight }));
+        return;
+      }
+
       // Negated on the way in: dragging the finger down moves the list down,
       // which is a decrease in offset.
       settleWithVelocity(velocity);
     },
-    [releaseCapture, settleWithVelocity]
+    [itemHeight, releaseCapture, settleWithVelocity, springTo]
   );
 
   const onPointerMove = useCallback(
@@ -229,10 +323,23 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
         onPointerUp(event);
         return;
       }
+      // The threshold classifies the gesture; it does not gate the motion. The wheel
+      // tracks the pointer from its first pixel, so three pixels of tap-slop do move
+      // it three pixels and the tap then settles back onto the same detent — which at
+      // a fortieth of a row is not something an eye resolves, and is a better trade
+      // than a deadzone that makes the start of every drag lag or jump.
+      if (
+        pastDragThreshold({
+          from: { x: start.pointerX, y: start.pointerY },
+          to: { x: event.clientX, y: event.clientY },
+        })
+      ) {
+        beginDragging();
+      }
       pushSample(samplesRef.current, { time: performance.now(), y: event.clientY });
       offset.set(start.offset - (event.clientY - start.pointerY));
     },
-    [offset, onPointerUp]
+    [beginDragging, offset, onPointerUp]
   );
 
   /**

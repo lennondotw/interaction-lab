@@ -2,7 +2,7 @@ import { cn } from '@monorepo/utils';
 import { motion, useMotionTemplate, useTransform, type MotionValue } from 'motion/react';
 import type { FC } from 'react';
 
-import { useWheel } from './use-wheel.js';
+import { useWheel, WHEEL_SLOT_ATTRIBUTE } from './use-wheel.js';
 import {
   drumOverscan,
   drumRadius,
@@ -89,9 +89,19 @@ const WheelRow: FC<WheelRowProps> = ({
   const drumTransform = useMotionTemplate`translateZ(${-radius}px) rotateX(${rotateX}deg) translateZ(${radius}px)`;
 
   const isDrum = variant === 'drum';
+  // A row turned past 90° is on the back of the drum. `drumRow` clamps it to
+  // invisible, but invisible is not untouchable: the arc brings it back inside the
+  // column's box, where it would still win a hit-test and send a tap five rows away.
+  // The flat wheel is already safe — its far rows are clipped out, and clipping
+  // takes hit-testing with it — but binding both costs nothing.
+  const pointerEvents = useTransform(isDrum ? drumOpacity : flatOpacity, (value) => (value < 0.02 ? 'none' : 'auto'));
 
   return (
     <motion.div
+      // The rows are a rendering of the column's value, and the column already
+      // announces that value through `aria-valuetext`. Left visible to the
+      // accessibility tree they would have it read six times over.
+      aria-hidden="true"
       className={cn('absolute inset-x-0 flex items-center justify-center', WIREFRAME_ITEM)}
       style={
         isDrum
@@ -102,9 +112,11 @@ const WheelRow: FC<WheelRowProps> = ({
               top: (viewportHeight({ itemHeight, rows }) - itemHeight) / 2,
               opacity: drumOpacity,
               transform: drumTransform,
+              pointerEvents,
             }
-          : { height: itemHeight, top: 0, y: top, opacity: flatOpacity, scale: flatScale }
+          : { height: itemHeight, top: 0, y: top, opacity: flatOpacity, scale: flatScale, pointerEvents }
       }
+      {...{ [WHEEL_SLOT_ATTRIBUTE]: slot }}
     >
       <motion.span className={cn('tabular-nums', contentClassName)}>{label}</motion.span>
     </motion.div>
@@ -173,9 +185,16 @@ export const WheelColumn: FC<WheelColumnProps> = ({
       aria-valuenow={index}
       aria-valuetext={valueText?.(index) ?? items[index]}
       className={cn(
+        // `pointer` at rest because a tap now selects a row, and the closed hand only
+        // once the gesture has been classified as a drag. This cannot be `active:`,
+        // which begins at `pointerdown` and so would close the hand for taps too.
+        //
+        // The attribute name is spelled out rather than interpolated from
+        // `WHEEL_DRAGGING_ATTRIBUTE` because Tailwind scans source text and would not
+        // see a class built at runtime. Keep the two in step.
         `
-          relative cursor-grab overflow-hidden select-none
-          active:cursor-grabbing
+          relative cursor-pointer overflow-hidden select-none
+          data-[dragging=true]:cursor-grabbing
         `,
         // Without this, a touch drag scrolls the page instead of the wheel.
         'touch-none',

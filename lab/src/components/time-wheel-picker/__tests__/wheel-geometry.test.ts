@@ -8,11 +8,13 @@ import {
   indexFromOffset,
   nearestDetentOffset,
   nearestOffsetForIndex,
+  pastDragThreshold,
   rebaseOffset,
   rowIndex,
   rowSlots,
   rowTop,
   splitOffset,
+  tapTargetOffset,
   viewportHeight,
   wrapIndex,
 } from '../wheel-geometry.js';
@@ -175,6 +177,59 @@ describe('nearestOffsetForIndex', () => {
           (ITEM_HEIGHT * count) / 2 + ITEM_HEIGHT
         );
       }
+    }
+  });
+});
+
+describe('pastDragThreshold', () => {
+  it('takes three pixels of 2D distance, as Motion does', () => {
+    const from = { x: 100, y: 100 };
+    expect(pastDragThreshold({ from, to: { x: 100, y: 102 } })).toBe(false);
+    expect(pastDragThreshold({ from, to: { x: 100, y: 103 } })).toBe(true);
+    expect(pastDragThreshold({ from, to: { x: 102, y: 102 } })).toBe(false);
+    expect(pastDragThreshold({ from, to: { x: 100, y: 97 } })).toBe(true);
+    // Diagonal counts, so a sloppy tap that wanders sideways is a drag rather than
+    // an unexpected jump to whichever row it ended over.
+    expect(pastDragThreshold({ from, to: { x: 103, y: 100 } })).toBe(true);
+  });
+});
+
+describe('tapTargetOffset', () => {
+  it('brings the tapped row to the centre, whatever the wheel was mid-way through', () => {
+    // The whole claim, as an assertion: the item that ends up selected is the item
+    // the tapped row was displaying when it was tapped.
+    for (const offsetAtTap of [0, 17.5, ITEM_HEIGHT * 3, ITEM_HEIGHT * 3.5, -ITEM_HEIGHT * 2.25, 1234.7]) {
+      for (const slot of rowSlots({ rows: ROWS })) {
+        const target = tapTargetOffset({ offsetAtTap, slot, itemHeight: ITEM_HEIGHT });
+        expect(indexFromOffset(target, ITEM_HEIGHT, COUNT), `offset ${offsetAtTap}, slot ${slot}`).toBe(
+          rowIndex({ slot, offset: offsetAtTap, itemHeight: ITEM_HEIGHT, count: COUNT })
+        );
+      }
+    }
+  });
+
+  it('lands on an exact detent', () => {
+    for (const offsetAtTap of [0, 17.5, ITEM_HEIGHT * 3.5, -91.25]) {
+      for (const slot of rowSlots({ rows: ROWS })) {
+        const target = tapTargetOffset({ offsetAtTap, slot, itemHeight: ITEM_HEIGHT });
+        // A whole number of rows, asserted as a division rather than a remainder:
+        // `-80 % 40` is `-0`, which is a signed-zero quirk of `%` and not a wheel
+        // sitting off its detent.
+        expect(Number.isInteger(target / ITEM_HEIGHT), `offset ${offsetAtTap}, slot ${slot}`).toBe(true);
+      }
+    }
+  });
+
+  it('does nothing when the centre row is tapped while the wheel is at rest', () => {
+    const settled = ITEM_HEIGHT * 7;
+    expect(tapTargetOffset({ offsetAtTap: settled, slot: 0, itemHeight: ITEM_HEIGHT })).toBe(settled);
+  });
+
+  it('moves by whole rows, so a tap never travels further than the row it aimed at', () => {
+    const settled = ITEM_HEIGHT * 7;
+    for (const slot of rowSlots({ rows: ROWS })) {
+      const target = tapTargetOffset({ offsetAtTap: settled, slot, itemHeight: ITEM_HEIGHT });
+      expect(target - settled, `slot ${slot}`).toBe(slot * ITEM_HEIGHT);
     }
   });
 });

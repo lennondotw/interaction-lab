@@ -14,7 +14,14 @@ export {
   type WheelIndices,
 } from './time-model.js';
 export { TimeWheelPicker, type TimeWheelPickerProps } from './time-wheel-picker.js';
-export { useWheel, type UseWheelOptions, type Wheel, type WheelHandlers } from './use-wheel.js';
+export {
+  useWheel,
+  WHEEL_DRAGGING_ATTRIBUTE,
+  WHEEL_SLOT_ATTRIBUTE,
+  type UseWheelOptions,
+  type Wheel,
+  type WheelHandlers,
+} from './use-wheel.js';
 export { WheelColumn, type WheelColumnProps, type WheelVariant } from './wheel-column.js';
 export {
   assertOddRows,
@@ -26,6 +33,7 @@ export {
   nearestDetentOffset,
   nearestOffsetForIndex,
   offsetForIndex,
+  pastDragThreshold,
   rebaseOffset,
   rowDistance,
   rowFade,
@@ -33,6 +41,7 @@ export {
   rowSlots,
   rowTop,
   splitOffset,
+  tapTargetOffset,
   viewportHeight,
   wrapIndex,
 } from './wheel-geometry.js';

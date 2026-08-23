@@ -112,6 +112,55 @@ export const nearestDetentOffset = (offset: number, itemHeight: number): number 
   Math.round(offset / itemHeight) * itemHeight;
 
 /**
+ * Whether a pointer has moved far enough to have meant a drag rather than a tap.
+ *
+ * Three pixels of 2D distance from where the pointer went down, which is Motion's
+ * own `PanSession.distanceThreshold` and its `distance2D(info.offset, {x:0, y:0})`
+ * test. Matched deliberately: a wheel that decides at a different distance from
+ * every other draggable thing on the page is a wheel that feels wrong for reasons
+ * nobody can name.
+ *
+ * The caller must treat the answer as *sticky* — once true for a gesture, true for
+ * the rest of it. Re-testing the displacement at release instead would call a drag
+ * that wandered out and came back to its origin a tap, and then jump the wheel to
+ * whatever row the pointer happened to be resting on.
+ */
+export const pastDragThreshold = ({
+  from,
+  to,
+  threshold = 3,
+}: {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  threshold?: number;
+}): boolean => Math.hypot(to.x - from.x, to.y - from.y) >= threshold;
+
+/**
+ * Where the wheel has to travel for a tapped row to come to the centre.
+ *
+ * Takes the slot that was tapped and the offset *at the moment of the tap*, not at
+ * release: with the wheel following the pointer from its first pixel, the offset can
+ * have drifted a couple of pixels by the time the finger lifts, and if that drift
+ * crossed an integer the `base` would flip and the tap would land a row out.
+ *
+ * The correctness of this is worth stating precisely, because it is the reason the
+ * caller can get away with a DOM hit-test instead of inverse-projecting a pointer
+ * through the drum's perspective transform: `base` here is the same `base` the
+ * tapped row used to choose the label it was displaying, so the item that arrives at
+ * the centre is *by construction* the item the user pointed at. There is no
+ * arithmetic linking the two that could be off by one — it is the same arithmetic.
+ */
+export const tapTargetOffset = ({
+  offsetAtTap,
+  slot,
+  itemHeight,
+}: {
+  offsetAtTap: number;
+  slot: number;
+  itemHeight: number;
+}): number => offsetForIndex(splitOffset(offsetAtTap, itemHeight).base + slot, itemHeight);
+
+/**
  * Signed distance from the centre line to the centre of the row at `slot`, in rows.
  *
  * The single primitive both looks are built from: the flat wheel multiplies it by
