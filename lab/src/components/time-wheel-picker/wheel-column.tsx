@@ -5,6 +5,8 @@ import type { FC } from 'react';
 import { prefixTypeahead, type Typeahead } from './typeahead.js';
 import { useWheel, WHEEL_SLOT_ATTRIBUTE } from './use-wheel.js';
 import {
+  DRUM_PERSPECTIVE,
+  drumHeight,
   drumOverscan,
   drumRadius,
   drumRow,
@@ -17,9 +19,6 @@ import {
 } from './wheel-geometry.js';
 import { WIREFRAME_FOCUS, WIREFRAME_FRAME, WIREFRAME_ITEM } from './wheel-style.js';
 
-/** Distance to the projection plane. Large enough that the drum reads as curved rather than as a fisheye. */
-const DRUM_PERSPECTIVE = 900;
-
 export type WheelVariant = 'drum' | 'flat';
 
 interface WheelRowProps {
@@ -28,6 +27,8 @@ interface WheelRowProps {
   items: readonly string[];
   itemHeight: number;
   rows: number;
+  /** The box the rows are centred in. Not `itemHeight * rows` once a drum sizes itself. */
+  height: number;
   variant: WheelVariant;
   anglePerItem: number;
   contentClassName?: string;
@@ -54,6 +55,7 @@ const WheelRow: FC<WheelRowProps> = ({
   items,
   itemHeight,
   rows,
+  height,
   variant,
   anglePerItem,
   contentClassName,
@@ -109,8 +111,9 @@ const WheelRow: FC<WheelRowProps> = ({
           ? {
               height: itemHeight,
               // Every row starts stacked at the centre line; the rotation is what
-              // distributes them around the drum.
-              top: (viewportHeight({ itemHeight, rows }) - itemHeight) / 2,
+              // distributes them around the drum. Centred in the resolved box, which
+              // for a drum is its own height rather than `itemHeight * rows`.
+              top: (height - itemHeight) / 2,
               opacity: drumOpacity,
               transform: drumTransform,
               pointerEvents,
@@ -135,6 +138,15 @@ export interface WheelColumnProps {
   variant?: WheelVariant;
   /** Degrees between adjacent items on the drum. Ignored when flat. */
   anglePerItem?: number;
+  /**
+   * Overrides the box height. Only meaningful for a drum, whose own height has
+   * nothing to do with `rows`; a flat wheel *is* `rows` items tall by definition.
+   *
+   * Left out, a drum measures itself — see `drumHeight`. Set it larger and the extra
+   * is padding above and below the drum; set it smaller and the drum is clipped.
+   * Neither is guarded against, because both are things a caller might mean.
+   */
+  height?: number;
   /**
    * How typing selects. Defaults to `<select>`'s prefix matching, which is right for
    * a wheel over arbitrary labels; a wheel over numbers should be handed
@@ -178,6 +190,7 @@ export const WheelColumn: FC<WheelColumnProps> = ({
   rows,
   variant = 'flat',
   anglePerItem = 20,
+  height,
   typeahead = prefixTypeahead,
   onSettled,
   label,
@@ -196,6 +209,9 @@ export const WheelColumn: FC<WheelColumnProps> = ({
   });
 
   const slots = rowSlots({ rows, overscan: variant === 'drum' ? drumOverscan({ rows, anglePerItem }) : 0 });
+  // A drum is as tall as the cylinder its edges sweep; a flat wheel is `rows` items.
+  const resolvedHeight =
+    height ?? (variant === 'drum' ? drumHeight({ itemHeight, anglePerItem }) : viewportHeight({ itemHeight, rows }));
 
   return (
     <div
@@ -229,7 +245,7 @@ export const WheelColumn: FC<WheelColumnProps> = ({
       // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="spinbutton"
       style={{
-        height: viewportHeight({ itemHeight, rows }),
+        height: resolvedHeight,
         perspective: variant === 'drum' ? DRUM_PERSPECTIVE : undefined,
       }}
       tabIndex={0}
@@ -239,6 +255,7 @@ export const WheelColumn: FC<WheelColumnProps> = ({
         <WheelRow
           anglePerItem={anglePerItem}
           contentClassName={contentClassName}
+          height={resolvedHeight}
           itemHeight={itemHeight}
           items={items}
           key={slot}

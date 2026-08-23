@@ -13,7 +13,7 @@ import {
 } from './time-model.js';
 import { numericTypeahead } from './typeahead.js';
 import { WheelColumn, type WheelVariant } from './wheel-column.js';
-import { viewportHeight } from './wheel-geometry.js';
+import { drumHeight, viewportHeight } from './wheel-geometry.js';
 import { WIREFRAME_BAND, WIREFRAME_FRAME, WIREFRAME_ITEM } from './wheel-style.js';
 
 /**
@@ -33,7 +33,8 @@ const MERIDIEM_COLUMN_WIDTH = 'w-[4ch]';
 
 interface SeparatorCellProps {
   itemHeight: number;
-  rows: number;
+  /** The same box the columns use, so the colon sits on their centre line. */
+  height: number;
 }
 
 /**
@@ -65,15 +66,11 @@ interface SeparatorCellProps {
  * sideways under a fixed colon as the wheel passed 9 → 10. Which reads, wrongly,
  * as the colon moving.
  */
-const SeparatorCell: FC<SeparatorCellProps> = ({ itemHeight, rows }) => (
-  <div
-    aria-hidden="true"
-    className={cn('relative', SEPARATOR_WIDTH)}
-    style={{ height: viewportHeight({ itemHeight, rows }) }}
-  >
+const SeparatorCell: FC<SeparatorCellProps> = ({ itemHeight, height }) => (
+  <div aria-hidden="true" className={cn('relative', SEPARATOR_WIDTH)} style={{ height }}>
     <div
       className={cn('absolute inset-x-0 flex items-center justify-center', WIREFRAME_ITEM)}
-      style={{ height: itemHeight, top: (viewportHeight({ itemHeight, rows }) - itemHeight) / 2 }}
+      style={{ height: itemHeight, top: (height - itemHeight) / 2 }}
     >
       <span>:</span>
     </div>
@@ -92,6 +89,16 @@ export interface TimeWheelPickerProps {
   variant?: WheelVariant;
   /** Degrees between adjacent items on the drum. Ignored when flat. */
   anglePerItem?: number;
+  /**
+   * Overrides the box height of every column, and with it the `:` and the band, so the
+   * three stay on one centre line.
+   *
+   * Left out, a drum measures itself — the cylinder its edges sweep, see `drumHeight` —
+   * and a flat wheel is `itemHeight * rows`. Larger than that is padding, smaller is a
+   * clip, and a clip is usually what is wanted: most uses do not want the whole drum,
+   * only the legible middle of it.
+   */
+  height?: number;
   className?: string;
 }
 
@@ -112,6 +119,7 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
   rows = 5,
   variant = 'flat',
   anglePerItem = 20,
+  height,
   className,
 }) => {
   const hours = useMemo(() => hourItems(hourFormat), [hourFormat]);
@@ -160,7 +168,10 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
   const onMinuteChange = useCallback((minute: number) => report({ minute }), [report]);
   const onMeridiemChange = useCallback((meridiem: number) => report({ meridiem }), [report]);
 
-  const height = viewportHeight({ itemHeight, rows });
+  // One height for the columns, the separator and the band, so all three agree about
+  // where the centre line is however the box was arrived at.
+  const resolvedHeight =
+    height ?? (variant === 'drum' ? drumHeight({ itemHeight, anglePerItem }) : viewportHeight({ itemHeight, rows }));
 
   /**
    * Typing `0941p` should fill the whole picker, which means a finished segment has
@@ -200,6 +211,7 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
           className={DIGIT_COLUMN_WIDTH}
           contentClassName={cn(DIGITS_WIDTH, 'text-right')}
           index={indices.hour}
+          height={resolvedHeight}
           itemHeight={itemHeight}
           items={hours}
           label="Hour"
@@ -209,12 +221,13 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
           typeahead={numericTypeahead}
           variant={variant}
         />
-        <SeparatorCell itemHeight={itemHeight} rows={rows} />
+        <SeparatorCell height={resolvedHeight} itemHeight={itemHeight} />
         <WheelColumn
           anglePerItem={anglePerItem}
           className={DIGIT_COLUMN_WIDTH}
           contentClassName={cn(DIGITS_WIDTH, 'text-left')}
           index={indices.minute}
+          height={resolvedHeight}
           itemHeight={itemHeight}
           items={minutes}
           label="Minute"
@@ -231,6 +244,7 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
             className={MERIDIEM_COLUMN_WIDTH}
             contentClassName={cn(MERIDIEM_WIDTH, 'text-center')}
             index={indices.meridiem}
+            height={resolvedHeight}
             itemHeight={itemHeight}
             items={meridiems}
             label="AM or PM"
@@ -251,7 +265,7 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
         <div
           aria-hidden="true"
           className={cn('pointer-events-none absolute inset-x-0', WIREFRAME_BAND)}
-          style={{ height: itemHeight, top: (height - itemHeight) / 2 }}
+          style={{ height: itemHeight, top: (resolvedHeight - itemHeight) / 2 }}
         />
       </div>
     </div>

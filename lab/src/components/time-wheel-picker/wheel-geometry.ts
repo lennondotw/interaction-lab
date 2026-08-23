@@ -229,6 +229,59 @@ export const drumRadius = ({ itemHeight, anglePerItem }: { itemHeight: number; a
   itemHeight / ((anglePerItem * Math.PI) / 180);
 
 /**
+ * Distance to the projection plane for a drum.
+ *
+ * Large enough that the drum reads as curved rather than as a fisheye, and it belongs
+ * here rather than in the component because `drumHeight` cannot be computed without
+ * it: the projection divide is part of how tall a drum is.
+ */
+export const DRUM_PERSPECTIVE = 900;
+
+/**
+ * How tall a drum actually is.
+ *
+ * The rows are flat rectangles, not arcs, so in cross-section the drum is a **prism**
+ * and not a cylinder: the rows are its faces and they meet at edges. A prism sits
+ * between two cylinders, and both of them are worth naming because they bracket every
+ * answer to "how tall":
+ *
+ * - the **inscribed** cylinder has radius `r`, the apothem — the distance
+ *   `translateZ(r)` pushes each row's own centre out to;
+ * - the **circumscribed** cylinder has radius `hypot(r, itemHeight / 2)`, reaching the
+ *   rows' corners, which is the surface the prism's edges sweep as it turns.
+ *
+ * A third height exists — the prism's extent at rest — and it is the wrong one to
+ * build on, because it depends on the rotation phase and so would have the box
+ * breathe while the wheel scrolled. Measured, it moves about a pixel. Both cylinders
+ * are rotation-invariant, which is the property a height needs.
+ *
+ * `perspective` then divides everything down. At the angle where a point is highest
+ * its `z` is back at the axis, so the projection is `ρ · P / (P + r)`.
+ *
+ * At the defaults the two cylinders are 203.3 and 206.4 — 1.5% apart, which is why
+ * the choice barely matters and `outer` is the default: it is the honest "the whole
+ * drum fits". What *did* matter was a box of `itemHeight * rows` on a drum whose own
+ * height is unrelated to it; at 40° per item that left 43px of dead space on each
+ * side.
+ */
+export const drumHeight = ({
+  itemHeight,
+  anglePerItem,
+  perspective = DRUM_PERSPECTIVE,
+  fit = 'outer',
+}: {
+  itemHeight: number;
+  anglePerItem: number;
+  perspective?: number;
+  /** `outer` clips nothing; `inner` trims to where the rows' own centres reach. */
+  fit?: 'inner' | 'outer';
+}): number => {
+  const apothem = drumRadius({ itemHeight, anglePerItem });
+  const radius = fit === 'inner' ? apothem : Math.hypot(apothem, itemHeight / 2);
+  return 2 * radius * (perspective / (perspective + apothem));
+};
+
+/**
  * Where a row sits on the drum: its rotation about the wheel's axis, and how much
  * of it is facing the viewer.
  *

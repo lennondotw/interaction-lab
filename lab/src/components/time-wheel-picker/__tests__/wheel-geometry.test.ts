@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertOddRows,
+  DRUM_PERSPECTIVE,
+  drumHeight,
   drumOverscan,
   drumRadius,
   drumRow,
@@ -249,6 +251,58 @@ describe('the drum', () => {
     expect(drumRow({ distance: 2, anglePerItem: 20 }).rotateX).toBeCloseTo(-40, 9);
     expect(drumRow({ distance: 4.5, anglePerItem: 20 }).opacity).toBeCloseTo(0, 9);
     expect(drumRow({ distance: 6, anglePerItem: 20 }).opacity).toBe(0);
+  });
+
+  describe('height', () => {
+    it('matches what the rendered drum measures', () => {
+      // 206.4 was measured off the real Drum story at the defaults, with
+      // `getBoundingClientRect` over every rendered row. The closed form has to agree
+      // with the thing on screen or it is not the drum's height.
+      expect(drumHeight({ itemHeight: 40, anglePerItem: 20 })).toBeCloseTo(206.4, 1);
+    });
+
+    it('brackets the prism between its two cylinders', () => {
+      const outer = drumHeight({ itemHeight: 40, anglePerItem: 20 });
+      const inner = drumHeight({ itemHeight: 40, anglePerItem: 20, fit: 'inner' });
+      // The inscribed cylinder runs through the rows' own centres, the circumscribed
+      // one through their corners, so the prism is between them and `outer` is the one
+      // that cannot clip.
+      expect(inner).toBeLessThan(outer);
+      expect(inner).toBeCloseTo(203.3, 1);
+      // 1.5% apart at the defaults, which is why the choice is not a design decision.
+      expect((outer - inner) / outer).toBeLessThan(0.02);
+    });
+
+    it('shrinks as the arc tightens, which a rows-based box could not follow', () => {
+      const wide = drumHeight({ itemHeight: 40, anglePerItem: 10 });
+      const mid = drumHeight({ itemHeight: 40, anglePerItem: 20 });
+      const tight = drumHeight({ itemHeight: 40, anglePerItem: 34 });
+      expect(wide).toBeGreaterThan(mid);
+      expect(mid).toBeGreaterThan(tight);
+      // Over the three angles the story shows, the drum's own height moves by 2.8x
+      // while `itemHeight * rows` would have stayed at 200 throughout.
+      expect(wide / tight).toBeCloseTo(2.8, 1);
+      // Across 8°-40° the closed form spans 3.82x. The browser measured 4.03x over the
+      // same pair; the gap is that the measurement filtered to rows still visible and
+      // read `getBoundingClientRect`, which overestimates a 3D-transformed quad.
+      expect(
+        drumHeight({ itemHeight: 40, anglePerItem: 8 }) / drumHeight({ itemHeight: 40, anglePerItem: 40 })
+      ).toBeCloseTo(3.82, 2);
+    });
+
+    it('is independent of rows, because a drum is not rows tall', () => {
+      // Nothing in the signature takes `rows`. Stated as a test because it is the
+      // whole point: the box follows the cylinder, not the row budget.
+      expect(drumHeight({ itemHeight: 40, anglePerItem: 20 })).toBe(
+        drumHeight({ itemHeight: 40, anglePerItem: 20, perspective: DRUM_PERSPECTIVE })
+      );
+    });
+
+    it('grows with the item height at a fixed arc', () => {
+      expect(drumHeight({ itemHeight: 60, anglePerItem: 20 })).toBeGreaterThan(
+        drumHeight({ itemHeight: 40, anglePerItem: 20 })
+      );
+    });
   });
 
   it('asks for enough rows to reach the edge of the arc', () => {

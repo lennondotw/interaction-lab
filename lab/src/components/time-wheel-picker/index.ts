@@ -32,6 +32,8 @@ export {
 export { WheelColumn, type WheelColumnProps, type WheelVariant } from './wheel-column.js';
 export {
   assertOddRows,
+  DRUM_PERSPECTIVE,
+  drumHeight,
   drumOverscan,
   drumRadius,
   drumRow,
