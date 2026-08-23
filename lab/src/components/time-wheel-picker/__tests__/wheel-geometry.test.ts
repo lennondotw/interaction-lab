@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertOddRows,
   DRUM_PERSPECTIVE,
+  drumAngleForHeight,
   drumHeight,
   drumSlots,
   drumRadius,
@@ -282,6 +283,57 @@ describe('the drum', () => {
     expect(drumRow({ distance: 2, anglePerItem: 20 }).rotateX).toBeCloseTo(-40, 9);
     expect(drumRow({ distance: 4.5, anglePerItem: 20 }).opacity).toBeCloseTo(0, 9);
     expect(drumRow({ distance: 6, anglePerItem: 20 }).opacity).toBe(0);
+  });
+
+  describe('sizing the drum by its height instead of its angle', () => {
+    it('round-trips against drumHeight for every angle worth using', () => {
+      // The one test that matters: the inverse has to agree with the forward function it
+      // inverts, or the two spellings of a drum's shape are not spellings of one thing.
+      for (const anglePerItem of [4, 8, 10, 14, 20, 28, 34, 40, 60, 89]) {
+        const height = drumHeight({ itemHeight: 40, anglePerItem });
+        expect(drumAngleForHeight({ itemHeight: 40, drumHeight: height }), `${anglePerItem}°`).toBeCloseTo(
+          anglePerItem,
+          6
+        );
+      }
+    });
+
+    it('round-trips at other item heights too', () => {
+      for (const itemHeight of [24, 40, 72]) {
+        for (const anglePerItem of [10, 20, 34]) {
+          const height = drumHeight({ itemHeight, anglePerItem });
+          expect(
+            drumAngleForHeight({ itemHeight, drumHeight: height }),
+            `${itemHeight}px at ${anglePerItem}°`
+          ).toBeCloseTo(anglePerItem, 6);
+        }
+      }
+    });
+
+    it('gives the angle the default height was already using', () => {
+      // 206.4 is what a 20° drum measures, so asking for 206.4 must ask for 20°.
+      expect(drumAngleForHeight({ itemHeight: 40, drumHeight: 206.4 })).toBeCloseTo(20, 2);
+    });
+
+    it('refuses a height no drum can have, rather than inventing an angle', () => {
+      // Shorter than one row is the limit as the angle grows without bound.
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 40 })).toThrow(/between/u);
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 12 })).toThrow(/between/u);
+      // Twice the perspective is the limit as the angle shrinks to nothing.
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 1800 })).toThrow(/between/u);
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 5000 })).toThrow(/between/u);
+    });
+
+    it('accepts anything strictly inside those limits', () => {
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 41 })).not.toThrow();
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 1799 })).not.toThrow();
+    });
+
+    it('asks for a tighter arc when asked for a shorter drum', () => {
+      const short = drumAngleForHeight({ itemHeight: 40, drumHeight: 130 });
+      const tall = drumAngleForHeight({ itemHeight: 40, drumHeight: 360 });
+      expect(short).toBeGreaterThan(tall);
+    });
   });
 
   describe('height', () => {

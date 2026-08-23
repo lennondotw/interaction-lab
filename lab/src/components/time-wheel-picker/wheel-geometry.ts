@@ -282,6 +282,59 @@ export const drumHeight = ({
 };
 
 /**
+ * The angle per item that would make a drum exactly this tall — {@link drumHeight} run
+ * backwards.
+ *
+ * Two ways of saying one thing, so they are mutually exclusive: a drum's shape is either
+ * given as an angle or as the height that angle produces. Neither is the *box*, which is
+ * `height` and stays independent of both — see {@link resolveColumnHeight}. Overloading
+ * `height` to mean this instead would cost the clip, which is the more common need: a
+ * smaller box trims the ends of the arc, whereas a smaller `drumHeight` tightens the arc
+ * itself. They are different pictures and both are wanted.
+ *
+ * Inverting `2 · hypot(r, h/2) · P / (P + r)` for `r` is a quadratic:
+ *
+ *     r²(k² − P²) + 2k²P·r + P²(k² − (h/2)²) = 0        with k = drumHeight / 2
+ *
+ * `k < P` always holds inside the bounds below, so the leading coefficient is negative and
+ * the constant is positive, which makes the `−√D` root the positive one. There is exactly
+ * one physical answer, never a choice between two.
+ *
+ * The bounds are real rather than defensive, and both are limits of the forward function:
+ * as the angle grows the radius shrinks and the height tends to `itemHeight`, a single row
+ * seen face-on; as the angle shrinks the radius grows and the height tends to
+ * `2 · perspective`. A target outside that open interval has no drum, so it throws rather
+ * than silently returning a nonsense angle.
+ */
+export const drumAngleForHeight = ({
+  itemHeight,
+  drumHeight: target,
+  perspective = DRUM_PERSPECTIVE,
+}: {
+  itemHeight: number;
+  /** The drum's own height, not the box. */
+  drumHeight: number;
+  perspective?: number;
+}): number => {
+  const shortest = itemHeight;
+  const tallest = 2 * perspective;
+  if (!(target > shortest && target < tallest)) {
+    throw new Error(
+      `drumHeight must be between ${shortest} and ${tallest} for itemHeight ${itemHeight} ` +
+        `and perspective ${perspective}, received ${target}`
+    );
+  }
+
+  const half = target / 2;
+  const a = half * half - perspective * perspective;
+  const b = 2 * half * half * perspective;
+  const c = perspective * perspective * (half * half - (itemHeight / 2) ** 2);
+  const radius = (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+
+  return ((itemHeight / radius) * 180) / Math.PI;
+};
+
+/**
  * Where a row sits on the drum: its rotation about the wheel's axis, and how much
  * of it is facing the viewer.
  *

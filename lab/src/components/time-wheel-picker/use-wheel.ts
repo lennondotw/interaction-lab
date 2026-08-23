@@ -199,6 +199,33 @@ export function useWheel({
   }, []);
 
   /**
+   * Keeps the wheel where it is when the row pitch changes under it.
+   *
+   * `offset` is a distance in pixels and `itemHeight` is its unit — `offset / itemHeight` is
+   * the index — so changing the pitch silently changes what the stored number means.
+   * `useMotionValue` reads its argument only on the first render, so the wheel went on
+   * holding an offset measured in the old pitch: at 40 → 62 the selected row ended 0.16 of a
+   * row off the centre line and the band no longer sat on any row at all.
+   *
+   * Multiplying by the ratio preserves `offset / itemHeight` exactly, so the index survives
+   * and so does any fraction the wheel was resting at. Snapping to the index instead would
+   * also fix the alignment, and would move a wheel that was deliberately mid-row.
+   *
+   * Any animation in flight is stopped rather than rescaled: its target was computed in the
+   * old unit, and re-aiming it is not worth the arithmetic for what is a configuration
+   * change rather than a gesture.
+   */
+  const pitchRef = useRef(itemHeight);
+  useEffect(() => {
+    const previous = pitchRef.current;
+    if (previous === itemHeight) return;
+    pitchRef.current = itemHeight;
+    stopAnimation();
+    keyTargetRef.current = null;
+    offset.set((offset.get() / previous) * itemHeight);
+  }, [itemHeight, offset, stopAnimation]);
+
+  /**
    * Called when a gesture has come fully to rest.
    *
    * The rebase is the whole reason the loop needs no DOM trickery: subtracting
