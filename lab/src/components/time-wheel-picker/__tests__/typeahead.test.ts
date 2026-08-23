@@ -226,4 +226,24 @@ describe('the two strategies together', () => {
     expect(type(numericTypeahead, hourItems(12), '9').settledAt).toEqual([0]);
     expect(type(numericTypeahead, minuteItems(), '41').landed).toBe('41');
   });
+
+  it('spells 1021, where the first digit is already a value and then gets extended', () => {
+    // The awkward shape: `1` is a valid hour *and* extendable, so it selects and keeps
+    // the buffer open; `0` then makes ten and settles on width. The wheel therefore
+    // visits `1` on its way to `10`, which is a visible reversal on screen and the
+    // cost of moving on every keystroke rather than waiting for the segment.
+    const hour = type(numericTypeahead, hourItems(12), '10');
+    expect(hour.trail).toEqual(['1', '10']);
+    expect(hour.settledAt).toEqual([1]);
+
+    const minute = type(numericTypeahead, minuteItems(), '21');
+    expect(minute.trail).toEqual(['02', '21']);
+    expect(minute.settledAt).toEqual([1]);
+  });
+
+  it('spells 1021 on a 24-hour wheel too, where the hour labels are padded', () => {
+    const hour = type(numericTypeahead, hourItems(24), '10');
+    expect(hour.trail).toEqual(['01', '10']);
+    expect(hour.settledAt).toEqual([1]);
+  });
 });
