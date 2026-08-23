@@ -4,7 +4,7 @@ import {
   assertOddRows,
   DRUM_PERSPECTIVE,
   drumHeight,
-  drumOverscan,
+  drumSlots,
   drumRadius,
   drumRow,
   indexFromOffset,
@@ -12,6 +12,7 @@ import {
   nearestOffsetForIndex,
   pastDragThreshold,
   rebaseOffset,
+  resolveColumnHeight,
   rowIndex,
   rowSlots,
   rowTop,
@@ -236,6 +237,36 @@ describe('tapTargetOffset', () => {
   });
 });
 
+describe('resolveColumnHeight', () => {
+  it('lets `height` win, whichever variant and whatever the drum would have measured', () => {
+    // The rule that used to be an inline `??` at two call sites. `height` is the source of
+    // truth for the box; the angle remains the drum's shape.
+    expect(resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20, height: 166 })).toBe(166);
+    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 5, height: 166 })).toBe(166);
+    // Both directions of disagreement are legal, so neither is clamped away.
+    expect(resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20, height: 600 })).toBe(600);
+    expect(resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20, height: 40 })).toBe(40);
+  });
+
+  it('measures a drum from its own cylinder when no height is given', () => {
+    expect(resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20 })).toBeCloseTo(
+      drumHeight({ itemHeight: 40, anglePerItem: 20 }),
+      9
+    );
+  });
+
+  it('makes a flat wheel exactly `rows` items tall, which for it is not negotiable', () => {
+    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 5 })).toBe(200);
+    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 7 })).toBe(280);
+  });
+
+  it('ignores `rows` on a drum, which is why a drum no longer accepts one', () => {
+    const withRows = resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20, rows: 9 });
+    const without = resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20 });
+    expect(withRows).toBe(without);
+  });
+});
+
 describe('the drum', () => {
   it('puts one row of arc at one row of height, so the drag mapping matches the flat wheel', () => {
     const anglePerItem = 20;
@@ -305,9 +336,23 @@ describe('the drum', () => {
     });
   });
 
-  it('asks for enough rows to reach the edge of the arc', () => {
-    expect(drumOverscan({ rows: 5, anglePerItem: 20 })).toBe(2);
-    // A 90-degree pitch turns the next row edge-on, so the flat set already covers it.
-    expect(drumOverscan({ rows: 5, anglePerItem: 90 })).toBe(0);
+  it('renders the slots that fit inside the arc, and takes no row count to do it', () => {
+    // 20° per item reaches 90° at the fifth row, so the slots run -4..5.
+    expect(drumSlots({ anglePerItem: 20 })).toEqual([-4, -3, -2, -1, 0, 1, 2, 3, 4, 5]);
+    // A tighter arc needs fewer.
+    expect(drumSlots({ anglePerItem: 34 })).toEqual([-2, -1, 0, 1, 2, 3]);
+    // And a 90° pitch turns the very next row edge-on.
+    expect(drumSlots({ anglePerItem: 90 })).toEqual([0, 1]);
+  });
+
+  it('is unaffected by anything a flat wheel would be sized by', () => {
+    // Not a tautology about the signature but the finding that removed `rows` from the
+    // drum: measured in the browser, a drum at 20° rendered the identical ten slots at
+    // every row count from 1 to 9, because the overscan that used to derive them cancelled
+    // `rows` out of its own arithmetic.
+    const slots = drumSlots({ anglePerItem: 20 });
+    expect(slots).toHaveLength(10);
+    expect(Math.min(...slots)).toBe(1 - Math.ceil(90 / 20));
+    expect(Math.max(...slots)).toBe(Math.ceil(90 / 20));
   });
 });

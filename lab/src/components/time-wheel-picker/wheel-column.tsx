@@ -6,16 +6,15 @@ import { prefixTypeahead, type Typeahead } from './typeahead.js';
 import { useWheel, WHEEL_SLOT_ATTRIBUTE } from './use-wheel.js';
 import {
   DRUM_PERSPECTIVE,
-  drumHeight,
-  drumOverscan,
   drumRadius,
   drumRow,
+  drumSlots,
+  resolveColumnHeight,
   rowDistance,
   rowFade,
   rowIndex,
   rowSlots,
   rowTop,
-  viewportHeight,
 } from './wheel-geometry.js';
 import { WIREFRAME_FOCUS, WIREFRAME_FRAME, WIREFRAME_ITEM } from './wheel-style.js';
 
@@ -26,9 +25,14 @@ interface WheelRowProps {
   offset: MotionValue<number>;
   items: readonly string[];
   itemHeight: number;
-  rows: number;
   /** The box the rows are centred in. Not `itemHeight * rows` once a drum sizes itself. */
   height: number;
+  /**
+   * How far the fade reaches, in rows. Only a flat wheel has one; a drum's dimming comes
+   * from `cos θ`, which needs no reach because a surface turning away is not a curve
+   * anyone chose.
+   */
+  rows: number | undefined;
   variant: WheelVariant;
   anglePerItem: number;
   contentClassName?: string;
@@ -65,9 +69,11 @@ const WheelRow: FC<WheelRowProps> = ({
   const label = useTransform(offset, (value) => items[rowIndex({ slot, offset: value, itemHeight, count })] ?? '');
   const distance = useTransform(offset, (value) => rowDistance({ slot, offset: value, itemHeight }));
 
-  const top = useTransform(offset, (value) => rowTop({ slot, offset: value, itemHeight, rows }));
-  const flatOpacity = useTransform(distance, (value) => rowFade({ distance: value, rows }).opacity);
-  const flatScale = useTransform(distance, (value) => rowFade({ distance: value, rows }).scale);
+  // `rows` is only ever absent on a drum, which reads none of these three.
+  const flatRows = rows ?? 1;
+  const top = useTransform(offset, (value) => rowTop({ slot, offset: value, itemHeight, rows: flatRows }));
+  const flatOpacity = useTransform(distance, (value) => rowFade({ distance: value, rows: flatRows }).opacity);
+  const flatScale = useTransform(distance, (value) => rowFade({ distance: value, rows: flatRows }).scale);
 
   const rotateX = useTransform(distance, (value) => drumRow({ distance: value, anglePerItem }).rotateX);
   const drumOpacity = useTransform(distance, (value) => drumRow({ distance: value, anglePerItem }).opacity);
@@ -127,26 +133,13 @@ const WheelRow: FC<WheelRowProps> = ({
   );
 };
 
-export interface WheelColumnProps {
+/** Everything a wheel needs whichever way it is drawn. */
+interface WheelColumnBase {
   /** Labels, in wheel order. Looped, so any length works — including two. */
   items: readonly string[];
   index: number;
   onIndexChange: (index: number) => void;
   itemHeight: number;
-  /** Odd, and the viewport is exactly this many items tall. */
-  rows: number;
-  variant?: WheelVariant;
-  /** Degrees between adjacent items on the drum. Ignored when flat. */
-  anglePerItem?: number;
-  /**
-   * Overrides the box height. Only meaningful for a drum, whose own height has
-   * nothing to do with `rows`; a flat wheel *is* `rows` items tall by definition.
-   *
-   * Left out, a drum measures itself — see `drumHeight`. Set it larger and the extra
-   * is padding above and below the drum; set it smaller and the drum is clipped.
-   * Neither is guarded against, because both are things a caller might mean.
-   */
-  height?: number;
   /**
    * How typing selects. Defaults to `<select>`'s prefix matching, which is right for
    * a wheel over arbitrary labels; a wheel over numbers should be handed
@@ -173,6 +166,41 @@ export interface WheelColumnProps {
    */
   contentClassName?: string;
 }
+
+/**
+ * How the wheel is drawn, and the sizing that goes with it. A discriminated union rather
+ * than one flat set of optional props, because the two shapes are sized by different
+ * things and the props that size one are meaningless on the other.
+ *
+ * `rows` is the flat wheel's size: it *is* the box, `itemHeight * rows` tall. A drum has
+ * no use for it — measured, a drum renders identical geometry at every row count — so
+ * accepting it there would be accepting a prop that silently does nothing.
+ *
+ * A drum is sized by its own geometry instead: `anglePerItem` is its shape, and `height`
+ * is the window onto it. See `resolveColumnHeight` for how those two settle the box.
+ */
+export type WheelColumnShape =
+  | {
+      variant?: 'flat';
+      /** Odd, and the viewport is exactly this many items tall. */
+      rows: number;
+      anglePerItem?: never;
+      height?: never;
+    }
+  | {
+      variant: 'drum';
+      rows?: never;
+      /** Degrees between adjacent items. The drum's shape, and so its natural height. */
+      anglePerItem?: number;
+      /**
+       * Overrides the box. Left out, the drum measures itself — the cylinder its edges
+       * sweep. Larger is padding above and below it, smaller is a clip, and the clip is
+       * usually the point.
+       */
+      height?: number;
+    };
+
+export type WheelColumnProps = WheelColumnBase & WheelColumnShape;
 
 /**
  * One endlessly looping column.
@@ -208,10 +236,10 @@ export const WheelColumn: FC<WheelColumnProps> = ({
     onSettled,
   });
 
-  const slots = rowSlots({ rows, overscan: variant === 'drum' ? drumOverscan({ rows, anglePerItem }) : 0 });
-  // A drum is as tall as the cylinder its edges sweep; a flat wheel is `rows` items.
-  const resolvedHeight =
-    height ?? (variant === 'drum' ? drumHeight({ itemHeight, anglePerItem }) : viewportHeight({ itemHeight, rows }));
+  // A drum's slots come from its arc and a flat wheel's from its row count — the two are
+  // sized by different things, which is what the props union says.
+  const slots = variant === 'drum' ? drumSlots({ anglePerItem }) : rowSlots({ rows: rows ?? 1 });
+  const resolvedHeight = resolveColumnHeight({ variant, itemHeight, rows, anglePerItem, height });
 
   return (
     <div

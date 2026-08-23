@@ -301,17 +301,66 @@ export const drumRow = ({
 };
 
 /**
- * Extra rows a drum needs beyond the flat slot set.
+ * Slot numbers to render on a drum, top to bottom.
  *
- * The flat wheel renders exactly the rows the viewport can hold, because a row's
- * apparent height there is always `itemHeight`. On a drum the rows away from the
- * centre compress, so the same viewport holds more of them, and the arc keeps
- * going until it turns edge-on at 90°. Stopping at the flat count leaves a visible
- * empty band at the top and bottom of the drum where the wheel should be curving
- * away.
+ * Deliberately does not take `rows`, because a drum's row count never depended on it.
+ * The arc runs until a row turns edge-on at 90°, so the slots are the ones that fit
+ * inside that: `1 - ceil(90 / anglePerItem)` up to `ceil(90 / anglePerItem)`.
+ *
+ * This used to be spelled as the flat slot set plus an overscan derived from `rows`, and
+ * the algebra cancelled: the lower bound `-half - (ceil(90/a) - half - 1)` loses its
+ * `half`. Measured, a drum at 20° per item renders the identical ten slots at every row
+ * count from 1 to 9, and the two extra slots at 11 are past 90° and invisible. So `rows`
+ * was a prop that silently did nothing on a drum, which is why the drum branch no longer
+ * accepts it.
  */
-export const drumOverscan = ({ rows, anglePerItem }: { rows: number; anglePerItem: number }): number =>
-  Math.max(0, Math.ceil(90 / anglePerItem) - halfRows(rows) - 1);
+export const drumSlots = ({ anglePerItem }: { anglePerItem: number }): number[] => {
+  const reach = Math.ceil(90 / anglePerItem);
+  const slots: number[] = [];
+  for (let slot = 1 - reach; slot <= reach; slot++) {
+    slots.push(slot === 0 ? 0 : slot);
+  }
+  return slots;
+};
+
+/**
+ * The box height a column is actually laid out at.
+ *
+ * One function so the rule is stated once and can be asserted, rather than being an `??`
+ * repeated at each call site. The rule:
+ *
+ * - `height`, when given, wins. It is the source of truth for the box, whatever the drum
+ *   would have measured, and both directions of disagreement are legal: larger is padding
+ *   above and below the drum, smaller is a clip. Neither is guarded against, because both
+ *   are things a caller means — the clip especially, since the ends of a full drum's arc
+ *   are edge-on slivers most uses would rather not spend space on.
+ * - a drum otherwise measures itself, from the cylinder its edges sweep. See
+ *   {@link drumHeight}.
+ * - a flat wheel is `rows` items tall, and that is not negotiable: for it, `rows` *is* the
+ *   box.
+ *
+ * `height` and `anglePerItem` are not two spellings of one thing and do not need a
+ * priority between them beyond this: the angle is the drum's shape, `height` is the window
+ * onto it. The only quantity they both touch is the box, and that is the one decided here.
+ */
+export const resolveColumnHeight = ({
+  variant,
+  itemHeight,
+  rows,
+  anglePerItem,
+  height,
+}: {
+  variant: 'drum' | 'flat';
+  itemHeight: number;
+  /** Required for a flat wheel; a drum has no use for it. */
+  rows?: number;
+  anglePerItem?: number;
+  height?: number;
+}): number => {
+  if (height !== undefined) return height;
+  if (variant === 'drum') return drumHeight({ itemHeight, anglePerItem: anglePerItem ?? 20 });
+  return viewportHeight({ itemHeight, rows: rows ?? 1 });
+};
 
 /**
  * `offset` brought back into the first lap, without moving anything on screen.

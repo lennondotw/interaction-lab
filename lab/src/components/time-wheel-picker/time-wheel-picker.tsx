@@ -13,7 +13,7 @@ import {
 } from './time-model.js';
 import { numericTypeahead } from './typeahead.js';
 import { WheelColumn, type WheelVariant } from './wheel-column.js';
-import { drumHeight, viewportHeight } from './wheel-geometry.js';
+import { resolveColumnHeight } from './wheel-geometry.js';
 import { WIREFRAME_BAND, WIREFRAME_FRAME, WIREFRAME_ITEM } from './wheel-style.js';
 
 /**
@@ -84,10 +84,18 @@ export interface TimeWheelPickerProps {
   hourFormat?: HourFormat;
   /** Row pitch. Everything else is derived from it, so it is a contract rather than a magic number. */
   itemHeight?: number;
-  /** Must be odd — an even count has no centred row for the band and the `:` to align to. */
+  /**
+   * How many items tall a **flat** wheel is. Must be odd — an even count has no centred
+   * row for the band and the `:` to align to.
+   *
+   * A drum ignores it, and provably: its slots come from its arc, so it renders the same
+   * geometry at every row count. `WheelColumn` refuses the pair outright, but this level
+   * keeps both props because it owns a `variant` toggle and a caller flipping that should
+   * not have to restructure its props to do it.
+   */
   rows?: number;
   variant?: WheelVariant;
-  /** Degrees between adjacent items on the drum. Ignored when flat. */
+  /** Degrees between adjacent items on the drum, which is its shape. Ignored when flat. */
   anglePerItem?: number;
   /**
    * Overrides the box height of every column, and with it the `:` and the band, so the
@@ -170,8 +178,23 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
 
   // One height for the columns, the separator and the band, so all three agree about
   // where the centre line is however the box was arrived at.
-  const resolvedHeight =
-    height ?? (variant === 'drum' ? drumHeight({ itemHeight, anglePerItem }) : viewportHeight({ itemHeight, rows }));
+  const resolvedHeight = resolveColumnHeight({ variant, itemHeight, rows, anglePerItem, height });
+
+  /**
+   * The sizing half of a column's props, which differs by variant.
+   *
+   * `WheelColumn` takes a union — a flat wheel is sized by `rows`, a drum by its own
+   * geometry — so a caller holding a variant at runtime has to pick a branch rather than
+   * spread everything and hope. This picker is that caller, and being made to choose here
+   * is the point: it is where the `variant` toggle lives.
+   *
+   * The drum is handed the height already resolved, so the separator, the band and all
+   * three columns cannot end up disagreeing about the box.
+   */
+  const shape =
+    variant === 'drum'
+      ? ({ variant: 'drum', anglePerItem, height: resolvedHeight } as const)
+      : ({ variant: 'flat', rows } as const);
 
   /**
    * Typing `0941p` should fill the whole picker, which means a finished segment has
@@ -207,50 +230,41 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
     >
       <div className="relative flex" ref={columnsRef}>
         <WheelColumn
-          anglePerItem={anglePerItem}
           className={DIGIT_COLUMN_WIDTH}
           contentClassName={cn(DIGITS_WIDTH, 'text-right')}
           index={indices.hour}
-          height={resolvedHeight}
           itemHeight={itemHeight}
           items={hours}
           label="Hour"
           onIndexChange={onHourChange}
           onSettled={() => focusColumn(1)}
-          rows={rows}
+          {...shape}
           typeahead={numericTypeahead}
-          variant={variant}
         />
         <SeparatorCell height={resolvedHeight} itemHeight={itemHeight} />
         <WheelColumn
-          anglePerItem={anglePerItem}
           className={DIGIT_COLUMN_WIDTH}
           contentClassName={cn(DIGITS_WIDTH, 'text-left')}
           index={indices.minute}
-          height={resolvedHeight}
           itemHeight={itemHeight}
           items={minutes}
           label="Minute"
           onIndexChange={onMinuteChange}
           onSettled={() => focusColumn(2)}
-          rows={rows}
+          {...shape}
           typeahead={numericTypeahead}
           valueText={(index) => `${minutes[index] ?? ''} minutes`}
-          variant={variant}
         />
         {hourFormat === 12 && (
           <WheelColumn
-            anglePerItem={anglePerItem}
             className={MERIDIEM_COLUMN_WIDTH}
             contentClassName={cn(MERIDIEM_WIDTH, 'text-center')}
             index={indices.meridiem}
-            height={resolvedHeight}
             itemHeight={itemHeight}
             items={meridiems}
             label="AM or PM"
             onIndexChange={onMeridiemChange}
-            rows={rows}
-            variant={variant}
+            {...shape}
           />
         )}
         {/*

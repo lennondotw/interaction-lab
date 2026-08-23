@@ -294,13 +294,7 @@ const HOURS_24 = Array.from({ length: 24 }, (_unused, hour) => String(hour).padS
  * visible padding; where it is larger the drum runs off the edge and is clipped. Seeing
  * both against the same drawn boundary is the only way to judge which is wanted.
  */
-const DrumCaseWheel: FC<DrumCase & { itemHeight: number; rows: number }> = ({
-  title,
-  itemHeight,
-  rows,
-  anglePerItem,
-  height,
-}) => {
+const DrumCaseWheel: FC<DrumCase & { itemHeight: number }> = ({ title, itemHeight, anglePerItem, height }) => {
   const [index, setIndex] = useState(4);
   const box = height ?? drumHeight({ itemHeight, anglePerItem });
 
@@ -317,7 +311,6 @@ const DrumCaseWheel: FC<DrumCase & { itemHeight: number; rows: number }> = ({
           items={HOURS_24}
           label={`Hour ${title}`}
           onIndexChange={setIndex}
-          rows={rows}
           variant="drum"
         />
         <div
@@ -334,13 +327,13 @@ const DrumCaseLabel: FC<DrumCase & { itemHeight: number }> = ({ title, note, ite
   const auto = drumHeight({ itemHeight, anglePerItem });
 
   return (
-    <span className="text-center text-xs leading-4 text-neutral-500">
+    // Each field on its own line, so the column is only as wide as its longest single field
+    // and nothing has to wrap mid-phrase.
+    <span className="flex flex-col items-center whitespace-nowrap text-center text-xs leading-4 text-neutral-500">
       {title}
-      <br />
-      <span className="font-mono text-neutral-400 tabular-nums">
-        {anglePerItem}° · auto {auto.toFixed(0)} · box {(height ?? auto).toFixed(0)}
-      </span>
-      <br />
+      <span className="font-mono text-neutral-400 tabular-nums">{anglePerItem}°</span>
+      <span className="font-mono text-neutral-400 tabular-nums">auto {auto.toFixed(0)}</span>
+      <span className="font-mono text-neutral-400 tabular-nums">box {(height ?? auto).toFixed(0)}</span>
       <span className="text-neutral-400">{note}</span>
     </span>
   );
@@ -372,7 +365,8 @@ export const DrumHeight: Story = {
   parameters: { controls: { disable: true } },
   render: (args) => {
     const itemHeight = args.itemHeight ?? 40;
-    const rows = args.rows ?? 5;
+    // No `rows` here on purpose: a drum is sized by its arc, and its props no longer
+    // accept a row count.
     const auto = drumHeight({ itemHeight, anglePerItem: 20 });
     const cases: DrumCase[] = [
       { title: 'wide arc', note: 'auto', anglePerItem: 10 },
@@ -392,11 +386,11 @@ export const DrumHeight: Story = {
         >
           {cases.map((drum) => (
             <div className="flex justify-center self-center" key={drum.title}>
-              <DrumCaseWheel {...drum} itemHeight={itemHeight} rows={rows} />
+              <DrumCaseWheel {...drum} itemHeight={itemHeight} />
             </div>
           ))}
           {cases.map((drum) => (
-            <div className="flex w-[13ch] justify-center self-start" key={drum.title}>
+            <div className="flex justify-center self-start" key={drum.title}>
               <DrumCaseLabel {...drum} itemHeight={itemHeight} />
             </div>
           ))}

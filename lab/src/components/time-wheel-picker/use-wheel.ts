@@ -77,8 +77,11 @@ export interface UseWheelOptions {
   /** The labels. Their count is the loop period; typing matches against them. */
   items: readonly string[];
   itemHeight: number;
-  /** Odd. Only needed so a page-sized wheel delta means something. */
-  rows: number;
+  /**
+   * Only ever read to scale a page-sized wheel delta, so it is optional: a drum has no row
+   * count to give, and a page of a drum is one screen either way.
+   */
+  rows?: number;
   /** Controlled selection. */
   index: number;
   onIndexChange: (index: number) => void;
@@ -515,7 +518,7 @@ export function useWheel({
 
       // `deltaMode` is pixels almost everywhere, but Firefox reports lines and
       // some remotes report pages; both are a multiple of the wheel's own metrics.
-      const scale = event.deltaMode === 1 ? itemHeight : event.deltaMode === 2 ? itemHeight * rows : 1;
+      const scale = event.deltaMode === 1 ? itemHeight : event.deltaMode === 2 ? itemHeight * (rows ?? 1) : 1;
       offset.set(offset.get() + event.deltaY * scale);
 
       // Trackpad momentum arrives as a decaying burst of events, so the gesture
