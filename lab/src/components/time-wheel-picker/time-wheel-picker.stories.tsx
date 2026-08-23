@@ -287,6 +287,16 @@ interface DrumCase {
 const HOURS_24 = Array.from({ length: 24 }, (_unused, hour) => String(hour).padStart(2, '0'));
 
 /**
+ * Width of one case's grid track in `DrumHeight`.
+ *
+ * A fixed width rather than the content's, so the drums sit at even intervals and can be
+ * read as a series — which is the whole job of that story. Wide enough for a drum plus its
+ * frame several times over, and narrow enough that five fit on a laptop; the longest note
+ * wraps to two lines at it, which is why the labels no longer forbid wrapping.
+ */
+const CASE_COLUMN_WIDTH = 100;
+
+/**
  * One drum with its box drawn around it.
  *
  * The dashed outer rule is the box the column is actually given, and the solid inner one
@@ -338,13 +348,16 @@ const DrumCaseLabel: FC<DrumCase & { itemHeight: number }> = ({
   const auto = drumHeight({ itemHeight, anglePerItem: drumAnglePerItem });
 
   return (
-    // Each field on its own line, so the column is only as wide as its longest single field
-    // and nothing has to wrap mid-phrase.
-    <span className="flex flex-col items-center whitespace-nowrap text-center text-xs leading-4 text-neutral-500">
+    // One field per line. The numbers keep `whitespace-nowrap` so `auto 367` never splits
+    // across two lines; the prose is allowed to wrap, because the track is a fixed width and
+    // the longest note does not fit on one line at it.
+    <span className="flex w-full flex-col items-center text-center text-xs leading-4 text-neutral-500">
       {title}
-      <span className="font-mono text-neutral-400 tabular-nums">{drumAnglePerItem.toFixed(1)}°</span>
-      <span className="font-mono text-neutral-400 tabular-nums">auto {auto.toFixed(0)}</span>
-      <span className="font-mono text-neutral-400 tabular-nums">box {(drumViewportHeight ?? auto).toFixed(0)}</span>
+      <span className="font-mono whitespace-nowrap text-neutral-400 tabular-nums">{drumAnglePerItem.toFixed(1)}°</span>
+      <span className="font-mono whitespace-nowrap text-neutral-400 tabular-nums">auto {auto.toFixed(0)}</span>
+      <span className="font-mono whitespace-nowrap text-neutral-400 tabular-nums">
+        box {(drumViewportHeight ?? auto).toFixed(0)}
+      </span>
       <span className="text-neutral-400">{note}</span>
     </span>
   );
@@ -386,16 +399,19 @@ export const DrumHeight: Story = {
       { title: 'default', note: 'auto', drumAnglePerItem: 20 },
       { title: 'tight arc', note: 'auto', drumAnglePerItem: 34 },
       { title: 'taller box', note: 'override, padded', drumAnglePerItem: 20, drumViewportHeight: auto + 60 },
-      { title: 'sized by height', note: 'via drumAngleForHeight', drumAnglePerItem: byHeight },
+      { title: 'sized by height', note: 'from a height', drumAnglePerItem: byHeight },
     ];
 
     return (
       <Frame>
         <div
           className="grid justify-center gap-x-8 gap-y-4"
-          // Derived from the data rather than a `grid-cols-5` class, so adding a case cannot
-          // leave the layout describing the wrong number of them.
-          style={{ gridTemplateColumns: `repeat(${cases.length}, min-content)` }}
+          // Equal fixed tracks, not `min-content`: sized to their contents the tracks took
+          // their width from the labels, whose longest line differs by more than a factor of
+          // three, so the drums ended up at uneven intervals and could not be read as a
+          // series. The count comes from the data rather than a `grid-cols-5` class, so
+          // adding a case cannot leave the layout describing the wrong number of them.
+          style={{ gridTemplateColumns: `repeat(${cases.length}, ${CASE_COLUMN_WIDTH}px)` }}
         >
           {cases.map((drum) => (
             <div className="flex justify-center self-center" key={drum.title}>
