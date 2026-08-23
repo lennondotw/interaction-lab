@@ -29,10 +29,13 @@ export {
   type Wheel,
   type WheelHandlers,
 } from './use-wheel.js';
-export { WheelColumn, type WheelColumnProps, type WheelVariant } from './wheel-column.js';
+export { WheelColumn, type WheelColumnProps, type WheelColumnShape, type WheelVariant } from './wheel-column.js';
 export {
+  assertDrumAngle,
   assertOddRows,
+  DEFAULT_DRUM_ANGLE_PER_ITEM,
   DRUM_PERSPECTIVE,
+  drumAngleForHeight,
   drumHeight,
   drumSlots,
   drumRadius,

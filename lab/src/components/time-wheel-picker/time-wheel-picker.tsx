@@ -12,8 +12,8 @@ import {
   type WheelIndices,
 } from './time-model.js';
 import { numericTypeahead } from './typeahead.js';
-import { WheelColumn, type WheelVariant } from './wheel-column.js';
-import { resolveColumnHeight } from './wheel-geometry.js';
+import { WheelColumn, type WheelColumnShape, type WheelVariant } from './wheel-column.js';
+import { DEFAULT_DRUM_ANGLE_PER_ITEM, resolveColumnHeight } from './wheel-geometry.js';
 import { WIREFRAME_BAND, WIREFRAME_FRAME, WIREFRAME_ITEM } from './wheel-style.js';
 
 /**
@@ -95,18 +95,23 @@ export interface TimeWheelPickerProps {
    */
   rows?: number;
   variant?: WheelVariant;
-  /** Degrees between adjacent items on the drum, which is its shape. Ignored when flat. */
-  anglePerItem?: number;
   /**
-   * Overrides the box height of every column, and with it the `:` and the band, so the
-   * three stay on one centre line.
+   * The drum's shape: degrees between adjacent items. Ignored when flat.
    *
-   * Left out, a drum measures itself — the cylinder its edges sweep, see `drumHeight` —
-   * and a flat wheel is `itemHeight * rows`. Larger than that is padding, smaller is a
-   * clip, and a clip is usually what is wanted: most uses do not want the whole drum,
-   * only the legible middle of it.
+   * To size a drum to a target height instead, invert it —
+   * `drumAnglePerItem={drumAngleForHeight({ itemHeight, drumHeight: 240 })}` — rather than
+   * looking for a second prop. The two are one quantity.
    */
-  height?: number;
+  drumAnglePerItem?: number;
+  /**
+   * The window onto the drum, applied to every column and with them the `:` and the band,
+   * so all three stay on one centre line. Ignored when flat, whose box is `rows` items.
+   *
+   * Left out, a drum measures itself — the cylinder its edges sweep, see `drumHeight`.
+   * Smaller than that clips the ends of the arc, which is usually what is wanted; larger
+   * pads above and below it.
+   */
+  drumViewportHeight?: number;
   className?: string;
 }
 
@@ -126,8 +131,8 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
   itemHeight = 40,
   rows = 5,
   variant = 'flat',
-  anglePerItem = 20,
-  height,
+  drumAnglePerItem = DEFAULT_DRUM_ANGLE_PER_ITEM,
+  drumViewportHeight,
   className,
 }) => {
   const hours = useMemo(() => hourItems(hourFormat), [hourFormat]);
@@ -178,7 +183,13 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
 
   // One height for the columns, the separator and the band, so all three agree about
   // where the centre line is however the box was arrived at.
-  const resolvedHeight = resolveColumnHeight({ variant, itemHeight, rows, anglePerItem, height });
+  const resolvedHeight = resolveColumnHeight({
+    variant,
+    itemHeight,
+    rows,
+    anglePerItem: drumAnglePerItem,
+    height: drumViewportHeight,
+  });
 
   /**
    * The sizing half of a column's props, which differs by variant.
@@ -193,8 +204,8 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
    */
   const shape =
     variant === 'drum'
-      ? ({ variant: 'drum', anglePerItem, height: resolvedHeight } as const)
-      : ({ variant: 'flat', rows } as const);
+      ? ({ variant: 'drum', drumAnglePerItem, drumViewportHeight: resolvedHeight } satisfies WheelColumnShape)
+      : ({ variant: 'flat', rows } satisfies WheelColumnShape);
 
   /**
    * Typing `0941p` should fill the whole picker, which means a finished segment has

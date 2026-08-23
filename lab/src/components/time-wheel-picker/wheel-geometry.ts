@@ -238,6 +238,16 @@ export const drumRadius = ({ itemHeight, anglePerItem }: { itemHeight: number; a
 export const DRUM_PERSPECTIVE = 900;
 
 /**
+ * Degrees per item when a drum is given no angle.
+ *
+ * Exported because it used to be spelled three times — a default parameter in the column, a
+ * `?? 20` in `resolveColumnHeight` and another in the picker — and changing one of those
+ * would have drawn the box at one angle and the rows at another. Nothing here defaults it
+ * any more; the component does, once.
+ */
+export const DEFAULT_DRUM_ANGLE_PER_ITEM = 20;
+
+/**
  * How tall a drum actually is.
  *
  * The rows are flat rectangles, not arcs, so in cross-section the drum is a **prism**
@@ -258,26 +268,24 @@ export const DRUM_PERSPECTIVE = 900;
  * `perspective` then divides everything down. At the angle where a point is highest
  * its `z` is back at the axis, so the projection is `ρ · P / (P + r)`.
  *
- * At the defaults the two cylinders are 203.3 and 206.4 — 1.5% apart, which is why
- * the choice barely matters and `outer` is the default: it is the honest "the whole
- * drum fits". What *did* matter was a box of `itemHeight * rows` on a drum whose own
- * height is unrelated to it; at 40° per item that left 43px of dead space on each
- * side.
+ * At the defaults the two cylinders are 203.3 and 206.4 — 1.5% apart, which is why this
+ * returns the circumscribed one and offers no choice about it. A `fit` option existed
+ * briefly and was worse than useless: `drumAngleForHeight` has no such option, so
+ * inverting an inscribed height silently produced the wrong angle. What *did* matter was a
+ * box of `itemHeight * rows` on a drum whose own height is unrelated to it; at 40° per item
+ * that left 43px of dead space on each side.
  */
 export const drumHeight = ({
   itemHeight,
   anglePerItem,
   perspective = DRUM_PERSPECTIVE,
-  fit = 'outer',
 }: {
   itemHeight: number;
   anglePerItem: number;
   perspective?: number;
-  /** `outer` clips nothing; `inner` trims to where the rows' own centres reach. */
-  fit?: 'inner' | 'outer';
 }): number => {
   const apothem = drumRadius({ itemHeight, anglePerItem });
-  const radius = fit === 'inner' ? apothem : Math.hypot(apothem, itemHeight / 2);
+  const radius = Math.hypot(apothem, itemHeight / 2);
   return 2 * radius * (perspective / (perspective + apothem));
 };
 
@@ -354,6 +362,24 @@ export const drumRow = ({
 };
 
 /**
+ * Refuses an angle no drum can be built from.
+ *
+ * Not defensive tidying. `anglePerItem: 0` gives `ceil(90 / 0) === Infinity`, so
+ * {@link drumSlots} starts its loop at `1 - Infinity` and `slot++` never advances it —
+ * an unbounded `push` that hangs the tab. A negative angle gives a reversed range, so
+ * the loop body never runs and the column renders silently blank. `drumRadius` divides by
+ * it too. It arrives from props, is read during render, and is one division from a freeze.
+ *
+ * 90° is the upper bound because a row one step from the centre is then already edge-on:
+ * past that the arc has no front face left to show.
+ */
+export const assertDrumAngle = (anglePerItem: number): void => {
+  if (!Number.isFinite(anglePerItem) || anglePerItem <= 0 || anglePerItem > 90) {
+    throw new Error(`anglePerItem must be greater than 0 and at most 90, received ${anglePerItem}`);
+  }
+};
+
+/**
  * Slot numbers to render on a drum, top to bottom.
  *
  * Deliberately does not take `rows`, because a drum's row count never depended on it.
@@ -368,6 +394,7 @@ export const drumRow = ({
  * accepts it.
  */
 export const drumSlots = ({ anglePerItem }: { anglePerItem: number }): number[] => {
+  assertDrumAngle(anglePerItem);
   const reach = Math.ceil(90 / anglePerItem);
   const slots: number[] = [];
   for (let slot = 1 - reach; slot <= reach; slot++) {
@@ -390,7 +417,11 @@ export const drumSlots = ({ anglePerItem }: { anglePerItem: number }): number[] 
  * - a drum otherwise measures itself, from the cylinder its edges sweep. See
  *   {@link drumHeight}.
  * - a flat wheel is `rows` items tall, and that is not negotiable: for it, `rows` *is* the
- *   box.
+ *   box. That asymmetry is load-bearing rather than an omission — `rowTop` centres a flat
+ *   row on `halfRows(rows) * itemHeight`, so it assumes the box is exactly that, while a
+ *   drum row centres on `(height - itemHeight) / 2` and survives any box. A
+ *   `flatViewportHeight` added later "for symmetry" would silently mis-centre every flat
+ *   row.
  *
  * `height` and `anglePerItem` are not two spellings of one thing and do not need a
  * priority between them beyond this: the angle is the drum's shape, `height` is the window
@@ -407,11 +438,12 @@ export const resolveColumnHeight = ({
   itemHeight: number;
   /** Required for a flat wheel; a drum has no use for it. */
   rows?: number;
-  anglePerItem?: number;
+  /** Required, not defaulted: the box and the rows must be drawn at one angle. */
+  anglePerItem: number;
   height?: number;
 }): number => {
   if (height !== undefined) return height;
-  if (variant === 'drum') return drumHeight({ itemHeight, anglePerItem: anglePerItem ?? 20 });
+  if (variant === 'drum') return drumHeight({ itemHeight, anglePerItem });
   return viewportHeight({ itemHeight, rows: rows ?? 1 });
 };
 

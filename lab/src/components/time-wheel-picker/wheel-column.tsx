@@ -5,6 +5,7 @@ import type { FC } from 'react';
 import { prefixTypeahead, type Typeahead } from './typeahead.js';
 import { useWheel, WHEEL_SLOT_ATTRIBUTE } from './use-wheel.js';
 import {
+  DEFAULT_DRUM_ANGLE_PER_ITEM,
   DRUM_PERSPECTIVE,
   drumRadius,
   drumRow,
@@ -70,10 +71,10 @@ const WheelRow: FC<WheelRowProps> = ({
   const distance = useTransform(offset, (value) => rowDistance({ slot, offset: value, itemHeight }));
 
   // `rows` is only ever absent on a drum, which reads none of these three.
-  const flatRows = rows ?? 1;
-  const top = useTransform(offset, (value) => rowTop({ slot, offset: value, itemHeight, rows: flatRows }));
-  const flatOpacity = useTransform(distance, (value) => rowFade({ distance: value, rows: flatRows }).opacity);
-  const flatScale = useTransform(distance, (value) => rowFade({ distance: value, rows: flatRows }).scale);
+  const fadeRows = rows ?? 1;
+  const top = useTransform(offset, (value) => rowTop({ slot, offset: value, itemHeight, rows: fadeRows }));
+  const flatOpacity = useTransform(distance, (value) => rowFade({ distance: value, rows: fadeRows }).opacity);
+  const flatScale = useTransform(distance, (value) => rowFade({ distance: value, rows: fadeRows }).scale);
 
   const rotateX = useTransform(distance, (value) => drumRow({ distance: value, anglePerItem }).rotateX);
   const drumOpacity = useTransform(distance, (value) => drumRow({ distance: value, anglePerItem }).opacity);
@@ -182,22 +183,37 @@ interface WheelColumnBase {
 export type WheelColumnShape =
   | {
       variant?: 'flat';
-      /** Odd, and the viewport is exactly this many items tall. */
+      /**
+       * Odd, and the viewport is exactly this many items tall — for a flat wheel `rows` *is*
+       * the box, which is why there is no viewport prop on this branch. See
+       * `resolveColumnHeight` for why that asymmetry is load-bearing.
+       */
       rows: number;
-      anglePerItem?: never;
-      height?: never;
+      drumAnglePerItem?: never;
+      drumViewportHeight?: never;
     }
   | {
       variant: 'drum';
       rows?: never;
-      /** Degrees between adjacent items. The drum's shape, and so its natural height. */
-      anglePerItem?: number;
       /**
-       * Overrides the box. Left out, the drum measures itself — the cylinder its edges
-       * sweep. Larger is padding above and below it, smaller is a clip, and the clip is
-       * usually the point.
+       * The drum's shape: degrees between adjacent items, which sets its radius and so its
+       * own height.
+       *
+       * Sizing to a target drum height is the inverse of this rather than a second prop,
+       * because the two are one quantity and a prop for each would need a rule for being
+       * given both:
+       *
+       * ```tsx
+       * drumAnglePerItem={drumAngleForHeight({ itemHeight, drumHeight: 240 })}
+       * ```
        */
-      height?: number;
+      drumAnglePerItem?: number;
+      /**
+       * The window onto the drum, and independent of its shape. Smaller than the drum's own
+       * height — `drumHeight()` — clips the ends of the arc, which is usually the point;
+       * larger pads above and below it. Neither is guarded against.
+       */
+      drumViewportHeight?: number;
     };
 
 export type WheelColumnProps = WheelColumnBase & WheelColumnShape;
@@ -217,8 +233,8 @@ export const WheelColumn: FC<WheelColumnProps> = ({
   itemHeight,
   rows,
   variant = 'flat',
-  anglePerItem = 20,
-  height,
+  drumAnglePerItem,
+  drumViewportHeight,
   typeahead = prefixTypeahead,
   onSettled,
   label,
@@ -226,20 +242,27 @@ export const WheelColumn: FC<WheelColumnProps> = ({
   className,
   contentClassName,
 }) => {
+  // The one place the drum's default angle is applied.
+  const anglePerItem = drumAnglePerItem ?? DEFAULT_DRUM_ANGLE_PER_ITEM;
+  const slots = variant === 'drum' ? drumSlots({ anglePerItem }) : rowSlots({ rows: rows ?? 1 });
+  const resolvedHeight = resolveColumnHeight({
+    variant,
+    itemHeight,
+    rows,
+    anglePerItem,
+    height: drumViewportHeight,
+  });
+
   const { offset, elementRef, handlers } = useWheel({
     items,
     itemHeight,
-    rows,
+    // A drum has no row count, so its page step comes from the arc instead.
+    pageRows: rows ?? slots.length,
     index,
     onIndexChange,
     typeahead: typeahead ?? undefined,
     onSettled,
   });
-
-  // A drum's slots come from its arc and a flat wheel's from its row count — the two are
-  // sized by different things, which is what the props union says.
-  const slots = variant === 'drum' ? drumSlots({ anglePerItem }) : rowSlots({ rows: rows ?? 1 });
-  const resolvedHeight = resolveColumnHeight({ variant, itemHeight, rows, anglePerItem, height });
 
   return (
     <div

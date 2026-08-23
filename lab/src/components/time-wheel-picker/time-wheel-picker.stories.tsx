@@ -5,7 +5,7 @@ import { useState, type FC, type ReactNode } from 'react';
 import { formatTime, timeParts, type TimeValue } from './time-model.js';
 import { TimeWheelPicker, type TimeWheelPickerProps } from './time-wheel-picker.js';
 import { WheelColumn } from './wheel-column.js';
-import { drumHeight, viewportHeight } from './wheel-geometry.js';
+import { drumAngleForHeight, drumHeight, viewportHeight } from './wheel-geometry.js';
 import { WIREFRAME_BAND, WIREFRAME_FRAME } from './wheel-style.js';
 
 const meta = {
@@ -17,7 +17,7 @@ const meta = {
     // Stepped by two from an odd start, because the component throws on an even
     // row count rather than rounding it — there is no centred row to align to.
     rows: { control: { type: 'range', min: 1, max: 9, step: 2 } },
-    anglePerItem: { control: { type: 'range', min: 8, max: 40, step: 1 } },
+    drumAnglePerItem: { control: { type: 'range', min: 8, max: 40, step: 1 } },
     hourFormat: { control: { type: 'inline-radio' }, options: [12, 24] },
     variant: { control: { type: 'inline-radio' }, options: ['flat', 'drum'] },
     // The picker is controlled, so these two are supplied by the story rather than
@@ -32,7 +32,7 @@ const meta = {
     itemHeight: 40,
     rows: 5,
     variant: 'flat',
-    anglePerItem: 20,
+    drumAnglePerItem: 20,
     value: { hour: 9, minute: 41 },
     onChange: () => undefined,
   },
@@ -179,7 +179,7 @@ export const FlatAndDrum: Story = {
             <span className="text-xs text-neutral-500">flat</span>
           </div>
           <div className="flex flex-col items-center gap-2">
-            <PickerDemo {...args} height={shared} variant="drum" />
+            <PickerDemo {...args} drumViewportHeight={shared} variant="drum" />
             <span className="text-xs text-neutral-500">drum, same box</span>
           </div>
         </div>
@@ -279,9 +279,9 @@ export const GenericPrefixTypeahead: Story = {
 interface DrumCase {
   title: string;
   note: string;
-  anglePerItem: number;
+  drumAnglePerItem: number;
   /** Left out to let the drum size itself. */
-  height?: number;
+  drumViewportHeight?: number;
 }
 
 const HOURS_24 = Array.from({ length: 24 }, (_unused, hour) => String(hour).padStart(2, '0'));
@@ -294,18 +294,23 @@ const HOURS_24 = Array.from({ length: 24 }, (_unused, hour) => String(hour).padS
  * visible padding; where it is larger the drum runs off the edge and is clipped. Seeing
  * both against the same drawn boundary is the only way to judge which is wanted.
  */
-const DrumCaseWheel: FC<DrumCase & { itemHeight: number }> = ({ title, itemHeight, anglePerItem, height }) => {
+const DrumCaseWheel: FC<DrumCase & { itemHeight: number }> = ({
+  title,
+  itemHeight,
+  drumAnglePerItem,
+  drumViewportHeight,
+}) => {
   const [index, setIndex] = useState(4);
-  const box = height ?? drumHeight({ itemHeight, anglePerItem });
+  const box = drumViewportHeight ?? drumHeight({ itemHeight, anglePerItem: drumAnglePerItem });
 
   return (
     <div className={cn('inline-flex p-1', WIREFRAME_BAND)}>
       <div className="relative flex">
         <WheelColumn
-          anglePerItem={anglePerItem}
           className="w-[4ch]"
           contentClassName="w-[2ch] text-center"
-          height={height}
+          drumAnglePerItem={drumAnglePerItem}
+          drumViewportHeight={drumViewportHeight}
           index={index}
           itemHeight={itemHeight}
           items={HOURS_24}
@@ -323,17 +328,23 @@ const DrumCaseWheel: FC<DrumCase & { itemHeight: number }> = ({ title, itemHeigh
   );
 };
 
-const DrumCaseLabel: FC<DrumCase & { itemHeight: number }> = ({ title, note, itemHeight, anglePerItem, height }) => {
-  const auto = drumHeight({ itemHeight, anglePerItem });
+const DrumCaseLabel: FC<DrumCase & { itemHeight: number }> = ({
+  title,
+  note,
+  itemHeight,
+  drumAnglePerItem,
+  drumViewportHeight,
+}) => {
+  const auto = drumHeight({ itemHeight, anglePerItem: drumAnglePerItem });
 
   return (
     // Each field on its own line, so the column is only as wide as its longest single field
     // and nothing has to wrap mid-phrase.
     <span className="flex flex-col items-center whitespace-nowrap text-center text-xs leading-4 text-neutral-500">
       {title}
-      <span className="font-mono text-neutral-400 tabular-nums">{anglePerItem}°</span>
+      <span className="font-mono text-neutral-400 tabular-nums">{drumAnglePerItem.toFixed(1)}°</span>
       <span className="font-mono text-neutral-400 tabular-nums">auto {auto.toFixed(0)}</span>
-      <span className="font-mono text-neutral-400 tabular-nums">box {(height ?? auto).toFixed(0)}</span>
+      <span className="font-mono text-neutral-400 tabular-nums">box {(drumViewportHeight ?? auto).toFixed(0)}</span>
       <span className="text-neutral-400">{note}</span>
     </span>
   );
@@ -368,12 +379,14 @@ export const DrumHeight: Story = {
     // No `rows` here on purpose: a drum is sized by its arc, and its props no longer
     // accept a row count.
     const auto = drumHeight({ itemHeight, anglePerItem: 20 });
+    // Sizing a drum to a target height is the inverse of the angle, not a second prop.
+    const byHeight = drumAngleForHeight({ itemHeight, drumHeight: 160 });
     const cases: DrumCase[] = [
-      { title: 'wide arc', note: 'auto', anglePerItem: 10 },
-      { title: 'default', note: 'auto', anglePerItem: 20 },
-      { title: 'tight arc', note: 'auto', anglePerItem: 34 },
-      { title: 'taller box', note: 'override, padded', anglePerItem: 20, height: auto + 60 },
-      { title: 'one row cut', note: 'override, trimmed', anglePerItem: 20, height: auto - itemHeight },
+      { title: 'wide arc', note: 'auto', drumAnglePerItem: 10 },
+      { title: 'default', note: 'auto', drumAnglePerItem: 20 },
+      { title: 'tight arc', note: 'auto', drumAnglePerItem: 34 },
+      { title: 'taller box', note: 'override, padded', drumAnglePerItem: 20, drumViewportHeight: auto + 60 },
+      { title: 'sized by height', note: 'via drumAngleForHeight', drumAnglePerItem: byHeight },
     ];
 
     return (

@@ -46,26 +46,41 @@ nothing to do with a drum. Across the angles the stories offer, the drum's own h
 4×; at 8° per item the old box cut it roughly in half, and at 40° it left 43px of dead space
 on each side. Only the default 20° landed close enough to look deliberate.
 
-## Angle and height are shape and window, not alternatives
+## Shape and window are two things, and only one of them is a prop pair
 
-The two look like rival ways to say the same thing and are not:
+A drum is sized by two independent quantities, and keeping them apart is most of the API:
 
-- `anglePerItem` is the drum's **shape**. It sets the radius, and so the drum's own height
-  and how many rows fit in the arc.
-- `height` is the **window** onto it. Larger than the drum is padding above and below;
-  smaller is a clip.
+- **shape** — how much arc one item occupies. `drumAnglePerItem`. It sets the radius, and so
+  the drum's own height and how many rows fit in the arc.
+- **window** — the box you view it through. `drumViewportHeight`. Larger than the drum pads
+  above and below; smaller clips the ends of the arc.
 
-They need no priority between them beyond the one quantity they both touch — the box — and
-`resolveColumnHeight` decides that: `height` wins when given, otherwise a drum measures
-itself and a flat wheel is `rows` items tall. Neither direction of disagreement is guarded
+`resolveColumnHeight` decides the only quantity they both touch, the box: the window wins
+when given, otherwise the drum measures itself. Neither direction of disagreement is guarded
 against, because both are things a caller means. **The clip is usually the point**: a full
-drum's outermost rows are turned so far from the viewer that they are edge-on slivers a
-pixel or two tall, so most uses want the legible middle and nothing else.
+drum's outermost rows are turned so far from the viewer that they are edge-on slivers a pixel
+or two tall, so most uses want the legible middle and nothing else.
 
-Making the pair mutually exclusive was considered. It would mean deriving the angle from the
-height — invertible, via a quadratic in `r` — and it would remove trimming, since a smaller
-height would then produce a tighter arc rather than a clipped drum. The exclusivity landed
-on `rows` instead, where the props genuinely conflict.
+### Sizing to a height is the inverse, not a second prop
+
+"Make the drum itself 240px" is the shape said as a length, so it is one quantity with the
+angle rather than a second input:
+
+```tsx
+drumAnglePerItem={drumAngleForHeight({ itemHeight, drumHeight: 240 })}
+```
+
+`drumAngleForHeight` inverts the projection — a quadratic in the radius with one physical
+root — and is round-trip tested against `drumHeight` across the whole usable range. A prop
+for it as well would need a rule for being handed both spellings at once, and the only
+honest rules are "throw" or "silently ignore one".
+
+The window was nearly made relative instead — a `drumTrim` in pixels — and the composer is
+what ruled it out. `TimeWheelPicker` resolves the box **once** and hands the same number to
+the drum columns, the `:` separator and the selection band; that shared value is why all
+three sit on one centre line. A relative trim would have made the composer compute the
+drum's height itself and then derive the box a second time, turning one number that must
+agree into two that must be kept agreeing.
 
 ## `rows` is not a drum concept
 
@@ -80,6 +95,19 @@ algebra cancelled — the lower bound `-half - (ceil(90/a) - half - 1)` loses it
 Measured, a drum at 20° rendered the identical ten slots at every row count from 1 to 9.
 So `rows` was a prop that silently did nothing, and `WheelColumnProps` is now a union
 discriminated on `variant` that refuses it.
+
+The prefixing is deliberately asymmetric: the drum's props carry a `drum` prefix, `rows`
+does not. `anglePerItem` and especially `height` are ambiguous bare — on a component that
+also takes `className`, `height` reads as CSS — they are optional, and they reach the
+component through a composer's spread, where a mistyped name is silently inert rather than a
+type error. `rows` has none of those problems, is the unmarked branch, and shares its
+vocabulary with `rowSlots`, `rowTop`, `rowFade` and `halfRows`. So the prefix itself carries
+information: it marks a prop that exists only on the marked branch.
+
+`assertDrumAngle` guards the angle, and that guard is not tidiness. `anglePerItem: 0` gives
+`ceil(90 / 0) === Infinity`, so `drumSlots` begins its loop at `1 - Infinity` where `slot++`
+cannot advance — an unbounded push that hangs the tab. A negative angle reverses the range
+and renders a blank column with no error at all.
 
 ## Two traps in the transform
 

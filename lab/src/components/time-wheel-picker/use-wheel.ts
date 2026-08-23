@@ -78,10 +78,15 @@ export interface UseWheelOptions {
   items: readonly string[];
   itemHeight: number;
   /**
-   * Only ever read to scale a page-sized wheel delta, so it is optional: a drum has no row
-   * count to give, and a page of a drum is one screen either way.
+   * How many rows a page-sized wheel delta moves — `deltaMode === 2`, which Firefox and some
+   * remotes send.
+   *
+   * Named for what it is rather than passed the column's `rows`, which is what it used to
+   * be: a drum has no row count, so it arrived as `undefined`, defaulted to 1, and paged by
+   * a single row. That was invisible from outside once the props union stopped a drum from
+   * having a `rows` to pass.
    */
-  rows?: number;
+  pageRows?: number;
   /** Controlled selection. */
   index: number;
   onIndexChange: (index: number) => void;
@@ -128,7 +133,7 @@ export interface Wheel {
 export function useWheel({
   items,
   itemHeight,
-  rows,
+  pageRows = 1,
   index,
   onIndexChange,
   typeahead,
@@ -545,7 +550,7 @@ export function useWheel({
 
       // `deltaMode` is pixels almost everywhere, but Firefox reports lines and
       // some remotes report pages; both are a multiple of the wheel's own metrics.
-      const scale = event.deltaMode === 1 ? itemHeight : event.deltaMode === 2 ? itemHeight * (rows ?? 1) : 1;
+      const scale = event.deltaMode === 1 ? itemHeight : event.deltaMode === 2 ? itemHeight * pageRows : 1;
       offset.set(offset.get() + event.deltaY * scale);
 
       // Trackpad momentum arrives as a decaying burst of events, so the gesture
@@ -562,7 +567,7 @@ export function useWheel({
     return () => {
       element.removeEventListener('wheel', onWheelEvent);
     };
-  }, [clearBuffer, itemHeight, offset, rows, springTo, stopAnimation]);
+  }, [clearBuffer, itemHeight, offset, pageRows, springTo, stopAnimation]);
 
   useEffect(
     () => () => {

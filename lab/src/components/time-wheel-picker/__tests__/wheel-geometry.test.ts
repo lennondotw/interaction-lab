@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertDrumAngle,
   assertOddRows,
+  DEFAULT_DRUM_ANGLE_PER_ITEM,
   DRUM_PERSPECTIVE,
   drumAngleForHeight,
   drumHeight,
@@ -238,12 +240,39 @@ describe('tapTargetOffset', () => {
   });
 });
 
+describe('assertDrumAngle', () => {
+  it('refuses zero, which would otherwise hang the tab', () => {
+    // `ceil(90 / 0)` is Infinity, so `drumSlots` starts its loop at `1 - Infinity` and
+    // `slot++` never advances it — an unbounded push, not a wrong answer.
+    expect(() => assertDrumAngle(0)).toThrow(/greater than 0/u);
+    expect(() => drumSlots({ anglePerItem: 0 })).toThrow(/greater than 0/u);
+  });
+
+  it('refuses a negative angle, which would render a silently blank column', () => {
+    // `ceil(90 / -20)` is -4, so the range runs 5..-4 and the loop body never executes.
+    expect(() => assertDrumAngle(-20)).toThrow(/greater than 0/u);
+    expect(() => drumSlots({ anglePerItem: -20 })).toThrow(/greater than 0/u);
+  });
+
+  it('refuses non-finite angles and anything past edge-on', () => {
+    expect(() => assertDrumAngle(Number.NaN)).toThrow(/greater than 0/u);
+    expect(() => assertDrumAngle(Number.POSITIVE_INFINITY)).toThrow(/greater than 0/u);
+    expect(() => assertDrumAngle(91)).toThrow(/at most 90/u);
+  });
+
+  it('accepts the usable range, including the default', () => {
+    for (const angle of [0.5, 8, DEFAULT_DRUM_ANGLE_PER_ITEM, 45, 90]) {
+      expect(() => assertDrumAngle(angle), `${angle}°`).not.toThrow();
+    }
+  });
+});
+
 describe('resolveColumnHeight', () => {
   it('lets `height` win, whichever variant and whatever the drum would have measured', () => {
     // The rule that used to be an inline `??` at two call sites. `height` is the source of
     // truth for the box; the angle remains the drum's shape.
     expect(resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20, height: 166 })).toBe(166);
-    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 5, height: 166 })).toBe(166);
+    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 5, anglePerItem: 20, height: 166 })).toBe(166);
     // Both directions of disagreement are legal, so neither is clamped away.
     expect(resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20, height: 600 })).toBe(600);
     expect(resolveColumnHeight({ variant: 'drum', itemHeight: 40, anglePerItem: 20, height: 40 })).toBe(40);
@@ -257,8 +286,8 @@ describe('resolveColumnHeight', () => {
   });
 
   it('makes a flat wheel exactly `rows` items tall, which for it is not negotiable', () => {
-    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 5 })).toBe(200);
-    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 7 })).toBe(280);
+    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 5, anglePerItem: 20 })).toBe(200);
+    expect(resolveColumnHeight({ variant: 'flat', itemHeight: 40, rows: 7, anglePerItem: 20 })).toBe(280);
   });
 
   it('ignores `rows` on a drum, which is why a drum no longer accepts one', () => {
@@ -346,7 +375,11 @@ describe('the drum', () => {
 
     it('brackets the prism between its two cylinders', () => {
       const outer = drumHeight({ itemHeight: 40, anglePerItem: 20 });
-      const inner = drumHeight({ itemHeight: 40, anglePerItem: 20, fit: 'inner' });
+      // The inscribed cylinder, computed here rather than offered as an option: a `fit`
+      // parameter existed briefly and was worse than useless, because `drumAngleForHeight`
+      // has no such option and would silently invert an inscribed height to the wrong angle.
+      const apothem = drumRadius({ itemHeight: 40, anglePerItem: 20 });
+      const inner = 2 * apothem * (DRUM_PERSPECTIVE / (DRUM_PERSPECTIVE + apothem));
       // The inscribed cylinder runs through the rows' own centres, the circumscribed
       // one through their corners, so the prism is between them and `outer` is the one
       // that cannot clip.
