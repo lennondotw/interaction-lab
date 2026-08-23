@@ -415,11 +415,37 @@ export function useWheel({
     [itemHeight, offset, releaseCapture, springTo]
   );
 
+  /**
+   * Takes a key out of circulation once this column has acted on it.
+   *
+   * `preventDefault` alone is not enough, because it only speaks to the browser's own
+   * default action. An ancestor listening for the same key still hears it, and plenty
+   * of hosts listen: Storybook's preview forwards every `keydown` to its manager
+   * unless the target is an `input`, `textarea`, `select` or contentEditable — and a
+   * `div[role="spinbutton"]` is none of those — where its default shortcuts bind `1`,
+   * `2` and `3` to focusing the sidebar, the canvas and the panel. The effect was that
+   * typing `1021` moved the hour to `01` and then lost the focus to the sidebar, so
+   * the remaining three digits went nowhere.
+   *
+   * That was invisible from `/iframe.html`, which is how these stories were being
+   * checked; it only appears in the normal Storybook view. Stopping propagation is the
+   * right fix anywhere, not a Storybook workaround: a key this column has consumed is
+   * not a key anything above it should also act on.
+   */
+  const consume = useCallback((event: KeyboardEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // React attaches at the root container, so the synthetic `stopPropagation` above
+    // does not reach a listener bound directly to `document` — which is exactly where
+    // Storybook's forwarder sits.
+    event.nativeEvent.stopImmediatePropagation();
+  }, []);
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       const arrow = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
       if (arrow !== 0) {
-        event.preventDefault();
+        consume(event);
         interactingRef.current = true;
         // An arrow key means the user has given up spelling and is nudging instead.
         clearBuffer();
@@ -451,7 +477,7 @@ export function useWheel({
       });
       if (step === null) return;
 
-      event.preventDefault();
+      consume(event);
       bufferRef.current = step.buffer;
 
       if (bufferTimerRef.current !== null) clearTimeout(bufferTimerRef.current);
@@ -471,7 +497,7 @@ export function useWheel({
 
       if (step.settled) onSettled?.();
     },
-    [clearBuffer, count, items, itemHeight, offset, onSettled, springTo, typeahead]
+    [clearBuffer, consume, count, items, itemHeight, offset, onSettled, springTo, typeahead]
   );
 
   // Wheel and trackpad. Non-passive so the page does not scroll underneath, which
