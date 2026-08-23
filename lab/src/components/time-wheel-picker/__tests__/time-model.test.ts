@@ -8,6 +8,7 @@ import {
   meridiemItems,
   meridiemOf,
   minuteItems,
+  timeParts,
   toWheelIndices,
 } from '../time-model.js';
 
@@ -85,7 +86,41 @@ describe('the round trip', () => {
   });
 });
 
+describe('timeParts', () => {
+  it('leaves the 12-hour hour unpadded, so a caller has to reserve its width', () => {
+    expect(timeParts({ hour: 9, minute: 41 }, 12)).toEqual({ hour: '9', minute: '41', meridiem: 'AM' });
+    expect(timeParts({ hour: 22, minute: 5 }, 12)).toEqual({ hour: '10', minute: '05', meridiem: 'PM' });
+    expect(timeParts({ hour: 0, minute: 0 }, 12)).toEqual({ hour: '12', minute: '00', meridiem: 'AM' });
+  });
+
+  it('pads the 24-hour hour and has no meridiem at all', () => {
+    expect(timeParts({ hour: 9, minute: 41 }, 24)).toEqual({ hour: '09', minute: '41', meridiem: null });
+    expect(timeParts({ hour: 23, minute: 59 }, 24)).toEqual({ hour: '23', minute: '59', meridiem: null });
+  });
+
+  it('never gives an hour wider than the two characters a caller reserves', () => {
+    for (const format of [12, 24] as const) {
+      for (let hour = 0; hour < 24; hour++) {
+        const { hour: shown, minute } = timeParts({ hour, minute: 7 }, format);
+        expect(shown.length, `${format}h hour ${hour}`).toBeLessThanOrEqual(2);
+        expect(minute).toHaveLength(2);
+      }
+    }
+  });
+});
+
 describe('formatTime', () => {
+  it('is the join of the parts, so a caller laying them out cannot drift from it', () => {
+    for (const format of [12, 24] as const) {
+      for (let hour = 0; hour < 24; hour++) {
+        const value = { hour, minute: 8 };
+        const { hour: h, minute: m, meridiem } = timeParts(value, format);
+        const joined = meridiem === null ? `${h}:${m}` : `${h}:${m} ${meridiem}`;
+        expect(formatTime(value, format), `${format}h ${hour}`).toBe(joined);
+      }
+    }
+  });
+
   it('reads back what the wheels show', () => {
     expect(formatTime({ hour: 0, minute: 5 }, 12)).toBe('12:05 AM');
     expect(formatTime({ hour: 12, minute: 0 }, 12)).toBe('12:00 PM');

@@ -6,8 +6,10 @@ export {
   meridiemItems,
   meridiemOf,
   minuteItems,
+  timeParts,
   toWheelIndices,
   type HourFormat,
+  type TimeParts,
   type TimeValue,
   type WheelIndices,
 } from './time-model.js';

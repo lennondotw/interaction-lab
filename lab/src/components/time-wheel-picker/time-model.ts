@@ -77,8 +77,37 @@ export const fromWheelIndices = (indices: WheelIndices, format: HourFormat): Tim
   return { hour: (shown % 12) + (indices.meridiem === 1 ? 12 : 0), minute: indices.minute };
 };
 
+export interface TimeParts {
+  /**
+   * `00`–`23` at 24-hour, and `1`–`12` unpadded at 12-hour.
+   *
+   * So this is the one part whose width varies, and a caller laying the parts out
+   * separately should reserve two characters for it. Padding it instead would be
+   * easier and wrong: no 12-hour clock shows `09:41`.
+   */
+  hour: string;
+  /** Always two digits. */
+  minute: string;
+  /** `AM` or `PM`, and null at 24-hour, where there is no such column either. */
+  meridiem: string | null;
+}
+
+/**
+ * The readout broken into the pieces it is made of.
+ *
+ * Exists because a caller that wants the hour to hold a fixed width has to get at
+ * the hour on its own, and re-deriving it from `TimeValue` at the call site is how
+ * a second, subtly different formatter gets written. {@link formatTime} is a join
+ * of this, so the two cannot drift.
+ */
+export const timeParts = (value: TimeValue, format: HourFormat): TimeParts => ({
+  hour: format === 24 ? pad2(value.hour) : String(displayHour(value.hour)),
+  minute: pad2(value.minute),
+  meridiem: format === 24 ? null : (MERIDIEM_ITEMS[meridiemOf(value.hour)] ?? null),
+});
+
 /** `13:05` or `1:05 PM`, for a readout next to the wheel. */
-export const formatTime = (value: TimeValue, format: HourFormat): string =>
-  format === 24
-    ? `${pad2(value.hour)}:${pad2(value.minute)}`
-    : `${displayHour(value.hour)}:${pad2(value.minute)} ${MERIDIEM_ITEMS[meridiemOf(value.hour)] ?? ''}`;
+export const formatTime = (value: TimeValue, format: HourFormat): string => {
+  const { hour, minute, meridiem } = timeParts(value, format);
+  return meridiem === null ? `${hour}:${minute}` : `${hour}:${minute} ${meridiem}`;
+};

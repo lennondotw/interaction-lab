@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type FC, type ReactNode } from 'react';
 
-import { formatTime, type TimeValue } from './time-model.js';
+import { formatTime, timeParts, type TimeValue } from './time-model.js';
 import { TimeWheelPicker, type TimeWheelPickerProps } from './time-wheel-picker.js';
 
 const meta = {
@@ -37,6 +37,29 @@ const meta = {
 export default meta;
 
 /**
+ * A 12-hour hour with the width of two characters reserved, and only one of them
+ * used when that is all the hour needs.
+ *
+ * A 12-hour clock runs 1 to 12, so printing the hour as-is makes the readout one
+ * character narrower half the time — and since the line is centred, crossing
+ * 9 → 10 drags the colon, the meridiem and everything after it sideways. Reserving
+ * the space a leading zero would occupy holds all of it still without printing a
+ * zero, which is the part that matters: no 12-hour clock shows `04:41`. The same
+ * reservation the picker's own hour column makes, for the same reason.
+ *
+ * Only the 12-hour half needs this. The canonical half is a 24-hour value, and a
+ * 24-hour clock *does* pad, so there `timeParts` hands back `04` and the width is
+ * already fixed — which is worth preferring where it is available, because a
+ * reserved blank next to the `·` separator reads as a stray double space.
+ *
+ * `ch` is the advance of `0`, and the readout is `font-mono`, so `2ch` is exactly
+ * two characters at whatever size the line is set.
+ */
+const ReservedHour: FC<{ children: string }> = ({ children }) => (
+  <span className="inline-block w-[2ch] text-right">{children}</span>
+);
+
+/**
  * The picker plus a readout, so a fling can be seen to land somewhere specific.
  *
  * Holds the value itself and still forwards every change, so the Actions panel
@@ -44,6 +67,9 @@ export default meta;
  */
 const PickerDemo: FC<TimeWheelPickerProps> = ({ value: initial, onChange, ...props }) => {
   const [value, setValue] = useState<TimeValue>(initial);
+  const format = props.hourFormat ?? 12;
+  const shown = timeParts(value, format);
+  const canonical = timeParts(value, 24);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -56,11 +82,9 @@ const PickerDemo: FC<TimeWheelPickerProps> = ({ value: initial, onChange, ...pro
         value={value}
       />
       <p className="font-mono text-sm text-neutral-500 tabular-nums">
-        {formatTime(value, props.hourFormat ?? 12)}
-        <span className="text-neutral-400">
-          {' · '}
-          {`${value.hour}:${String(value.minute).padStart(2, '0')}`} canonical
-        </span>
+        <ReservedHour>{shown.hour}</ReservedHour>
+        {`:${shown.minute}${shown.meridiem === null ? '' : ` ${shown.meridiem}`}`}
+        <span className="text-neutral-400">{` · ${canonical.hour}:${canonical.minute} canonical`}</span>
       </p>
     </div>
   );
