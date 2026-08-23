@@ -32,6 +32,7 @@ import { animate, useMotionValue, useMotionValueEvent, useReducedMotion, type Mo
 import { useCallback, useEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 
 import { pushSample, trackVelocity, type PointerSample } from './pointer-velocity.js';
+import type { Typeahead } from './typeahead.js';
 import {
   indexFromOffset,
   nearestDetentOffset,
@@ -73,14 +74,28 @@ const SNAP_SPRING = { type: 'spring', stiffness: 520, damping: 42, mass: 0.6, re
 const WHEEL_SETTLE_MS = 140;
 
 export interface UseWheelOptions {
-  /** Number of distinct items. The loop period is `count * itemHeight`. */
-  count: number;
+  /** The labels. Their count is the loop period; typing matches against them. */
+  items: readonly string[];
   itemHeight: number;
   /** Odd. Only needed so a page-sized wheel delta means something. */
   rows: number;
   /** Controlled selection. */
   index: number;
   onIndexChange: (index: number) => void;
+  /**
+   * How typing selects. Omit to leave the wheel deaf to character keys; arrow keys
+   * work either way, because they mean the same thing on every wheel.
+   */
+  typeahead?: Typeahead;
+  /**
+   * Called when a typed entry can go no further — two digits into a two-digit field,
+   * or a prefix that has identified exactly one item.
+   *
+   * Deliberately just a signal. Whether that should move focus, and to what, is
+   * something only the composition around the column knows; a column has no idea
+   * whether it has a neighbour.
+   */
+  onSettled?: () => void;
 }
 
 export interface WheelHandlers {
@@ -90,6 +105,8 @@ export interface WheelHandlers {
   onPointerCancel: (event: PointerEvent<HTMLElement>) => void;
   onLostPointerCapture: (event: PointerEvent<HTMLElement>) => void;
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  /** Only there to discard a half-typed value when the column stops being the target. */
+  onBlur: () => void;
 }
 
 export interface Wheel {
@@ -105,7 +122,16 @@ export interface Wheel {
   handlers: WheelHandlers;
 }
 
-export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseWheelOptions): Wheel {
+export function useWheel({
+  items,
+  itemHeight,
+  rows,
+  index,
+  onIndexChange,
+  typeahead,
+  onSettled,
+}: UseWheelOptions): Wheel {
+  const count = items.length;
   const prefersReducedMotion = useReducedMotion();
   const offset = useMotionValue(index * itemHeight);
   const elementRef = useRef<HTMLDivElement>(null);
@@ -144,10 +170,29 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
    * target instead makes each press add a row whatever the frame rate.
    */
   const keyTargetRef = useRef<number | null>(null);
+  /** Characters typed so far. Owned by the strategy; this only stores it. */
+  const bufferRef = useRef('');
+  const bufferTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopAnimation = useCallback(() => {
     animationRef.current?.stop();
     animationRef.current = null;
+  }, []);
+
+  /**
+   * Throws away a partly typed entry.
+   *
+   * Called from every other route into the wheel — a drag, an arrow key, the scroll
+   * wheel, blur, Escape. All of them mean the user has stopped spelling a value, and
+   * a buffer that outlived one of them would combine the next keystroke with digits
+   * from a gesture ago.
+   */
+  const clearBuffer = useCallback(() => {
+    bufferRef.current = '';
+    if (bufferTimerRef.current !== null) {
+      clearTimeout(bufferTimerRef.current);
+      bufferTimerRef.current = null;
+    }
   }, []);
 
   /**
@@ -243,9 +288,10 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
 
       stopAnimation();
       interactingRef.current = true;
-      // A drag takes the wheel over from the arrow keys, so whatever they had
-      // queued up stops being the thing to count from.
+      // A drag takes the wheel over from the keyboard, so neither what the arrows had
+      // queued up nor a partly typed value stays the thing to count from.
       keyTargetRef.current = null;
+      clearBuffer();
       draggedRef.current = false;
       pointerIdRef.current = event.pointerId;
 
@@ -271,7 +317,7 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
       // which would take the pointer stream away before the release arrives.
       event.preventDefault();
     },
-    [offset, stopAnimation]
+    [clearBuffer, offset, stopAnimation]
   );
 
   const releaseCapture = useCallback(
@@ -371,16 +417,61 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
-      const step = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
-      if (step === 0) return;
+      const arrow = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+      if (arrow !== 0) {
+        event.preventDefault();
+        interactingRef.current = true;
+        // An arrow key means the user has given up spelling and is nudging instead.
+        clearBuffer();
+        const from = keyTargetRef.current ?? nearestDetentOffset(offset.get(), itemHeight);
+        const target = from + arrow * itemHeight;
+        keyTargetRef.current = target;
+        springTo(target);
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        clearBuffer();
+        return;
+      }
+
+      if (typeahead === undefined) return;
+      // Leave the browser's own shortcuts alone. Without this, Cmd-R on a focused
+      // column would be eaten as an `r`.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      // The live index rather than the `index` prop: prefix cycling searches from
+      // just after the current item, and during fast typing the prop lags a frame
+      // behind the wheel.
+      const step = typeahead.step({
+        buffer: bufferRef.current,
+        key: event.key,
+        items,
+        index: indexFromOffset(offset.get(), itemHeight, count),
+      });
+      if (step === null) return;
+
       event.preventDefault();
-      interactingRef.current = true;
-      const from = keyTargetRef.current ?? nearestDetentOffset(offset.get(), itemHeight);
-      const target = from + step * itemHeight;
-      keyTargetRef.current = target;
-      springTo(target);
+      bufferRef.current = step.buffer;
+
+      if (bufferTimerRef.current !== null) clearTimeout(bufferTimerRef.current);
+      bufferTimerRef.current = null;
+      // A strategy whose buffer is bounded by the value's own width needs no clock;
+      // see `typeahead.ts`. Only start one where the buffer could otherwise live for
+      // ever.
+      if (typeahead.idleTimeout !== null && step.buffer !== '') {
+        bufferTimerRef.current = setTimeout(clearBuffer, typeahead.idleTimeout);
+      }
+
+      if (step.index !== null) {
+        interactingRef.current = true;
+        keyTargetRef.current = null;
+        springTo(nearestOffsetForIndex({ fromOffset: offset.get(), index: step.index, itemHeight, count }));
+      }
+
+      if (step.settled) onSettled?.();
     },
-    [itemHeight, offset, springTo]
+    [clearBuffer, count, items, itemHeight, offset, onSettled, springTo, typeahead]
   );
 
   // Wheel and trackpad. Non-passive so the page does not scroll underneath, which
@@ -394,6 +485,7 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
       stopAnimation();
       interactingRef.current = true;
       keyTargetRef.current = null;
+      clearBuffer();
 
       // `deltaMode` is pixels almost everywhere, but Firefox reports lines and
       // some remotes report pages; both are a multiple of the wheel's own metrics.
@@ -414,11 +506,12 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
     return () => {
       element.removeEventListener('wheel', onWheelEvent);
     };
-  }, [itemHeight, offset, rows, springTo, stopAnimation]);
+  }, [clearBuffer, itemHeight, offset, rows, springTo, stopAnimation]);
 
   useEffect(
     () => () => {
       if (wheelTimerRef.current !== null) clearTimeout(wheelTimerRef.current);
+      if (bufferTimerRef.current !== null) clearTimeout(bufferTimerRef.current);
     },
     []
   );
@@ -447,6 +540,14 @@ export function useWheel({ count, itemHeight, rows, index, onIndexChange }: UseW
   return {
     offset,
     elementRef,
-    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture, onKeyDown },
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel,
+      onLostPointerCapture,
+      onKeyDown,
+      onBlur: clearBuffer,
+    },
   };
 }

@@ -15,6 +15,13 @@ export {
 } from './time-model.js';
 export { TimeWheelPicker, type TimeWheelPickerProps } from './time-wheel-picker.js';
 export {
+  numericTypeahead,
+  prefixTypeahead,
+  type Typeahead,
+  type TypeaheadInput,
+  type TypeaheadStep,
+} from './typeahead.js';
+export {
   useWheel,
   WHEEL_DRAGGING_ATTRIBUTE,
   WHEEL_SLOT_ATTRIBUTE,

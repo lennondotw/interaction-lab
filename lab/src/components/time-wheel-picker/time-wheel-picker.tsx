@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import { useCallback, useMemo, type FC } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type FC } from 'react';
 
 import {
   fromWheelIndices,
@@ -9,7 +9,9 @@ import {
   toWheelIndices,
   type HourFormat,
   type TimeValue,
+  type WheelIndices,
 } from './time-model.js';
+import { numericTypeahead } from './typeahead.js';
 import { WheelColumn, type WheelVariant } from './wheel-column.js';
 import { viewportHeight } from './wheel-geometry.js';
 import { WIREFRAME_BAND, WIREFRAME_FRAME, WIREFRAME_ITEM } from './wheel-style.js';
@@ -118,20 +120,67 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
 
   const indices = toWheelIndices(value, hourFormat);
 
-  const onHourChange = useCallback(
-    (hour: number) => onChange(fromWheelIndices({ ...toWheelIndices(value, hourFormat), hour }, hourFormat)),
-    [hourFormat, onChange, value]
-  );
-  const onMinuteChange = useCallback(
-    (minute: number) => onChange(fromWheelIndices({ ...toWheelIndices(value, hourFormat), minute }, hourFormat)),
-    [hourFormat, onChange, value]
-  );
-  const onMeridiemChange = useCallback(
-    (meridiem: number) => onChange(fromWheelIndices({ ...toWheelIndices(value, hourFormat), meridiem }, hourFormat)),
-    [hourFormat, onChange, value]
+  /**
+   * What the wheels collectively say.
+   *
+   * Each column writes only its own field here, and that is the whole point.
+   * Rebuilding the value from a snapshot of `value` inside each handler looks
+   * equivalent and loses updates: when two columns move at once they each carry a
+   * stale copy of the other's field, and whichever commits last wins for *both*. The
+   * symptom is the wheels and the reported value disagreeing — an hour wheel resting
+   * on `1` while the value says `11`, because the minute's report arrived carrying an
+   * hour the animation had merely passed through.
+   *
+   * Two columns moving at once is not exotic. Typing across them makes it the normal
+   * case, since the hour is still animating when the first minute digit lands, but
+   * two fingers or a tap during a fling could always do it.
+   */
+  const indicesRef = useRef(indices);
+
+  const report = useCallback(
+    (patch: Partial<WheelIndices>) => {
+      const next = { ...indicesRef.current, ...patch };
+      indicesRef.current = next;
+      onChange(fromWheelIndices(next, hourFormat));
+    },
+    [hourFormat, onChange]
   );
 
+  // Adopt a value that did not come from us — a controlled parent setting the time
+  // itself. Comparing against what our own indices would produce is what tells the
+  // two apart, so our own reports echoing back do not reset anything mid-edit.
+  useEffect(() => {
+    const echo = fromWheelIndices(indicesRef.current, hourFormat);
+    if (echo.hour !== value.hour || echo.minute !== value.minute) {
+      indicesRef.current = toWheelIndices(value, hourFormat);
+    }
+  }, [hourFormat, value]);
+
+  const onHourChange = useCallback((hour: number) => report({ hour }), [report]);
+  const onMinuteChange = useCallback((minute: number) => report({ minute }), [report]);
+  const onMeridiemChange = useCallback((meridiem: number) => report({ meridiem }), [report]);
+
   const height = viewportHeight({ itemHeight, rows });
+
+  /**
+   * Typing `0941p` should fill the whole picker, which means a finished segment has
+   * to hand focus on.
+   *
+   * The columns report that they are finished and nothing more — only this level
+   * knows there is a next column at all. Found by document order rather than by a ref
+   * per column, because document order *is* the column order here, and three refs
+   * plus merging them into the one `useWheel` already owns is more machinery than one
+   * query.
+   *
+   * Auto-advance is not a convenience on top of typeahead; it is what makes typing
+   * across columns work. Without it every digit of `0941` would land in the hour
+   * column and fight the previous one.
+   */
+  const columnsRef = useRef<HTMLDivElement>(null);
+  const focusColumn = useCallback((position: number) => {
+    const columns = columnsRef.current?.querySelectorAll<HTMLElement>('[role="spinbutton"]');
+    columns?.[position]?.focus();
+  }, []);
 
   return (
     <div
@@ -145,7 +194,7 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
       // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="group"
     >
-      <div className="relative flex">
+      <div className="relative flex" ref={columnsRef}>
         <WheelColumn
           anglePerItem={anglePerItem}
           className={DIGIT_COLUMN_WIDTH}
@@ -155,7 +204,9 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
           items={hours}
           label="Hour"
           onIndexChange={onHourChange}
+          onSettled={() => focusColumn(1)}
           rows={rows}
+          typeahead={numericTypeahead}
           variant={variant}
         />
         <SeparatorCell itemHeight={itemHeight} rows={rows} />
@@ -168,7 +219,9 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
           items={minutes}
           label="Minute"
           onIndexChange={onMinuteChange}
+          onSettled={() => focusColumn(2)}
           rows={rows}
+          typeahead={numericTypeahead}
           valueText={(index) => `${minutes[index] ?? ''} minutes`}
           variant={variant}
         />

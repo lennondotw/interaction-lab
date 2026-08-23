@@ -1,8 +1,12 @@
+import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type FC, type ReactNode } from 'react';
 
 import { formatTime, timeParts, type TimeValue } from './time-model.js';
 import { TimeWheelPicker, type TimeWheelPickerProps } from './time-wheel-picker.js';
+import { WheelColumn } from './wheel-column.js';
+import { viewportHeight } from './wheel-geometry.js';
+import { WIREFRAME_BAND, WIREFRAME_FRAME } from './wheel-style.js';
 
 const meta = {
   title: 'Components/TimeWheelPicker',
@@ -200,6 +204,55 @@ export const ShortestPath: Story = {
               00:00
             </button>
           </div>
+        </div>
+      </Frame>
+    );
+  },
+};
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/**
+ * A bare `WheelColumn` over words, to show what the wheel is once time is taken away.
+ *
+ * This is the default typeahead — `<select>`'s, verified against a real one. Focus the
+ * column and type: `t` then `t` again cycles Tuesday to Thursday and back, while `t h`
+ * goes straight to Thursday. The buffer expires after a second, as a `<select>`'s does.
+ *
+ * The `TimeWheelPicker` stories are this same component with `numericTypeahead` handed
+ * to the two digit columns; its meridiem column keeps *this* behaviour, which is why
+ * the strategy belongs to a column rather than to a picker. Time is not a mode.
+ */
+export const GenericPrefixTypeahead: Story = {
+  parameters: { controls: { disable: true } },
+  render: function Component(args) {
+    const [index, setIndex] = useState(0);
+    const itemHeight = args.itemHeight ?? 40;
+    const rows = args.rows ?? 5;
+
+    return (
+      <Frame>
+        <div className="flex flex-col items-center gap-3">
+          <div className={cn('inline-flex p-1', WIREFRAME_FRAME)}>
+            <div className="relative flex">
+              <WheelColumn
+                className="w-[11ch]"
+                contentClassName="w-[9ch] text-center"
+                index={index}
+                itemHeight={itemHeight}
+                items={WEEKDAYS}
+                label="Weekday"
+                onIndexChange={setIndex}
+                rows={rows}
+              />
+              <div
+                aria-hidden="true"
+                className={cn('pointer-events-none absolute inset-x-0', WIREFRAME_BAND)}
+                style={{ height: itemHeight, top: (viewportHeight({ itemHeight, rows }) - itemHeight) / 2 }}
+              />
+            </div>
+          </div>
+          <p className="font-mono text-sm text-neutral-500">{WEEKDAYS[index]}</p>
         </div>
       </Frame>
     );

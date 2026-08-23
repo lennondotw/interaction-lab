@@ -2,6 +2,7 @@ import { cn } from '@monorepo/utils';
 import { motion, useMotionTemplate, useTransform, type MotionValue } from 'motion/react';
 import type { FC } from 'react';
 
+import { prefixTypeahead, type Typeahead } from './typeahead.js';
 import { useWheel, WHEEL_SLOT_ATTRIBUTE } from './use-wheel.js';
 import {
   drumOverscan,
@@ -134,6 +135,21 @@ export interface WheelColumnProps {
   variant?: WheelVariant;
   /** Degrees between adjacent items on the drum. Ignored when flat. */
   anglePerItem?: number;
+  /**
+   * How typing selects. Defaults to `<select>`'s prefix matching, which is right for
+   * a wheel over arbitrary labels; a wheel over numbers should be handed
+   * `numericTypeahead` explicitly. Pass `null` to make the column deaf to characters.
+   *
+   * Explicit rather than inferred from whether the labels parse as integers: a column
+   * whose keyboard behaviour changes because one label stopped being a number is not
+   * a column anybody can debug.
+   */
+  typeahead?: Typeahead | null;
+  /**
+   * Called when a typed entry can go no further. A composition wires this to focus
+   * its next column; a single column has no opinion about it. See `useWheel`.
+   */
+  onSettled?: () => void;
   /** Accessible name for the column, since the wheel itself carries no text. */
   label: string;
   /** Spoken value, when the bare label is not enough — `'05 minutes'` rather than `'05'`. */
@@ -162,17 +178,21 @@ export const WheelColumn: FC<WheelColumnProps> = ({
   rows,
   variant = 'flat',
   anglePerItem = 20,
+  typeahead = prefixTypeahead,
+  onSettled,
   label,
   valueText,
   className,
   contentClassName,
 }) => {
   const { offset, elementRef, handlers } = useWheel({
-    count: items.length,
+    items,
     itemHeight,
     rows,
     index,
     onIndexChange,
+    typeahead: typeahead ?? undefined,
+    onSettled,
   });
 
   const slots = rowSlots({ rows, overscan: variant === 'drum' ? drumOverscan({ rows, anglePerItem }) : 0 });
