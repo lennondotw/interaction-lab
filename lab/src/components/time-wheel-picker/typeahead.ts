@@ -92,6 +92,18 @@ const isRepeatOfOneCharacter = (buffer: string): boolean => {
  * A keystroke that matches nothing leaves the buffer untouched rather than appending.
  * That is a deliberate choice and not something the platform was measured on: it
  * means one mistyped character does not poison the rest of the word.
+ *
+ * ## A repeated character is never a prefix
+ *
+ * The two modes overlap on a list holding both `Tuesday` and `TTY`, and cycling wins:
+ * `t t` goes Tuesday → Thursday, not to `TTY`. Measured, and native `<select>` does
+ * exactly the same — there is no way to make `tt` mean the prefix `TT` without giving
+ * up the far more common "press the same key again to see the next match".
+ *
+ * The item is not stranded, because the ambiguity only lasts as long as the repeat.
+ * A third, different character breaks it and the buffer becomes an ordinary prefix,
+ * so `t t y` does reach `TTY` and `t t x` reaches `TTX`. What is genuinely lost is
+ * only the ability to *stop* at `tt`; the intermediate state cycles instead.
  */
 export const prefixTypeahead: Typeahead = {
   idleTimeout: PREFIX_IDLE_TIMEOUT,
