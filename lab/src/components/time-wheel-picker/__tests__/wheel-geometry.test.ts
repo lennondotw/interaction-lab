@@ -5,7 +5,9 @@ import {
   assertOddRows,
   DEFAULT_DRUM_ANGLE_PER_ITEM,
   DRUM_PERSPECTIVE,
+  MAX_DRUM_ANGLE_PER_ITEM,
   drumAngleForHeight,
+  drumHeightRange,
   drumHeight,
   drumSlots,
   drumRadius,
@@ -345,23 +347,78 @@ describe('the drum', () => {
     });
 
     it('refuses a height no drum can have, rather than inventing an angle', () => {
-      // Shorter than one row is the limit as the angle grows without bound.
-      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 40 })).toThrow(/between/u);
-      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 12 })).toThrow(/between/u);
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 12 })).toThrow(/at least/u);
       // Twice the perspective is the limit as the angle shrinks to nothing.
-      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 1800 })).toThrow(/between/u);
-      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 5000 })).toThrow(/between/u);
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 1800 })).toThrow(/less than/u);
+      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 5000 })).toThrow(/less than/u);
     });
 
-    it('accepts anything strictly inside those limits', () => {
-      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 41 })).not.toThrow();
-      expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: 1799 })).not.toThrow();
+    it('refuses the heights between one row and the shortest real drum', () => {
+      // The regression this whole range exists for. One row face-on is only the limit of an
+      // angle that never arrives, so a 41px drum at a 40px pitch inverted to 114 degrees — a
+      // legal-looking number, refused much later by `drumSlots`, naming an angle the caller
+      // never wrote.
+      const { shortest } = drumHeightRange({ itemHeight: 40 });
+      for (const target of [40, 41, 50, shortest - 0.01]) {
+        expect(() => drumAngleForHeight({ itemHeight: 40, drumHeight: target }), `${target}px`).toThrow(/at least/u);
+      }
+    });
+
+    it('accepts the shortest real drum, and answers with the maximum angle', () => {
+      const { shortest } = drumHeightRange({ itemHeight: 40 });
+      const anglePerItem = drumAngleForHeight({ itemHeight: 40, drumHeight: shortest });
+      expect(anglePerItem).toBeCloseTo(MAX_DRUM_ANGLE_PER_ITEM, 6);
+      // Inclusive at that end, so the answer has to be renderable and not merely finite.
+      expect(() => assertDrumAngle(anglePerItem)).not.toThrow();
+      expect(() => drumSlots({ anglePerItem })).not.toThrow();
+    });
+
+    it('accepts everything else inside the range', () => {
+      const { shortest, tallest } = drumHeightRange({ itemHeight: 40 });
+      for (const target of [shortest + 0.01, 80, 206.4, 520, tallest - 1]) {
+        const anglePerItem = drumAngleForHeight({ itemHeight: 40, drumHeight: target });
+        expect(() => assertDrumAngle(anglePerItem), `${target}px`).not.toThrow();
+      }
     });
 
     it('asks for a tighter arc when asked for a shorter drum', () => {
       const short = drumAngleForHeight({ itemHeight: 40, drumHeight: 130 });
       const tall = drumAngleForHeight({ itemHeight: 40, drumHeight: 360 });
       expect(short).toBeGreaterThan(tall);
+    });
+  });
+
+  describe('drumHeightRange', () => {
+    it('puts the short end at the maximum angle, not at one row', () => {
+      const { shortest } = drumHeightRange({ itemHeight: 40 });
+      expect(shortest).toBeCloseTo(drumHeight({ itemHeight: 40, anglePerItem: MAX_DRUM_ANGLE_PER_ITEM }), 10);
+      // A little over 1.5x the pitch, and worth spelling out because guessing it is what went
+      // wrong: `drumRadius` is arc-length based, `h / θ`, so at a quarter turn the apothem is
+      // `2h/π` — not `h/2`, which a chord reading would give. The circumscribed radius is then
+      // `hypot(2h/π, h/2)`, and the projection trims a little off that.
+      expect(shortest).toBeCloseTo(62.978, 3);
+      expect(shortest / 40).toBeCloseTo(1.574, 3);
+    });
+
+    it('scales its short end with the pitch, which is why a fixed floor cannot work', () => {
+      // The bug in miniature: a slider whose minimum was 80 was safe at a 40px pitch and
+      // below the floor at 72px.
+      expect(drumHeightRange({ itemHeight: 24 }).shortest).toBeLessThan(80);
+      expect(drumHeightRange({ itemHeight: 72 }).shortest).toBeGreaterThan(80);
+    });
+
+    it('puts the tall end at twice the perspective', () => {
+      expect(drumHeightRange({ itemHeight: 40 }).tallest).toBe(2 * DRUM_PERSPECTIVE);
+      expect(drumHeightRange({ itemHeight: 40, perspective: 500 }).tallest).toBe(1000);
+    });
+
+    it('brackets every height the forward function can produce', () => {
+      const { shortest, tallest } = drumHeightRange({ itemHeight: 40 });
+      for (const anglePerItem of [0.5, 4, 20, 45, 89, MAX_DRUM_ANGLE_PER_ITEM]) {
+        const height = drumHeight({ itemHeight: 40, anglePerItem });
+        expect(height, `${anglePerItem}°`).toBeGreaterThanOrEqual(shortest - 1e-9);
+        expect(height, `${anglePerItem}°`).toBeLessThan(tallest);
+      }
     });
   });
 

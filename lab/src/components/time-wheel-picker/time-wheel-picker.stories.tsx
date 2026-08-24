@@ -5,7 +5,7 @@ import { useState, type FC, type ReactNode } from 'react';
 import { formatTime, timeParts, type TimeValue } from './time-model.js';
 import { TimeWheelPicker, type TimeWheelPickerProps } from './time-wheel-picker.js';
 import { WheelColumn } from './wheel-column.js';
-import { drumAngleForHeight, drumHeight, viewportHeight } from './wheel-geometry.js';
+import { drumAngleForHeight, drumHeight, drumHeightRange, viewportHeight } from './wheel-geometry.js';
 import { WIREFRAME_BAND, WIREFRAME_FRAME } from './wheel-style.js';
 
 const meta = {
@@ -423,6 +423,69 @@ export const DrumHeight: Story = {
               <DrumCaseLabel {...drum} itemHeight={itemHeight} />
             </div>
           ))}
+        </div>
+      </Frame>
+    );
+  },
+};
+
+/**
+ * Sizing a drum by a target height, with a knob for the target.
+ *
+ * There is no `drumHeight` prop, which is why no control for one appears anywhere else: a
+ * drum's shape is one quantity, and `drumAnglePerItem` is how it is spelled. A height is the
+ * same quantity said as a length, so it belongs at the call site as the angle's inverse —
+ * `drumAngleForHeight` — and not as a second prop that would need a rule for what to do when
+ * handed both spellings at once.
+ *
+ * A knob for it still belongs *somewhere*, and this is where: an arg this story declares for
+ * itself, converted before the component sees it. Which is the honest shape of the thing —
+ * exploring the component rather than part of its surface.
+ *
+ * Drag `drumHeight` and the angle follows. The readout prints what was asked for, the angle
+ * it resolved to, and what the drum then measures — the third number is the first one again,
+ * because the two functions invert each other.
+ *
+ * The slider runs below what any drum can be, on purpose, so the floor can be seen: hold it
+ * at the low end and the height stops following while the angle sits at its maximum. That
+ * floor is `drumHeightRange().shortest` — a little over 1.5 x `itemHeight`, and *not*
+ * `itemHeight`, which is only the limit of an angle the drum never reaches. Clamping to
+ * `itemHeight + 1` here is what found that: it crashed from inside `drumSlots`, at 114
+ * degrees per item.
+ */
+export const DrumSizedByHeight: StoryObj<TimeWheelPickerProps & { drumHeight: number }> = {
+  argTypes: {
+    ...meta.argTypes,
+    // Deliberately reaches below the floor at every pitch, so the clamp is demonstrable
+    // rather than merely defensive.
+    drumHeight: { control: { type: 'range', min: 32, max: 520, step: 4 } },
+    // The angle is this story's output, not its input. A control for it would be two knobs
+    // for one quantity, where moving either silently discards the other.
+    drumAnglePerItem: { table: { disable: true } },
+    drumViewportHeight: { table: { disable: true } },
+    rows: { table: { disable: true } },
+    variant: { table: { disable: true } },
+  },
+  args: { ...meta.args, drumHeight: 240, variant: 'drum' },
+  render: ({ drumHeight: target, ...args }) => {
+    const itemHeight = args.itemHeight ?? 40;
+    // Held at the shortest drum that exists for this pitch, which the geometry reports rather
+    // than the story guessing — the guess was `itemHeight`, and it was low by a third.
+    const { shortest } = drumHeightRange({ itemHeight });
+    const asked = Math.max(target, shortest);
+    const anglePerItem = drumAngleForHeight({ itemHeight, drumHeight: asked });
+
+    return (
+      <Frame>
+        <div className="flex flex-col items-center gap-3">
+          <PickerDemo {...args} drumAnglePerItem={anglePerItem} variant="drum" />
+          <p className="font-mono text-xs text-neutral-500 tabular-nums">
+            {`asked ${target} · ${anglePerItem.toFixed(2)}° · measures ${drumHeight({
+              itemHeight,
+              anglePerItem,
+            }).toFixed(1)}`}
+            {asked > target && <span className="text-neutral-400">{` · floored at ${shortest.toFixed(1)}`}</span>}
+          </p>
         </div>
       </Frame>
     );

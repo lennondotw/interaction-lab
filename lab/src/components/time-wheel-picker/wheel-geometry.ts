@@ -248,6 +248,18 @@ export const DRUM_PERSPECTIVE = 900;
 export const DEFAULT_DRUM_ANGLE_PER_ITEM = 20;
 
 /**
+ * The most arc one item may occupy: a quarter turn.
+ *
+ * At 90° a row is turned edge-on to its neighbour and the drum has only four faces, which
+ * is where `drumSlots`' reach bottoms out at one slot either side of centre. Past it the
+ * arithmetic keeps producing numbers — the reach falls below 1 and the column renders
+ * blank — so this is the edge of the shape rather than a matter of taste, and it bounds
+ * both spellings: {@link assertDrumAngle} rejects a larger angle, and
+ * {@link drumHeightRange} turns it into the shortest drum a height can ask for.
+ */
+export const MAX_DRUM_ANGLE_PER_ITEM = 90;
+
+/**
  * How tall a drum actually is.
  *
  * The rows are flat rectangles, not arcs, so in cross-section the drum is a **prism**
@@ -290,6 +302,39 @@ export const drumHeight = ({
 };
 
 /**
+ * Every height a drum of this row pitch can actually have.
+ *
+ * The tall end is a limit of the projection: as the angle shrinks the radius grows without
+ * bound and the height tends to `2 · perspective`, never reaching it. Exclusive, and no
+ * caller will go near it.
+ *
+ * The short end is the one worth having a function for, because it is **not** `itemHeight`.
+ * Read only as a limit, the forward function does tend to one row seen face-on as the angle
+ * grows without bound — but the angle cannot grow without bound. It stops at
+ * {@link MAX_DRUM_ANGLE_PER_ITEM}, so the shortest drum that exists is the one at that
+ * angle: a little over 1.5 × `itemHeight` at the default perspective, since `drumRadius` is
+ * arc-length based and a quarter turn puts the apothem at `2h/π`. Between the two is a range
+ * of heights that look reasonable, invert to a legal-looking number, and have no drum:
+ * `drumAngleForHeight` used to answer 114° for a 41px drum at a 40px pitch, and the throw
+ * arrived later and elsewhere, from `drumSlots`, naming an angle the caller never wrote. The
+ * short end is inclusive, since the drum at exactly the maximum angle is real.
+ *
+ * Callers that clamp a user-supplied height — a slider, a config value — want this rather
+ * than a guess, and it is where the `itemHeight` floor was found to be wrong: a story
+ * clamped to `itemHeight + 1` and still crashed.
+ */
+export const drumHeightRange = ({
+  itemHeight,
+  perspective = DRUM_PERSPECTIVE,
+}: {
+  itemHeight: number;
+  perspective?: number;
+}): { shortest: number; tallest: number } => ({
+  shortest: drumHeight({ itemHeight, anglePerItem: MAX_DRUM_ANGLE_PER_ITEM, perspective }),
+  tallest: 2 * perspective,
+});
+
+/**
  * The angle per item that would make a drum exactly this tall — {@link drumHeight} run
  * backwards.
  *
@@ -308,11 +353,9 @@ export const drumHeight = ({
  * the constant is positive, which makes the `−√D` root the positive one. There is exactly
  * one physical answer, never a choice between two.
  *
- * The bounds are real rather than defensive, and both are limits of the forward function:
- * as the angle grows the radius shrinks and the height tends to `itemHeight`, a single row
- * seen face-on; as the angle shrinks the radius grows and the height tends to
- * `2 · perspective`. A target outside that open interval has no drum, so it throws rather
- * than silently returning a nonsense angle.
+ * The bounds are {@link drumHeightRange}'s, and the short end of them is the whole reason
+ * that function exists — see its own note. A target outside the range has no drum behind
+ * it, so this throws rather than returning an angle nothing can render.
  */
 export const drumAngleForHeight = ({
   itemHeight,
@@ -324,12 +367,11 @@ export const drumAngleForHeight = ({
   drumHeight: number;
   perspective?: number;
 }): number => {
-  const shortest = itemHeight;
-  const tallest = 2 * perspective;
-  if (!(target > shortest && target < tallest)) {
+  const { shortest, tallest } = drumHeightRange({ itemHeight, perspective });
+  if (!(target >= shortest && target < tallest)) {
     throw new Error(
-      `drumHeight must be between ${shortest} and ${tallest} for itemHeight ${itemHeight} ` +
-        `and perspective ${perspective}, received ${target}`
+      `drumHeight must be at least ${shortest} and less than ${tallest} for itemHeight ` +
+        `${itemHeight} and perspective ${perspective}, received ${target}`
     );
   }
 
@@ -338,8 +380,11 @@ export const drumAngleForHeight = ({
   const b = 2 * half * half * perspective;
   const c = perspective * perspective * (half * half - (itemHeight / 2) ** 2);
   const radius = (-b - Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+  const anglePerItem = ((itemHeight / radius) * 180) / Math.PI;
 
-  return ((itemHeight / radius) * 180) / Math.PI;
+  // Only ever a rounding correction, and only at `shortest`, where the exact answer *is* the
+  // maximum: the guard above has already rejected every target that genuinely wants more.
+  return Math.min(anglePerItem, MAX_DRUM_ANGLE_PER_ITEM);
 };
 
 /**
@@ -374,8 +419,10 @@ export const drumRow = ({
  * past that the arc has no front face left to show.
  */
 export const assertDrumAngle = (anglePerItem: number): void => {
-  if (!Number.isFinite(anglePerItem) || anglePerItem <= 0 || anglePerItem > 90) {
-    throw new Error(`anglePerItem must be greater than 0 and at most 90, received ${anglePerItem}`);
+  if (!Number.isFinite(anglePerItem) || anglePerItem <= 0 || anglePerItem > MAX_DRUM_ANGLE_PER_ITEM) {
+    throw new Error(
+      `anglePerItem must be greater than 0 and at most ${MAX_DRUM_ANGLE_PER_ITEM}, received ${anglePerItem}`
+    );
   }
 };
 

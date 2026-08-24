@@ -75,6 +75,27 @@ root — and is round-trip tested against `drumHeight` across the whole usable r
 for it as well would need a rule for being handed both spellings at once, and the only
 honest rules are "throw" or "silently ignore one".
 
+#### The shortest drum is not one row tall
+
+Read as a limit, the forward function tends to `itemHeight` — one row seen face-on — as the
+angle grows without bound. So `drumAngleForHeight` guarded its lower bound there, and that
+was wrong, because **the angle cannot grow without bound**. It stops at 90°, where a row is
+edge-on to its neighbour. The shortest drum that exists is the one at that angle, a little
+over 1.5 × `itemHeight`: `drumRadius` is arc-length based, `h / θ`, so a quarter turn puts
+the apothem at `2h/π` rather than at the `h/2` a chord reading would suggest.
+
+Between one row and that floor is a band of heights that look reasonable and have no drum. A
+41px target at a 40px pitch inverted to **114° per item** — a finite, plausible number — and
+the throw arrived later and somewhere else, from `drumSlots`, naming an angle the caller
+never wrote. `drumHeightRange` now reports both ends, `drumAngleForHeight` guards against
+them, and 90° is spelled once as `MAX_DRUM_ANGLE_PER_ITEM` instead of being a literal in the
+assertion.
+
+The floor scales with the pitch, which is the part that makes a hand-written constant
+unsafe: 38px at a 24px pitch, 63px at 40, 111px at 72. The story that found this had been
+clamping to `itemHeight + 1` and crashed anyway; a fixed slider minimum of 80px would have
+been comfortable at the default pitch and below the floor at the largest one.
+
 The window was nearly made relative instead — a `drumTrim` in pixels — and the composer is
 what ruled it out. `TimeWheelPicker` resolves the box **once** and hands the same number to
 the drum columns, the `:` separator and the selection band; that shared value is why all
