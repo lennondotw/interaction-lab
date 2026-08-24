@@ -20,4 +20,5 @@ question survives being put aside.
 | [Telling a tap from a drag](./tap-or-drag.md)                                       | settled  | one surface, two gestures: the 3px sticky threshold, and resolving a tap by hit-test                  |
 | [Drum geometry](./drum-geometry.md)                                                 | settled  | the prism and its two cylinders, the auto height, and why angle and height are shape and window       |
 | [Two typeahead modes](./typeahead-two-modes.md)                                     | settled  | prefix matching and numeric accumulation behind one interface, per column                             |
+| [Keyboard and focus](./keyboard-and-focus.md)                                       | settled  | why the trap is the parent's and Left/Right is ours, and which keys are deliberately absent           |
 | [Release velocity across input devices](./release-velocity-across-input-devices.md) | **open** | whether one velocity window suits both a finger and a mouse, and whether desktop flinging is worth it |

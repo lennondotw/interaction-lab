@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import { useCallback, useEffect, useMemo, useRef, type FC } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type FC, type KeyboardEvent } from 'react';
 
 import {
   fromWheelIndices,
@@ -227,7 +227,50 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
     columns?.[position]?.focus();
   }, []);
 
+  /**
+   * Left and Right step between columns, because these three columns are one field.
+   *
+   * Measured off `<input type="time">` rather than chosen — see
+   * `archive/2026-08-wheel-focus-model`. The native field offers *both* paths: Tab walks its
+   * segments and so does Left/Right, and both **clamp** at the ends rather than wrapping.
+   * Clamping is the part worth being careful about, because this wheel's value loops and it
+   * would be easy to make the columns loop with it. The value is endless; the field is three
+   * columns wide and has a first and a last.
+   *
+   * It belongs here and not in `WheelColumn` for the same reason auto-advance does: a column
+   * knows about a wheel, and only this level knows there is a column beside it. A wheel has
+   * no horizontal axis of its own, so a single-column picker leaves Left/Right alone — which
+   * is better than aliasing them to Up/Down, since that would make one key mean two
+   * unrelated things depending on how many columns happened to be composed.
+   */
+  const onColumnsKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+    if (step === 0) return;
+
+    const columns = columnsRef.current?.querySelectorAll<HTMLElement>('[role="spinbutton"]');
+    if (columns === undefined) return;
+    const from = [...columns].indexOf(document.activeElement as HTMLElement);
+    // A key that arrived from somewhere other than a column is not ours to take.
+    if (from === -1) return;
+
+    // Consumed even when the clamp makes it a no-op: the key has been handled, and letting
+    // it through would scroll the page sideways at the ends only. `stopImmediatePropagation`
+    // for the reason `useWheel`'s `consume` documents — a host listening on `document` is
+    // otherwise still reached.
+    event.preventDefault();
+    event.stopPropagation();
+    event.nativeEvent.stopImmediatePropagation();
+
+    columns[Math.min(Math.max(from + step, 0), columns.length - 1)]?.focus();
+  }, []);
+
   return (
+    // The group carries a keydown handler without being interactive itself, which is the
+    // arrow-key container pattern rather than an exception to it: the interactive elements
+    // are the columns, which are focusable and keyboard-operable on their own, and the
+    // group only decides which of them Left/Right hands focus to. There is nothing here a
+    // pointer user could reach and a keyboard user could not.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       aria-label="Time"
       className={cn('inline-flex p-1', WIREFRAME_FRAME, className)}
@@ -238,6 +281,10 @@ export const TimeWheelPicker: FC<TimeWheelPickerProps> = ({
       // unwind. `role="group"` plus a label is the whole of what is meant here.
       // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="group"
+      // Bound to the group rather than to a column, because the group is the field and
+      // "which column next" is a fact about the field. The columns are its only focusable
+      // descendants, so anything reaching here by bubbling came from one of them.
+      onKeyDown={onColumnsKeyDown}
     >
       <div className="relative flex" ref={columnsRef}>
         <WheelColumn
