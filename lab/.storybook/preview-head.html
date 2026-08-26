@@ -1,0 +1,29 @@
+<script>
+  /* globals window, Object */
+  // Storybook's own base-preview-head.html runs just above this and does:
+  //
+  //   if (window.top !== window) {
+  //     window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.top.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  //   }
+  //
+  // so React DevTools can see through the preview iframe. Without the DevTools extension
+  // installed, window.top has no hook and that line writes `undefined` into an own property.
+  // bippy (via react-scan / react-grab) then asks hasOwnProperty() whether a hook is installed,
+  // gets `true`, skips its own install, and hands `undefined` back to instrument() — which
+  // throws `undefined is not an object` while the preview bundle is still evaluating. The
+  // preview never boots and the manager spins forever, on every story.
+  //
+  // Deleting the placeholder key puts bippy back on its install path. Only the copy is dropped;
+  // a real hook object (extension present) is left exactly as Storybook set it.
+  try {
+    if (
+      Object.prototype.hasOwnProperty.call(window, '__REACT_DEVTOOLS_GLOBAL_HOOK__') &&
+      window.__REACT_DEVTOOLS_GLOBAL_HOOK__ == null
+    ) {
+      delete window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('unable to reset the React DevTools hook placeholder', e);
+  }
+</script>

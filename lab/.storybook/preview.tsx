@@ -1,7 +1,6 @@
 import '#src/global.css';
 import type { Preview } from '@storybook/react-vite';
 import { useEffect, useRef, useState } from 'react';
-import { scan } from 'react-scan';
 import { Toaster } from 'sonner';
 
 import { CustomDocsContainer } from './preview-docs/docs-container.js';
@@ -83,7 +82,12 @@ const shouldEnableReactScan =
   window.localStorage.getItem('reactScan') !== 'false';
 
 if (import.meta.env.DEV && shouldEnableReactScan) {
-  scan({ enabled: true });
+  // Imported lazily so react-scan — and its react-grab / bippy transitive deps, which reach for
+  // __REACT_DEVTOOLS_GLOBAL_HOOK__ at module scope — stay out of the built preview bundle.
+  // See preview-head.html for the crash that reaching for that hook used to cause.
+  void import('react-scan').then(({ scan }) => {
+    scan({ enabled: true });
+  });
 }
 
 initPreview();
