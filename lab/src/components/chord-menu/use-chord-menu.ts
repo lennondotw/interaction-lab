@@ -199,11 +199,17 @@ export function useChordMenu(root: ChordMenuLevel, { enabled = true }: UseChordM
 
       const settle = (message: string) => {
         if (action.after !== 'stay') {
-          showResult(message);
+          // An action with nothing to report closes rather than putting up an empty card for a
+          // second and a half.
+          if (message) showResult(message);
+          else close();
 
           return;
         }
 
+        // Dispatched even when there is nothing to report, so a press with nothing to say clears
+        // the line the press before it left. The countdown restarts either way: a run of presses
+        // should not have the level vanish part-way through.
         dispatch({ type: 'notice', message });
         scheduleDismiss(OPEN_TIMEOUT_MS);
       };

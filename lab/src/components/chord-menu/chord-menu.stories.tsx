@@ -246,6 +246,97 @@ export const StaysOpen: Story = {
 };
 
 /**
+ * A footer under the rows, for the value the level adjusts.
+ *
+ * A stepper is the case the two features exist for together: `footer` says where the value is,
+ * `after: 'stay'` keeps the keys under the same fingers, and every press restarts the dismiss
+ * countdown so a run of them never has the level vanish part-way through. The presses report
+ * nothing back — the footer is already showing the outcome, and a notice would say it twice.
+ *
+ * The footer is a thunk for the same reason the level is: it is read at render, so it can move while
+ * the level stands still.
+ */
+export const FooterTracksTheValue: Story = {
+  render: () => {
+    const VolumeDemo: FC = () => {
+      const [volume, setVolume] = useState(50);
+      // Both the footer and the actions read the ref. A level is captured into the stack when it is
+      // pushed, so a closure over this render's `volume` would report the value it had then — for the
+      // footer that means a line that never moves, which is the one thing it is there to do.
+      const volumeRef = useRef(50);
+
+      // Padded to the width of '100', so the card does not narrow by a character when the value drops
+      // out of three digits — it is as wide as its widest line and springs to it, so an unpadded value
+      // has the whole card breathe on every press. Padded on the right, where the space is invisible:
+      // on the left it reads as a typo between the label and the number.
+      const footer = () => `Volume ${String(volumeRef.current).padEnd(3)}`;
+
+      const nudge = (delta: number): ChordMenuAction => {
+        const label = `${delta > 0 ? '+' : '−'}${Math.abs(delta)}`;
+
+        return {
+          label,
+          description: label,
+          type: 'run',
+          after: 'stay',
+          run: () => {
+            volumeRef.current = Math.min(100, Math.max(0, volumeRef.current + delta));
+            setVolume(volumeRef.current);
+
+            return '';
+          },
+        };
+      };
+
+      const VOLUME: ChordMenuLevel = {
+        title: 'Volume',
+        actions: [nudge(-10), nudge(-1), nudge(1), nudge(10)],
+        footer,
+      };
+
+      return (
+        <>
+          <Hint>
+            <p>
+              <Kbd>1</Kbd> walks into Volume, then <Kbd>1</Kbd>–<Kbd>4</Kbd> nudge it by 10 or by 1. The rows stay put
+              and the footer moves — currently <strong>{volume}</strong>.
+            </p>
+            <p>
+              Hold a finger off the keyboard for three seconds and it dismisses itself, but pressing anything starts
+              that over, so nudging from 50 to 90 one press at a time is one interaction rather than a race.
+            </p>
+          </Hint>
+          <Chord
+            root={{
+              title: 'Playback',
+              // The root carries the same line, so the value is on screen before you walk in to change it.
+              actions: [
+                group('Volume', 'Nudge it by 10 or by 1', VOLUME),
+                {
+                  label: 'Mute',
+                  description: 'Straight to 0, then the menu closes',
+                  type: 'run',
+                  run: () => {
+                    volumeRef.current = 0;
+                    setVolume(0);
+
+                    // Nothing to report, and nothing to stay open for: the menu just goes.
+                    return '';
+                  },
+                },
+              ],
+              footer,
+            }}
+          />
+        </>
+      );
+    };
+
+    return <VolumeDemo />;
+  },
+};
+
+/**
  * The menu holds itself open under the pointer.
  *
  * It dismisses itself after a few seconds otherwise, which a twelve-row level outlasts. Hovering

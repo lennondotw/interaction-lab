@@ -69,6 +69,22 @@ const Title: FC<{ children: string }> = ({ children }) => (
 );
 
 /**
+ * The level's value line, mirroring the title at the other end of the card.
+ *
+ * `whitespace-pre` so a footer can pad its value to a fixed width. The card is as wide as its
+ * widest line and springs to that width, so a footer counting from 9 to 10 would otherwise have
+ * the whole card breathe on every press.
+ */
+const Footer: FC<{ children: string }> = ({ children }) => (
+  <span
+    className={`block pt-0.5 font-mono text-[10px]/[14px] font-medium whitespace-pre text-white/50`}
+    data-testid="chord-menu-footer"
+  >
+    {children}
+  </span>
+);
+
+/**
  * The chord menu's card: a keyboard-driven list that resizes to whatever level is showing.
  *
  * The card is measured rather than laid out by the animation. Content sits absolutely centred
@@ -177,6 +193,9 @@ export const ChordMenu: FC<ChordMenuProps> = ({
                         {state.notice}
                       </span>
                     )}
+                    {/* Last, under the notice: the notice is about the press that just happened and
+                        belongs next to the rows, while this is the level's own bottom edge. */}
+                    {level.footer && <Footer>{level.footer()}</Footer>}
                   </motion.div>
                 )}
 

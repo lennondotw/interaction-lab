@@ -10,6 +10,18 @@ import { chordIndexForKey } from './chord-keys.js';
 export interface ChordMenuLevel {
   title?: string;
   actions: ChordMenuAction[];
+  /**
+   * A line under the rows, for the value the level adjusts.
+   *
+   * A thunk rather than a string because that is the whole point of it: a level that steps a value
+   * stays open while the value changes, so the line has to be read at render rather than captured
+   * when the level was pushed. For the same reason it must read from a ref or a store — a thunk
+   * closing over the render that built the level would keep reporting the value from then.
+   *
+   * Distinct from a `stay` action's notice, which reports the last press. The footer reports where
+   * the value now is, which is what someone stepping it is actually watching.
+   */
+  footer?: () => string;
 }
 
 /** What happens to the menu once an action has run. */
@@ -22,6 +34,9 @@ export type ChordMenuAfter =
    * For an action where one press is not the whole interaction — stepping through more than two
    * states, say. Closing after each press would mean reopening and re-navigating between every
    * step. A two-state toggle does not need this.
+   *
+   * Either way the dismiss countdown starts over, so a run of presses never has the level vanish
+   * mid-adjustment.
    */
   | 'stay';
 
@@ -31,6 +46,13 @@ export type ChordMenuAction =
       description: string;
       disabled?: boolean;
       type: 'run';
+      /**
+       * What to report back.
+       *
+       * An empty string reports nothing, for a press whose outcome is already on screen — a
+       * stepper under a footer showing the value, where a notice would say the same thing twice.
+       * The menu then stays or closes as it otherwise would, just without a line about it.
+       */
       run: () => string | Promise<string>;
       after?: ChordMenuAfter;
     }
