@@ -252,21 +252,67 @@ export const StaysOpen: Story = {
  * cancels that; leaving starts the countdown over rather than resuming what was left of it.
  */
 export const HoverHolds: Story = {
-  render: () => (
-    <>
-      <Hint>
-        <p>
-          Open the menu and leave the pointer off it: it closes on its own. Open it again and hover: it stays as long as
-          you are over it.
-        </p>
-        <p>
-          Move away and the full countdown starts again, so a pointer passing across buys the same time as one that
-          arrived deliberately.
-        </p>
-      </Hint>
-      <Chord root={ROOT} />
-    </>
-  ),
+  render: () => {
+    /**
+     * Composes the hook directly rather than going through `Chord`, so it can watch the same two
+     * signals the menu reports and say which one is in force. The indicator reads those signals; it
+     * is not a third source of truth the component has to be told about.
+     */
+    const HoverDemo: FC = () => {
+      const { state, holdOpen, releaseHold } = useChordMenu(ROOT);
+      const [held, setHeld] = useState(false);
+
+      // Closed wins over held: a menu dismissed from the keyboard under the pointer drops its hold
+      // too, and the hook has already done so by the time this renders.
+      const status = state.phase === 'closed' ? 'closed' : held ? 'holding' : 'counting down';
+
+      return (
+        <>
+          <Hint>
+            <p>
+              Open the menu and leave the pointer off it: it closes on its own. Open it again and hover: it stays as
+              long as you are over it.
+            </p>
+            <p>
+              Move away and the full countdown starts again, so a pointer passing across buys the same time as one that
+              arrived deliberately.
+            </p>
+          </Hint>
+          {/* Deliberately plain. It is here to make an invisible timer legible, and anything more designed would read
+              as part of the component.
+
+              The status gets a line to itself and the note sits under it: the note is much the longer of the two and
+              changes length with every state, so on one line it would drag the status word around as it went. */}
+          <div className={`mt-4 font-mono text-xs text-neutral-700 dark:text-neutral-300`} data-testid="hold-status">
+            <p>
+              {'status: '}
+              <strong>{status}</strong>
+            </p>
+            <p className={`text-neutral-500 dark:text-neutral-400`}>
+              {status === 'holding'
+                ? 'Pointer is over the menu, so no dismiss is scheduled.'
+                : status === 'counting down'
+                  ? 'Dismisses itself shortly.'
+                  : 'Press the chord to open it.'}
+            </p>
+          </div>
+          <ChordMenu
+            onHoldOpen={() => {
+              setHeld(true);
+              holdOpen();
+            }}
+            onReleaseHold={() => {
+              setHeld(false);
+              releaseHold();
+            }}
+            state={state}
+          />
+        </>
+      );
+    };
+
+    return <HoverDemo />;
+  },
 };
 
 /**
