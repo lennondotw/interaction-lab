@@ -6,9 +6,48 @@
  * level silently moves a key someone had learned. Position gives neither problem, at the
  * cost of the keys meaning nothing on their own — which is why the menu always shows them.
  *
- * Digits first: they need no modifier and sit under the same fingers on every layout.
+ * Digits first: they need no modifier and sit under the same fingers on every layout. In row order,
+ * so `0` comes after `9` where it sits on the keyboard rather than before `1` where it sits in
+ * arithmetic — the keys are read off the menu, not counted.
  */
-export const CHORD_KEYS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D'] as const;
+export const CHORD_KEYS = [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '0',
+  'a',
+  'b',
+  'c',
+  'd',
+  'e',
+  'f',
+  'g',
+  'h',
+  'i',
+  'j',
+  'k',
+  'l',
+  'm',
+  'n',
+  'o',
+  'p',
+  'q',
+  'r',
+  's',
+  't',
+  'u',
+  'v',
+  'w',
+  'x',
+  'y',
+  'z',
+] as const;
 
 export type ChordKey = (typeof CHORD_KEYS)[number];
 
@@ -25,7 +64,7 @@ export function chordKeyAt(index: number): ChordKey | undefined {
 
 /** Index of the action a keystroke selects on a level of `length`, or `-1` for none. */
 export function chordIndexForKey(key: string, length: number): number {
-  const pressed = key.toUpperCase();
+  const pressed = key.toLowerCase();
   // Widened rather than asserted: the keystroke is any string, and claiming otherwise would hide a
   // typo in a caller behind the assertion.
   const index = (CHORD_KEYS as readonly string[]).indexOf(pressed);

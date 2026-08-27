@@ -89,21 +89,21 @@ describe('currentChordMenuLevel', () => {
 
 describe('resolveChordMenuAction', () => {
   it('picks the action sitting at the key', () => {
-    expect(resolveChordMenuAction(opened(root), '1')?.label).toBe('Second');
+    expect(resolveChordMenuAction(opened(root), '2')?.label).toBe('Second');
   });
 
   it('resolves against the level on top, not the root', () => {
-    expect(resolveChordMenuAction(opened(root, nested), '0')?.label).toBe('Deep');
-    expect(resolveChordMenuAction(opened(root, nested), '1')).toBeUndefined();
+    expect(resolveChordMenuAction(opened(root, nested), '1')?.label).toBe('Deep');
+    expect(resolveChordMenuAction(opened(root, nested), '2')).toBeUndefined();
   });
 
   it('has nothing for a key this level does not use', () => {
     // Not an error: the menu is an overlay, so that key belongs to whatever is underneath it.
-    expect(resolveChordMenuAction(opened(root), 'Z')).toBeUndefined();
+    expect(resolveChordMenuAction(opened(root), 'z')).toBeUndefined();
     expect(resolveChordMenuAction(opened(root), '5')).toBeUndefined();
   });
 
   it('has nothing while the menu is closed', () => {
-    expect(resolveChordMenuAction(initialChordMenuState, '0')).toBeUndefined();
+    expect(resolveChordMenuAction(initialChordMenuState, '1')).toBeUndefined();
   });
 });
