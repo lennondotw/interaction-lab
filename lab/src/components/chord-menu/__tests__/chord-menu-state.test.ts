@@ -70,6 +70,15 @@ describe('chordMenuReducer', () => {
     expect(second).toEqual({ phase: 'open', stack: [root], notice: 'two' });
   });
 
+  it('takes an empty notice as clearing the last one', () => {
+    // How a press with nothing to report — one under a footer already showing the outcome — leaves
+    // the level. Keeping the previous line would credit this press with the one before it.
+    const reported = chordMenuReducer(opened(root), { type: 'notice', message: 'one' });
+    const silent = chordMenuReducer(reported, { type: 'notice', message: '' });
+
+    expect(silent).toEqual({ phase: 'open', stack: [root], notice: '' });
+  });
+
   it('ignores a push or a notice while closed', () => {
     expect(chordMenuReducer(initialChordMenuState, { type: 'push', level: nested })).toBe(initialChordMenuState);
     expect(chordMenuReducer(initialChordMenuState, { type: 'notice', message: 'x' })).toBe(initialChordMenuState);
