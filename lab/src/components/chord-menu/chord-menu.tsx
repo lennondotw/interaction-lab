@@ -14,6 +14,20 @@ const PADDING_X = 10;
 const RADIUS = (LINE_HEIGHT + PADDING_Y * 2) / 2;
 
 /**
+ * How narrow an open level may get.
+ *
+ * A terse level — a stepper's `−10 / +1`, a two-word toggle — measures about 60px, at which the card
+ * reads as a chip that happens to have keys in it rather than as the menu. The floor keeps every
+ * level recognisably the same object, whatever it holds.
+ *
+ * Applied as a floor on the *content* box rather than a clamp on the card, so the rows keep their
+ * left inset and the slack lands on the right. Clamping the card instead would centre the rows in
+ * it, moving the text's left edge with the width of the level. A result is exempt: it is a one-line
+ * tag, and giving it the menu's width would make it look like a level with its rows missing.
+ */
+const MIN_OPEN_WIDTH = 100;
+
+/**
  * Stiff and heavily damped. The card resizes between levels rather than crossfading, so the size
  * change *is* the transition — it has to finish about as fast as the eye expects a menu to appear.
  */
@@ -167,7 +181,12 @@ export const ChordMenu: FC<ChordMenuProps> = ({
             <div
               ref={measureRef}
               className={`absolute top-1/2 left-1/2 w-max -translate-1/2`}
-              style={{ padding: `${PADDING_Y}px ${PADDING_X}px` }}
+              style={{
+                // Border-box, so this is the card's width: the observer reports the content box and
+                // adds the same padding back.
+                minWidth: state.phase === 'open' ? MIN_OPEN_WIDTH : undefined,
+                padding: `${PADDING_Y}px ${PADDING_X}px`,
+              }}
             >
               <AnimatePresence mode="wait" initial={false}>
                 {level && (

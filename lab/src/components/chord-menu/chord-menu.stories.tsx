@@ -71,6 +71,19 @@ const Kbd: FC<{ children: string }> = ({ children }) => (
   </kbd>
 );
 
+/**
+ * A value the menu is changing, on a line of its own after the hint.
+ *
+ * Deliberately last and deliberately plain. Buried in a sentence it reads as prose and gets skimmed,
+ * which is no use for the one thing on the page that moves while you press keys.
+ */
+const Readout: FC<{ label: string; children: ReactNode }> = ({ label, children }) => (
+  <p className={`mt-4 font-mono text-xs text-neutral-700 dark:text-neutral-300`}>
+    {`${label}: `}
+    <strong>{children}</strong>
+  </p>
+);
+
 const meta: Meta = {
   title: 'Components/Chord menu',
   parameters: { layout: 'padded' },
@@ -210,13 +223,13 @@ export const StaysOpen: Story = {
         <>
           <Hint>
             <p>
-              <Kbd>1</Kbd> steps through three states. The level stays up, so the next press needs no reopening —
-              currently <strong>{STEPS[step % STEPS.length]}</strong>.
+              <Kbd>1</Kbd> steps through three states. The level stays up, so the next press needs no reopening.
             </p>
             <p>
               <Kbd>2</Kbd> is an ordinary action next to it: one press, a result, and the menu closes.
             </p>
           </Hint>
+          <Readout label="schedule">{STEPS[step % STEPS.length]}</Readout>
           <Chord
             root={{
               title: 'Playback',
@@ -299,13 +312,14 @@ export const FooterTracksTheValue: Story = {
           <Hint>
             <p>
               <Kbd>1</Kbd> walks into Volume, then <Kbd>1</Kbd>–<Kbd>4</Kbd> nudge it by 10 or by 1. The rows stay put
-              and the footer moves — currently <strong>{volume}</strong>.
+              and the footer moves under them.
             </p>
             <p>
               Hold a finger off the keyboard for three seconds and it dismisses itself, but pressing anything starts
               that over, so nudging from 50 to 90 one press at a time is one interaction rather than a race.
             </p>
           </Hint>
+          <Readout label="volume">{volume}</Readout>
           <Chord
             root={{
               title: 'Playback',
