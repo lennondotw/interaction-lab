@@ -8,14 +8,16 @@ import { describe, expect, it } from 'vitest';
 import { CHORD_KEYS, chordIndexForKey, chordKeyAt } from '../chord-keys.js';
 
 describe('chordKeyAt', () => {
-  it('hands out digits first, in order', () => {
-    expect([chordKeyAt(0), chordKeyAt(1), chordKeyAt(2)]).toEqual(['0', '1', '2']);
-    expect(chordKeyAt(9)).toBe('9');
+  it('hands out digits first, in keyboard-row order', () => {
+    expect([chordKeyAt(0), chordKeyAt(1), chordKeyAt(2)]).toEqual(['1', '2', '3']);
+    // `0` sits at the end of the row, so it is the tenth key rather than the first.
+    expect(chordKeyAt(8)).toBe('9');
+    expect(chordKeyAt(9)).toBe('0');
   });
 
   it('carries on into letters once the digits run out', () => {
-    expect(chordKeyAt(10)).toBe('A');
-    expect(chordKeyAt(CHORD_KEYS.length - 1)).toBe('D');
+    expect(chordKeyAt(10)).toBe('a');
+    expect(chordKeyAt(CHORD_KEYS.length - 1)).toBe('z');
   });
 
   it('has nothing past the end, rather than reusing a key already taken', () => {
@@ -27,8 +29,8 @@ describe('chordKeyAt', () => {
 
 describe('chordIndexForKey', () => {
   it('resolves a key to the action sitting at it', () => {
-    expect(chordIndexForKey('0', 3)).toBe(0);
-    expect(chordIndexForKey('2', 3)).toBe(2);
+    expect(chordIndexForKey('1', 3)).toBe(0);
+    expect(chordIndexForKey('3', 3)).toBe(2);
   });
 
   it('accepts a letter key in either case', () => {
@@ -39,11 +41,12 @@ describe('chordIndexForKey', () => {
   it('rejects a key past the end of this level', () => {
     // The key exists in the alphabet, but this level is not that long.
     expect(chordIndexForKey('9', 3)).toBe(-1);
+    expect(chordIndexForKey('0', 3)).toBe(-1);
   });
 
   it('rejects a key that is not in the alphabet at all', () => {
-    expect(chordIndexForKey('Z', 14)).toBe(-1);
-    expect(chordIndexForKey('Escape', 14)).toBe(-1);
-    expect(chordIndexForKey('', 14)).toBe(-1);
+    expect(chordIndexForKey('-', CHORD_KEYS.length)).toBe(-1);
+    expect(chordIndexForKey('Escape', CHORD_KEYS.length)).toBe(-1);
+    expect(chordIndexForKey('', CHORD_KEYS.length)).toBe(-1);
   });
 });

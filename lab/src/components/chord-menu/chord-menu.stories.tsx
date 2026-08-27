@@ -90,7 +90,7 @@ export const Default: Story = {
     <>
       <Hint>
         <p>
-          <Kbd>⌘.</Kbd> opens the menu. Rows are numbered, so <Kbd>0</Kbd> walks into Appearance and <Kbd>1</Kbd> picks
+          <Kbd>⌘.</Kbd> opens the menu. Rows are numbered, so <Kbd>1</Kbd> walks into Appearance and <Kbd>2</Kbd> picks
           the second row of whatever level is showing.
         </p>
         <p>
@@ -168,7 +168,7 @@ export const LevelsShareABottomEdge: Story = {
     <>
       <Hint>
         <p>
-          Open, then press <Kbd>0</Kbd>. The tall root gives way to a two-row level: the top edge drops, the bottom edge
+          Open, then press <Kbd>1</Kbd>. The tall root gives way to a two-row level: the top edge drops, the bottom edge
           stays put.
         </p>
       </Hint>
@@ -210,11 +210,11 @@ export const StaysOpen: Story = {
         <>
           <Hint>
             <p>
-              <Kbd>0</Kbd> steps through three states. The level stays up, so the next press needs no reopening —
+              <Kbd>1</Kbd> steps through three states. The level stays up, so the next press needs no reopening —
               currently <strong>{STEPS[step % STEPS.length]}</strong>.
             </p>
             <p>
-              <Kbd>1</Kbd> is an ordinary action next to it: one press, a result, and the menu closes.
+              <Kbd>2</Kbd> is an ordinary action next to it: one press, a result, and the menu closes.
             </p>
           </Hint>
           <Chord
@@ -318,8 +318,8 @@ export const HoverHolds: Story = {
 /**
  * Keys the menu has no use for still reach the page.
  *
- * The menu is an overlay, not a modal. It claims exactly the keys the current level uses — the row
- * numbers, <kbd>Esc</kbd>, the chord — and leaves everything else alone.
+ * The menu is an overlay, not a modal. It claims exactly the keys the current level hands out — one
+ * per row, plus <kbd>Esc</kbd> and the chord — and leaves everything else alone.
  */
 export const UnusedKeysPassThrough: Story = {
   render: () => {
@@ -330,8 +330,9 @@ export const UnusedKeysPassThrough: Story = {
         <>
           <Hint>
             <p>
-              Focus the field, open the menu with <Kbd>⌘.</Kbd>, and keep typing letters. They land in the field. Digits
-              do not: those belong to the level that is showing.
+              Focus the field, open the menu with <Kbd>⌘.</Kbd>, and keep typing letters. They land in the field — a
+              four-row level claims <Kbd>1</Kbd>–<Kbd>4</Kbd> and nothing else, so the rest of the alphabet is still the
+              page's.
             </p>
           </Hint>
           <input
@@ -365,7 +366,7 @@ export const Unavailable: Story = {
     <>
       <Hint>
         <p>
-          The second row is unavailable. Press <Kbd>1</Kbd> and the menu says so — and notice the rows under it keep
+          The second row is unavailable. Press <Kbd>2</Kbd> and the menu says so — and notice the rows under it keep
           their numbers.
         </p>
       </Hint>
@@ -394,7 +395,7 @@ export const AsyncAction: Story = {
     <>
       <Hint>
         <p>
-          <Kbd>0</Kbd> resolves after a second. <Kbd>1</Kbd> rejects.
+          <Kbd>1</Kbd> resolves after a second. <Kbd>2</Kbd> rejects.
         </p>
       </Hint>
       <Chord
@@ -431,23 +432,23 @@ export const AsyncAction: Story = {
 /**
  * More rows than there are keys.
  *
- * The alphabet runs `0`–`9` then `A`–`D`. Past that a row keeps its place in the list but has no key
- * — visibly unreachable, rather than quietly sharing a key with the row that already had it. It is a
- * prompt to group, which is what the levels are for.
+ * The alphabet runs `1`–`9`, `0`, then `a`–`z`. Past that a row keeps its place in the list but has no
+ * key — visibly unreachable, rather than quietly sharing a key with the row that already had it. It is
+ * a prompt to group, which is what the levels are for.
  */
 export const KeysRunOut: Story = {
   render: () => (
     <>
       <Hint>
         <p>
-          Sixteen rows, fourteen keys. The last two have no badge, which is the signal that this level wants splitting
-          up.
+          Thirty-eight rows, thirty-six keys. The last two have no badge, which is the signal that this level wants
+          splitting up — long before it got here, really.
         </p>
       </Hint>
       <Chord
         root={{
           title: 'Too many',
-          actions: Array.from({ length: 16 }, (_, index) => pick(`Row ${index + 1}`)),
+          actions: Array.from({ length: 38 }, (_, index) => pick(`Row ${index + 1}`)),
         }}
       />
     </>
