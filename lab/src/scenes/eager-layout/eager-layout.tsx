@@ -8,8 +8,7 @@ import { nanoid } from 'nanoid';
 import { FC, forwardRef, useMemo, useRef, useState } from 'react';
 
 import { FancyTimer, FancyTimerRef } from '#src/components/fancy-timer/fancy-timer.js';
-
-import { ImageWithState } from './image-with-state.js';
+import { ImageWithState } from '#src/components/image-with-state/image-with-state.js';
 
 const dylanStyle = new Style(dylanDefinition);
 

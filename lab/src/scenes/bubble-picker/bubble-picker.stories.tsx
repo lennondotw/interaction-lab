@@ -111,7 +111,7 @@ const manyItems = buildBubbleItems(30);
 const firstThreeIds = defaultItems.slice(0, 3).map((c) => c.id);
 
 const meta = {
-  title: 'Animations/BubblePicker',
+  title: 'Scenes/Bubble picker',
   component: ControlledPicker,
   parameters: { layout: 'fullscreen' },
   args: {

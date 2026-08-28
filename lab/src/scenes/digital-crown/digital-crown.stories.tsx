@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { DigitalCrown } from './digital-crown.js';
 
 const meta: Meta = {
-  title: 'Animations/DigitalCrown',
+  title: 'Scenes/Digital crown',
 };
 
 export default meta;

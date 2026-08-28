@@ -12,7 +12,7 @@ import {
 } from 'motion/react';
 import { FC, Fragment, useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
-import { NativeScrollRuler } from '../../components/native-scroll-ruler/native-scroll-ruler.js';
+import { NativeScrollRuler } from '#src/components/native-scroll-ruler/native-scroll-ruler.js';
 
 const ITEM_COUNT = 9;
 const ITEM_WIDTH = 280;
