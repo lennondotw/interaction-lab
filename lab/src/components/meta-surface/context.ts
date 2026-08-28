@@ -12,7 +12,7 @@
 
 import { createContext, type RefObject } from 'react';
 
-import type { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
+import type { ShapeRegistry } from '#src/components/meta-surface/sdf/rect-registry.js';
 
 export const MetaSurfaceRegistryContext = createContext<ShapeRegistry | null>(null);
 

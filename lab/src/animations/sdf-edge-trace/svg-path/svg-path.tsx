@@ -3,10 +3,10 @@ import { useIntervalEffect, useMeasure } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { buildPath2D, buildPathData } from '#src/components/meta-surface/sdf/contour-path.js';
+import { Ball, ContourTracer } from '#src/components/meta-surface/sdf/field.js';
 import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
 
-import { buildPath2D, buildPathData } from '../contour-path.js';
-import { Ball, ContourTracer } from '../field.js';
 import {
   BLEND,
   CELL_SIZES,

@@ -2,8 +2,8 @@ import { cn } from '@monorepo/utils';
 import { FC, useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '#src/components/button/button.js';
+import { Ball, ContourTracer } from '#src/components/meta-surface/sdf/field.js';
 
-import { Ball, ContourTracer } from '../field.js';
 import { SweepRow, runSweep } from '../sweep.js';
 
 const numberFormatter = new Intl.NumberFormat('en-US');

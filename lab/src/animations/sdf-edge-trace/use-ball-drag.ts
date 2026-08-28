@@ -19,7 +19,7 @@
 
 import { PointerEvent as ReactPointerEvent, RefObject, useCallback, useRef } from 'react';
 
-import { Ball } from './field.js';
+import { Ball } from '#src/components/meta-surface/sdf/field.js';
 
 export interface BallDragHandlers {
   onPointerDown: (event: ReactPointerEvent) => void;

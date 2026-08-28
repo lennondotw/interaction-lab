@@ -22,7 +22,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 
-import type { FieldShape } from './field.js';
+import type { FieldShape } from '#src/components/meta-surface/sdf/field.js';
+
 import { useBallDrag, type BallDragHandlers } from './use-ball-drag.js';
 
 export interface ShapeDragOptions<T extends FieldShape> {

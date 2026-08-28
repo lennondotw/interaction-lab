@@ -13,9 +13,10 @@
  * `RectField` story's live scope for whether the rest of it fits.
  */
 
+import { buildPath2D, buildPathData } from '#src/components/meta-surface/sdf/contour-path.js';
+import { Ball, ContourTracer, TraceConfig } from '#src/components/meta-surface/sdf/field.js';
+
 import { SweepProgress, timeBatched, yieldToBrowser } from '../bench-timing.js';
-import { buildPath2D, buildPathData } from '../contour-path.js';
-import { Ball, ContourTracer, TraceConfig } from '../field.js';
 
 export interface PathSweepRow {
   id: string;

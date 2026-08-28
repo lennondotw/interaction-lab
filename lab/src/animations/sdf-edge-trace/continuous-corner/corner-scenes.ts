@@ -12,7 +12,8 @@
  * and needs no transform at draw time.
  */
 
-import { quadtreeSafeView, type FieldShape } from '../field.js';
+import { quadtreeSafeView, type FieldShape } from '#src/components/meta-surface/sdf/field.js';
+
 import { familyShape, type Family } from './corner-families.js';
 
 /** Square sampling domain, padded so the quadtree keeps a large root. */

@@ -19,8 +19,7 @@
 
 import { CSS_SHAPE_K, CSS_SHAPE_RADIUS_SCALE } from '#src/components/continuous-corner/shape-css.js';
 import { squircleCorners, type CornerRadii } from '#src/components/continuous-corner/squircle-path.js';
-
-import type { FieldShape } from '../field.js';
+import type { FieldShape } from '#src/components/meta-surface/sdf/field.js';
 
 export type FamilyId = 'round' | 'superellipse' | 'apple-fit';
 

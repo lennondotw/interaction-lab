@@ -12,9 +12,9 @@
  * one picture that explains both the box primitive and the domain padding at once.
  */
 
-import { buildPath2D } from '../contour-path.js';
-import { CELL_LEAF, type ContourTracer } from '../field.js';
-import type { ShapeRect } from '../rect-registry.js';
+import { buildPath2D } from '#src/components/meta-surface/sdf/contour-path.js';
+import { CELL_LEAF, type ContourTracer } from '#src/components/meta-surface/sdf/field.js';
+import type { ShapeRect } from '#src/components/meta-surface/sdf/rect-registry.js';
 
 const COLORS = {
   fill: 'rgba(99, 102, 241, 0.22)',

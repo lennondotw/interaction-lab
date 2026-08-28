@@ -15,14 +15,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { buildPathData } from '#src/animations/sdf-edge-trace/contour-path.js';
+import { buildPathData } from '#src/components/meta-surface/sdf/contour-path.js';
 import {
   ContourTracer,
   quadtreeSafeView,
   type FieldShape,
   type TraceConfig,
-} from '#src/animations/sdf-edge-trace/field.js';
-import type { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
+} from '#src/components/meta-surface/sdf/field.js';
+import type { ShapeRegistry } from '#src/components/meta-surface/sdf/rect-registry.js';
 
 /** Margin sampled past the region, and half the quadtree tile. */
 export const SURFACE_OVERSCAN = 128;

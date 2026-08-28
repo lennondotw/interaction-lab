@@ -14,7 +14,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { CELL_LEAF, ContourTracer, QUADTREE_TILE, TraceConfig, Traversal, quadtreeSafeView } from '../field.js';
+import {
+  CELL_LEAF,
+  ContourTracer,
+  QUADTREE_TILE,
+  TraceConfig,
+  Traversal,
+  quadtreeSafeView,
+} from '#src/components/meta-surface/sdf/field.js';
 
 const VIEW = 512;
 const OVERSCAN = 128;

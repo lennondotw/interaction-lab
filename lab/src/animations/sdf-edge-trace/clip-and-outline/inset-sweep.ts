@@ -18,8 +18,9 @@
  * asserting a number — it depends on the shape, which the caller supplies live.
  */
 
+import { Ball, ContourTracer, TraceConfig, Traversal } from '#src/components/meta-surface/sdf/field.js';
+
 import { SweepProgress, timeBatched, yieldToBrowser } from '../bench-timing.js';
-import { Ball, ContourTracer, TraceConfig, Traversal } from '../field.js';
 
 export interface InsetCostRow {
   id: string;

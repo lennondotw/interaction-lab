@@ -3,9 +3,15 @@ import { useIntervalEffect, useMeasure } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  Ball,
+  ContourTracer,
+  FieldKind,
+  Traversal,
+  effectiveTraversal,
+} from '#src/components/meta-surface/sdf/field.js';
 import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
 
-import { Ball, ContourTracer, FieldKind, Traversal, effectiveTraversal } from '../field.js';
 import {
   BLEND,
   CELL_SIZES,

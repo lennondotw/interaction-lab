@@ -96,7 +96,7 @@ const Demo: FC<{ mode?: StepTransitionMode; prefetch?: boolean }> = ({ mode = 's
 };
 
 const meta = {
-  title: 'Animations/StepTransition',
+  title: 'Components/Step transition',
   component: StepTransition,
   parameters: { layout: 'centered' },
 } satisfies Meta<typeof StepTransition>;

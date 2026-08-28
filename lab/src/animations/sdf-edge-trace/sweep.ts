@@ -1,4 +1,4 @@
-import { Ball, ContourTracer, FieldKind, TraceConfig, Traversal } from './field.js';
+import { Ball, ContourTracer, FieldKind, TraceConfig, Traversal } from '#src/components/meta-surface/sdf/field.js';
 
 export interface SweepRow {
   id: string;

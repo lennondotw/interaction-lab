@@ -6,7 +6,7 @@
  * contour survive the move" would be unanswerable.
  */
 
-import { Ball } from './field.js';
+import { Ball } from '#src/components/meta-surface/sdf/field.js';
 
 /** The visible, interactive box. Power of two so the quadtree tiles it cleanly. */
 export const VIEW = 512;
