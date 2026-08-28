@@ -4,8 +4,33 @@ import { Meta } from '@storybook/addon-docs/blocks';
 
 # Story conventions
 
-How stories in this Storybook are expected to be written. Three rules, and the
+How stories in this Storybook are expected to be written. Four rules, and the
 reasoning behind each, because the reasoning is what tells you when to break them.
+
+## 0. Know which section it belongs to
+
+Five sections, each with a question that decides it. Ask them in this order — the
+first yes wins, which is what keeps a component that happens to be animated out of
+`scenes/` and a rig that happens to be pretty out of `components/`.
+
+| Section        | The question                                                       |
+| -------------- | ------------------------------------------------------------------ |
+| `components/`  | Would something else build with this?                              |
+| `scenes/`      | Does it need the whole viewport and the page's scroll to exist?    |
+| `studies/`     | Does it exist to answer a question, with the answer on the screen? |
+| `instruments/` | Is it what you look at other stories _with_?                       |
+| `templates/`   | Is it the file you copy to start a new story?                      |
+
+One rule holds the whole thing up: **`studies/` and `scenes/` may import
+`components/`; never the other way round.** A component that reaches into a study
+has the dependency backwards — the study is about the component, so it is the
+study's job to know where the component lives. When shared code appears inside a
+study, it moves to the component it serves rather than being imported out of the
+study.
+
+`instruments/` sits outside that rule because it is for stories rather than for
+code: any story may import one, including a component's own story. What an
+instrument may not do is appear in a component's implementation.
 
 ## 1. Don't wrap a story in its own background
 

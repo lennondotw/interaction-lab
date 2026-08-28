@@ -10,11 +10,27 @@ The toolchain experiments that used to share this repo are now in [monorepo-tool
 
 |                        |                                                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `lab/`                 | The Storybook workspace — 169 stories across animations, components, demos, and SVG playgrounds.      |
+| `lab/`                 | The Storybook workspace — 222 stories in five sections, below.                                        |
 | `packages/utils`       | `cn()` and friends.                                                                                   |
 | `packages/tailwindcss` | The shared stylesheet Tailwind resolves against.                                                      |
 | `packages/tsconfig`    | Shared `tsconfig` bases.                                                                              |
 | `archive/`             | Frozen investigation write-ups and probes. Outside every tsconfig, kept runnable rather than current. |
+
+### The five sections of `lab/src`
+
+|                | What earns a place                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `components/`  | Something else would build with it — primitives, and the ones with a state machine.        |
+| `scenes/`      | It needs the whole viewport and the page's scroll to exist at all.                         |
+| `studies/`     | It exists to answer a question, and puts the answer on the screen next to the subject.     |
+| `instruments/` | It is what you look at the other stories _with_ — the FPS readout, the scope, the console. |
+| `templates/`   | The file you copy to start a new story.                                                    |
+
+`studies/` and `scenes/` may import `components/`, never the other way round. That
+direction is the whole reason the sections exist rather than being a filing
+preference: a component that imports a study has its dependency backwards, since
+the study is the thing that is about the component. `lab/src/docs` carries the
+longer version, alongside the conventions for writing a story.
 
 ## Toolchain
 

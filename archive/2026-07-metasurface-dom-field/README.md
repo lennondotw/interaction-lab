@@ -77,7 +77,7 @@ the two are equal.
 root size so the failure is assertable rather than silent. A unit test fits a domain on
 purpose to prove the check can see the bug.
 
-The `Animations/SdfEdgeTrace/RectField` story reproduces it live: pin `Width` to 630,
+The `Studies/SDF edge trace/Rect field` story reproduces it live: pin `Width` to 630,
 toggle `fit domain`, and `root` drops to 1 while `probes` and the measured trace jump.
 Pinning the width is necessary because the cliff is **width-dependent** — a fitted domain
 roots at 1 only when `(width + 2*overscan) / cell` comes out odd, so at most sizes it

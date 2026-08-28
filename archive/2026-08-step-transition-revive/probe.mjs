@@ -1,6 +1,6 @@
 /**
  * Measures whether the step a fast round trip returns to is actually *visible*
- * when everything has settled, against the real `Animations/StepTransition`
+ * when everything has settled, against the real `Components/Step transition`
  * stories.
  *
  * The run is the one from the bug report: Next ×3 then Prev ×3 at a fixed gap,
@@ -38,7 +38,7 @@
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
-const STORY_ID = process.env.STORY_ID ?? 'animations-steptransition--slide-mode';
+const STORY_ID = process.env.STORY_ID ?? 'components-step-transition--slide-mode';
 // `reactScan=false` is the preview's own opt-out; left on, its overlay repaints
 // every card and swallows clicks.
 const STORY = `${STORYBOOK}/iframe.html?viewMode=story&reactScan=false&id=${STORY_ID}`;

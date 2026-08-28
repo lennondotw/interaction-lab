@@ -9,7 +9,7 @@
 // a property of the cylinder and has nothing to do with the row count — and the component
 // used the same expression for both, which is the thing this measures.
 //
-// It drives the real `Components/TimeWheelPicker` stories through their args rather than a
+// It drives the real `Components/Time wheel picker` stories through their args rather than a
 // copy, because the claim is about our own layering and must not be able to drift from it.
 //
 // A drum's rows are flat rectangles, not arcs, so in cross-section it is a PRISM: the rows
@@ -85,7 +85,7 @@ console.log('\nA · the drum sizes itself; the angle is the only input\n');
 console.log('  angle   model   inner   measured   box   slack   rows');
 console.log('  -----   -----   -----   --------   ---   -----   ----');
 for (const anglePerItem of [8, 10, 14, 20, 28, 34, 40]) {
-  await open(story('components-timewheelpicker--drum', { anglePerItem }));
+  await open(story('components-time-wheel-picker--drum', { anglePerItem }));
   const seen = await geometry();
   const model = drumHeight({ itemHeight: ITEM_HEIGHT, anglePerItem });
   const inner = drumHeight({ itemHeight: ITEM_HEIGHT, anglePerItem, fit: 'inner' });
@@ -100,7 +100,7 @@ for (const anglePerItem of [8, 10, 14, 20, 28, 34, 40]) {
 console.log('\nB · overriding the height: larger is padding, smaller is a clip\n');
 console.log('  case            box   drum    slack   reading');
 console.log('  ------------   ----   ----   ------   -------');
-await open(story('components-timewheelpicker--drum-height'), '[role="spinbutton"]');
+await open(story('components-time-wheel-picker--drum-height'), '[role="spinbutton"]');
 const cases = await page.evaluate(() =>
   [...document.querySelectorAll('[role="spinbutton"]')].map((column) => {
     const box = column.getBoundingClientRect();
@@ -125,7 +125,7 @@ for (const seen of cases) {
 
 // ── Phase C: the prism wobbles, so a height read at rest is the wrong one ─────────────
 console.log('\nC · the extent while turning, against its value at rest\n');
-await open(story('components-timewheelpicker--drum'));
+await open(story('components-time-wheel-picker--drum'));
 const atRest = (await geometry()).extent;
 const box = await page.locator('[aria-label="Hour"]').boundingBox();
 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

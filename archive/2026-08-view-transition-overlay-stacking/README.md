@@ -1,6 +1,6 @@
 # Known issue: a View Transition commit hides and freezes every overlay on the page
 
-**Date:** 2026-08 · **Status:** confirmed, spec-mandated; half of it has no author-side fix · **Applies to:** Chromium 141.0.7390.37, `Demos/Buffered Split Layout/View Transition Commit`
+**Date:** 2026-08 · **Status:** confirmed, spec-mandated; half of it has no author-side fix · **Applies to:** Chromium 141.0.7390.37, `Studies/Buffered split layout/View transition commit`
 
 `view-transition-commit` commits its layout inside
 `document.startViewTransition`. For the length of that commit, an overlay that

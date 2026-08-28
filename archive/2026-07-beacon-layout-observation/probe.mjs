@@ -1,6 +1,6 @@
 /**
  * Measures which observation source keeps a beacon on its anchor, for ten kinds
- * of layout change, against the real `Demos/Beacon layout observation` story.
+ * of layout change, against the real `Studies/Beacon layout observation` story.
  *
  * `useBeaconAnchor` has no polling loop. It wires five browser primitives to one
  * `measure()` — a self `ResizeObserver`, an ancestor RO cascade up to the
@@ -38,7 +38,7 @@ import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6010';
-const STORY = 'demos-beacon-layout-observation--probes';
+const STORY = 'studies-beacon-layout-observation--probes';
 const SHOTS = new URL('__screenshots__/', import.meta.url);
 
 /** Wide enough that the stage is at its `maxWidth: 680`, so C9 can narrow it. */

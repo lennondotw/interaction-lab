@@ -1,6 +1,6 @@
 # 2026-08 — can a held pane be painted below its own minimum?
 
-`Demos/Buffered Split Layout/Live Commit` resizes on a policy that looks like it has
+`Studies/Buffered split layout/Live commit` resizes on a policy that looks like it has
 to break a minimum width. On window resize the leading pane **holds** the width it
 already laid out at, and the trailing pane — positioned by two edges rather than by a
 width — absorbs the entire viewport change live. A stale width against a shrinking

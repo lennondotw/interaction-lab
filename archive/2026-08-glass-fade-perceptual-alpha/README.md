@@ -1,6 +1,6 @@
 # What does one α mean to a glass surface?
 
-**Date:** 2026-08 · **Status:** measured, shipped in `Demos/Glass fade` · **Applies to:** Chromium
+**Date:** 2026-08 · **Status:** measured, shipped in `Studies/Glass fade` · **Applies to:** Chromium
 at 2× device pixels
 
 A frosted surface is two ramps that both start at nothing: a blur radius and a tint alpha.

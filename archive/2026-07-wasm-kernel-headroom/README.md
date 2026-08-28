@@ -174,5 +174,5 @@ of minutes and prints agreement checks before any timing — a faster kernel tha
 returns a different distance is not a faster kernel.
 
 The in-situ frame numbers are not reproduced by the probe: they need a real
-display and the live story at `Animations/SdfEdgeTrace`. The sweep table comes
+display and the live story at `Studies/SDF edge trace`. The sweep table comes
 from that story's own **Run benchmark** panel.

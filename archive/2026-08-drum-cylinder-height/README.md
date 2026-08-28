@@ -1,6 +1,6 @@
 # How tall is a drum?
 
-**Date:** 2026-08 · **Status:** measured, shipped in `Components/TimeWheelPicker` ·
+**Date:** 2026-08 · **Status:** measured, shipped in `Components/Time wheel picker` ·
 **Applies to:** Chromium
 
 A flat wheel's box is `itemHeight * rows`: a flat row is `itemHeight` tall and there are
@@ -106,6 +106,6 @@ are things a caller means:
 
 The clip is usually the point. A full drum's outermost rows are turned so far from the
 viewer that they are edge-on slivers a pixel or two tall — geometrically present, not worth
-the space — so `Components/TimeWheelPicker` → `Flat and drum` trims one row's worth, half
+the space — so `Components/Time wheel picker` → `Flat and drum` trims one row's worth, half
 from each end, which is what a real use wants. `Drum height` shows all five cases above
 with the box drawn.

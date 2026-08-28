@@ -1,6 +1,6 @@
 # What should typing into a wheel do?
 
-**Date:** 2026-08 · **Status:** measured, shipped in `Components/TimeWheelPicker` ·
+**Date:** 2026-08 · **Status:** measured, shipped in `Components/Time wheel picker` ·
 **Applies to:** Chromium; the time input's shape follows the browser locale
 
 A wheel with focus that receives a character has to do something with it, and there are two
