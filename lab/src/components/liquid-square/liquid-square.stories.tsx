@@ -10,7 +10,7 @@ import { LiquidSquare } from './liquid-square.js';
 import { SpringTap } from './spring-tap.js';
 
 const meta: Meta = {
-  title: 'Animations/LiquidSquare',
+  title: 'Components/Liquid square',
   id: 'liquid-square',
 };
 

@@ -2,10 +2,10 @@ import { cn } from '@monorepo/utils';
 import { cubicBezier, motion, useMotionValue } from 'motion/react';
 import { FC, useMemo, useReducer, useState } from 'react';
 
-import { LiquidDiv } from '#src/animations/liquid-square/liquid-div.js';
-import { SpringTap } from '#src/animations/liquid-square/spring-tap.js';
 import { Button } from '#src/components/button/button.js';
 import { ImageWithState } from '#src/components/image-with-state/image-with-state.js';
+import { LiquidDiv } from '#src/components/liquid-square/liquid-div.js';
+import { SpringTap } from '#src/components/liquid-square/spring-tap.js';
 
 import { drawCircularGlassDisplacementMap } from './draw-map-circular-glass.js';
 import { getImages, imageReducer } from './images.js';

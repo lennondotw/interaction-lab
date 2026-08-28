@@ -13,7 +13,7 @@ import { cn } from '@monorepo/utils';
 import { Slot } from 'radix-ui';
 import { useContext, useRef, type HTMLAttributes } from 'react';
 
-import { useRegisteredRect } from '#src/animations/sdf-edge-trace/rect-registry.js';
+import { useRegisteredRect } from '#src/components/meta-surface/sdf/rect-registry.js';
 
 import { MetaSurfaceContainerContext, MetaSurfaceRegistryContext } from './context.js';
 

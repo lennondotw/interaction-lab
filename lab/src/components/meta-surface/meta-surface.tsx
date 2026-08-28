@@ -32,7 +32,7 @@
 import { cn } from '@monorepo/utils';
 import { Children, isValidElement, useCallback, useId, useMemo, useRef, type FC, type ReactNode } from 'react';
 
-import { ShapeRegistry } from '#src/animations/sdf-edge-trace/rect-registry.js';
+import { ShapeRegistry } from '#src/components/meta-surface/sdf/rect-registry.js';
 
 import { MetaSurfaceClipContext, MetaSurfaceContainerContext, MetaSurfaceRegistryContext } from './context.js';
 import { MetaSurfaceItem } from './meta-surface-item.js';

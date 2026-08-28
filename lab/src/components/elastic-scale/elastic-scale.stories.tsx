@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { DebugElasticScale } from './debug-elastic-scale.js';
 
 const meta = {
-  title: 'Animations/ElasticScale',
+  title: 'Components/Elastic scale',
   component: DebugElasticScale,
   parameters: { layout: 'centered' },
   tags: ['autodocs'],

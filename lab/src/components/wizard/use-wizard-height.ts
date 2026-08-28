@@ -1,7 +1,7 @@
 import { animate, useReducedMotion } from 'motion/react';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
-import { STEP_TRANSITION_EASE } from '#src/animations/step-transition/index.js';
+import { STEP_TRANSITION_EASE } from '#src/components/step-transition/index.js';
 
 /**
  * How tall a wizard is while a given step is showing.
