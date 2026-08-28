@@ -7,7 +7,7 @@ import { RoundedOutlinedContainer } from './index.js';
 type Story = StoryObj<typeof RoundedOutlinedContainer>;
 
 const meta: Meta<typeof RoundedOutlinedContainer> = {
-  title: 'Components/RoundedOutlinedContainer',
+  title: 'Components/Rounded outlined container',
   // Naming the component is what makes the Controls panel exist: Storybook reads
   // the prop types off it to build the args table.
   component: RoundedOutlinedContainer,

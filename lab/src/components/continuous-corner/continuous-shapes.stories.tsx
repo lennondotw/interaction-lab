@@ -12,7 +12,7 @@ const SURFACE = 'bg-white dark:bg-white/10';
  * is a different curve entirely — see `SPEC.md`.
  */
 const meta: Meta = {
-  title: 'Components/ContinuousShapes',
+  title: 'Components/Continuous shapes',
   parameters: { layout: 'fullscreen' },
 };
 
