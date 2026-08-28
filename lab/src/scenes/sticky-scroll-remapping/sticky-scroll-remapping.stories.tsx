@@ -5,7 +5,7 @@ import { StickyScrollScene } from './sticky-scroll-scene.js';
 import { TextRevealSpecimen } from './text-reveal-specimen.js';
 
 const meta: Meta<typeof StickyScrollScene> = {
-  title: 'Animations/StickyScrollRemapping',
+  title: 'Scenes/Sticky scroll remapping',
   component: StickyScrollScene,
   parameters: {
     layout: 'fullscreen',

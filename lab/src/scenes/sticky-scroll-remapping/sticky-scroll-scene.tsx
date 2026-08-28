@@ -2,7 +2,8 @@ import { cn } from '@monorepo/utils';
 import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
 import { useLayoutEffect, useRef, type FC, type ReactNode } from 'react';
 
-import { NativeScrollRuler } from '../../components/native-scroll-ruler/native-scroll-ruler.js';
+import { NativeScrollRuler } from '#src/components/native-scroll-ruler/native-scroll-ruler.js';
+
 import { useLenisScrollDriver, type StickyScrollDriver } from './lenis-scroll-driver.js';
 import { getStickyScrollCompensation } from './sticky-scroll-remapping.js';
 

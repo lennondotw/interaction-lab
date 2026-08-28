@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import tickSoundUrl from '../assets/clock-ticker-single.wav';
+import tickSoundUrl from './assets/clock-ticker-single.wav';
 
 export function useTickSound() {
   const audioContextRef = useRef<AudioContext | null>(null);

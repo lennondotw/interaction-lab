@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ScrollSmoothing } from './scroll-smoothing.js';
 
 const meta: Meta = {
-  title: 'Animations/ScrollSmoothing',
+  title: 'Scenes/Scroll smoothing',
 };
 
 export default meta;

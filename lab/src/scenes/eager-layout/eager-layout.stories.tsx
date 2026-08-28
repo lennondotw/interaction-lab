@@ -8,7 +8,7 @@ import {
 } from './eager-layout.js';
 
 const meta: Meta = {
-  title: 'Animations/EagerLayout',
+  title: 'Scenes/Eager layout',
   id: 'eager-layout',
 };
 
