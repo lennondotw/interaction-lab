@@ -14,6 +14,17 @@ const preview: Preview = {
     docs: {
       container: CustomDocsContainer,
     },
+    options: {
+      /**
+       * The sidebar's top level is the taxonomy, so it is ordered by what the sections *are*
+       * rather than alphabetically: the reusable things first, then the two kinds of exhibit
+       * built out of them, then the tools you look at those with, then the prose.
+       *
+       * Anything not named here sorts after, alphabetically — a new section shows up at the
+       * bottom rather than silently taking a position it did not ask for.
+       */
+      storySort: { order: ['Components', 'Scenes', 'Studies', 'Instruments', 'Documentation'] },
+    },
   },
   globalTypes: {
     theme: {

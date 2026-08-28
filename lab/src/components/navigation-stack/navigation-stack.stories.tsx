@@ -539,7 +539,7 @@ const Stage: FC<{ children: ReactNode }> = ({ children }) => (
 );
 
 const meta = {
-  title: 'Components/NavigationStack',
+  title: 'Components/Navigation stack',
   component: NavigationStack,
   parameters: { layout: 'fullscreen' },
   decorators: [

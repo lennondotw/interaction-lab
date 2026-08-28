@@ -77,7 +77,7 @@ const macOSRoot: FileTreeNode[] = [
 ];
 
 const meta: Meta<typeof FileTree> = {
-  title: 'Components/FileTree',
+  title: 'Components/File tree',
   // Naming the component is what makes the Controls panel exist: Storybook reads
   // the prop types off it to build the args table.
   component: FileTree,

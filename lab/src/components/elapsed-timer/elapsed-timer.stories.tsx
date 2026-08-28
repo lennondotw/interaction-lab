@@ -60,7 +60,7 @@ const Stage: FC<{ children: ReactNode }> = ({ children }) => (
 );
 
 const meta = {
-  title: 'Components/ElapsedTimer',
+  title: 'Components/Elapsed timer',
   component: ElapsedTimer,
   decorators: [
     (Story) => (

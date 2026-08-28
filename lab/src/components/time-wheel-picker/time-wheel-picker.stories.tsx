@@ -9,7 +9,7 @@ import { drumAngleForHeight, drumHeight, drumHeightRange, viewportHeight } from 
 import { WIREFRAME_BAND, WIREFRAME_FRAME } from './wheel-style.js';
 
 const meta = {
-  title: 'Components/TimeWheelPicker',
+  title: 'Components/Time wheel picker',
   component: TimeWheelPicker,
   parameters: { layout: 'fullscreen' },
   argTypes: {

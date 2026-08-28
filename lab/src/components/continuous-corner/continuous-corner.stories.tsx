@@ -9,7 +9,7 @@ const HAIRLINE = { width: 1, color: 'rgb(0 0 0 / 0.14)', align: 'inner' } as con
 const SURFACE = 'bg-white dark:bg-white/10';
 
 const meta: Meta<typeof ContinuousCorner> = {
-  title: 'Components/ContinuousCorner',
+  title: 'Components/Continuous corner',
   component: ContinuousCorner,
   parameters: { layout: 'fullscreen' },
   argTypes: {

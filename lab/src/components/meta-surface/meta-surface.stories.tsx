@@ -15,7 +15,7 @@ import type { SurfaceTraceResult } from './use-surface-trace.js';
  * what using it actually looks like.
  */
 const meta: Meta = {
-  title: 'Components/MetaSurface',
+  title: 'Components/Meta surface',
   parameters: { layout: 'centered' },
 };
 

@@ -82,7 +82,7 @@ const Stage: FC<{ children: ReactNode }> = ({ children }) => (
 );
 
 const meta = {
-  title: 'Components/ContentContainer',
+  title: 'Components/Content container',
   component: ContentContainer,
   decorators: [
     (Story) => (
