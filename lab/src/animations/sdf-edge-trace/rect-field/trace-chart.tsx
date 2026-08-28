@@ -22,7 +22,7 @@
 import { cn } from '@monorepo/utils';
 import { useCallback, type FC } from 'react';
 
-import { LiveScope } from '#src/components/live-scope/live-scope.js';
+import { LiveScope } from '#src/instruments/live-scope/live-scope.js';
 
 import { IDLE_AFTER_MS, statusOf, type TraceHistory, type TraceLog } from './trace-log.js';
 

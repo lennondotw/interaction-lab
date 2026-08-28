@@ -16,7 +16,7 @@ import {
 import useStateRef from 'react-usestateref';
 
 import { Button } from '#src/components/button/button.js';
-import { FpsIndicator } from '#src/components/fps-indicator/fps-indicator.js';
+import { FpsIndicator } from '#src/instruments/fps-indicator/fps-indicator.js';
 
 import { AnchoringMode, useAnchorInView } from './hooks/use-anchor-in-view.js';
 import { useFaker } from './hooks/use-faker.js';

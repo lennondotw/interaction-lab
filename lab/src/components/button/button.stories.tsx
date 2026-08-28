@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { CSSProperties, useMemo } from 'react';
 import { toast } from 'sonner';
 
-import { createMatrixFor } from '#src/utils/ui/matrix/matrix.js';
+import { createMatrixFor } from '#src/instruments/matrix/matrix.js';
 
 import { Button, ButtonVariants } from './index.js';
 

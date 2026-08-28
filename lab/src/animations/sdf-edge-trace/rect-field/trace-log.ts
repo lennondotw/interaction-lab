@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { LiveScopeSample } from '#src/components/live-scope/live-scope.js';
+import type { LiveScopeSample } from '#src/instruments/live-scope/live-scope.js';
 
 /**
  * No trace for this long and the surface is considered settled.
