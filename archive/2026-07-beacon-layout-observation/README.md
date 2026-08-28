@@ -294,7 +294,7 @@ node archive/2026-07-beacon-layout-observation/probe.mjs
 ```
 
 Set `STORYBOOK_URL` for a non-default port. The probe drives the real
-`Demos/Beacon layout observation` story through its own buttons; the only thing
+`Studies/Beacon layout observation` story through its own buttons; the only thing
 it asks of the app is a handful of `data-testid` handles. By hand, open the story
 and press the buttons — the trace panel is the same one the probe parses.
 

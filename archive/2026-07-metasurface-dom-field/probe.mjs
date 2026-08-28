@@ -1,6 +1,6 @@
 /**
  * Two questions about seeding a distance field from laid-out DOM rects, measured
- * against the real `Components/MetaSurface` stories.
+ * against the real `Components/Meta surface` stories.
  *
  *   1. **The quadtree domain.** `traverseSparse` roots at `nx & -nx`, so a domain
  *      *derived* from a measured element size instead of chosen can degenerate to
@@ -27,7 +27,7 @@
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
-const STORY = 'components-metasurface--layout-tracking';
+const STORY = 'components-meta-surface--layout-tracking';
 const CASES = ['S1', 'S2', 'S3', 'S4', 'S5'];
 const VIEWPORT = { width: 1200, height: 900 };
 

@@ -45,13 +45,13 @@ const SETTLE_MS = 340; // the navigation spring is critically damped and settles
 const CASES = [
   {
     name: 'RevisitedView',
-    story: 'components-navigationstack--revisited-view',
+    story: 'components-navigation-stack--revisited-view',
     note: '3 rows per view',
     scope: '[data-testid="navigation-content"]',
   },
   {
     name: 'WithTabBar',
-    story: 'components-navigationstack--with-tab-bar',
+    story: 'components-navigation-stack--with-tab-bar',
     note: '12 rows + copy per view',
     scope: '[data-testid="tab-panel-browse"] [data-testid="navigation-content"]',
   },

@@ -1,6 +1,6 @@
 /**
  * Measures whether a card that is already exiting can have its exit direction
- * rewritten by a *later* navigation, against the real `Animations/StepTransition`
+ * rewritten by a *later* navigation, against the real `Components/Step transition`
  * slide story.
  *
  * The run is the one from the bug report: Next ×4 to reach step 5, then Prev ×4
@@ -34,7 +34,7 @@ const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
 const SHOTS = new URL('__screenshots__/', import.meta.url);
 // `reactScan=false` is the preview's own opt-out. Left on, react-scan paints
 // render outlines over every card and lands a FPS meter in the screenshots.
-const STORY = `${STORYBOOK}/iframe.html?viewMode=story&reactScan=false&id=animations-steptransition--slide-mode`;
+const STORY = `${STORYBOOK}/iframe.html?viewMode=story&reactScan=false&id=components-step-transition--slide-mode`;
 
 /** Press gaps in ms. 450 is the transition duration, so only the last one is
  *  slow enough for each card to be gone before the next press. */

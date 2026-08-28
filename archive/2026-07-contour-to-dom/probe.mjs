@@ -1,6 +1,6 @@
 /**
  * Measures what it costs to take the traced contour out of a canvas and into the
- * DOM, against the real `Animations/SdfEdgeTrace` stories.
+ * DOM, against the real `Studies/SDF edge trace` stories.
  *
  * Four questions, four tables:
  *

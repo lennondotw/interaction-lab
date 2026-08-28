@@ -117,7 +117,7 @@ pnpm --filter @monorepo/app-storybook dev
 node archive/2026-07-step-transition-direction/probe.mjs
 ```
 
-The probe drives the real `Animations/StepTransition` → Slide story through its
+The probe drives the real `Components/Step transition` → Slide story through its
 own buttons; the only concession to testability is the `data-testid="step-stage"`
 wrapper in the story. Presses are scheduled by in-page timers rather than by the
 driver, because a round trip per click would not reproduce the gap under test.

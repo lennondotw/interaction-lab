@@ -9,8 +9,8 @@ question, the numbers, and what was decided. Where an investigation kept the
 output it measured rather than only the conclusion, that sits in a `data/`
 directory beside the probe.
 
-They are deliberately not wired into lint, typecheck, or the test suites — the
-root ESLint config ignores `archive/`. Regressions are guarded by the unit and
+They are deliberately not wired into lint, typecheck, or the test suites —
+`.oxlintrc.json` ignores `archive/`. Regressions are guarded by the unit and
 story tests; these exist to explain _why_ the code looks the way it does, and to
 let a future reader re-run the experiment rather than take the conclusion on
 faith.
@@ -57,6 +57,7 @@ the probe regenerates them.
 | [2026-07-sdf-vs-density-traversal](./2026-07-sdf-vs-density-traversal/README.md)                 | Which field should the tracer walk, and does quadtree culling pay?           | A real SDF — 1.7× per sample, 55× overall.               |
 | [2026-07-animate-presence-exit-batching](./2026-07-animate-presence-exit-batching/README.md)     | Does a child leave the DOM when its own exit animation finishes?             | No — removal is batched, and re-entry is reachable.      |
 | [2026-07-step-transition-direction](./2026-07-step-transition-direction/README.md)               | Can a later navigation rewrite the exit direction of a card already leaving? | Yes — so stamp the direction per step, not once.         |
+| [2026-08-step-transition-revive](./2026-08-step-transition-revive/README.md)                     | Why does a fast round trip land on an empty stage?                           | A revived child keeps its enter keyframe.                |
 | [2026-07-beacon-layout-observation](./2026-07-beacon-layout-observation/README.md)               | Which of the beacon's five observation sources catches which layout change?  | Four are near-disjoint — and one was dead.               |
 | [2026-07-contour-domain-overscan](./2026-07-contour-domain-overscan/README.md)                   | How far past the frame must the contour be traced, and what does it cost?    | 128px — free for the quadtree, 2.25× for dense.          |
 | [2026-07-wasm-kernel-headroom](./2026-07-wasm-kernel-headroom/README.md)                         | With the quadtree shipped, is the remaining kernel worth a Rust/WASM port?   | No — the 2.5× is in the loop, not the language.          |
@@ -74,6 +75,7 @@ the probe regenerates them.
 | [2026-08-split-minimum-across-frames](./2026-08-split-minimum-across-frames/README.md)           | Can a split pane held at a stale width be painted below its own minimum?     | No — the resize task re-clamps before that frame.        |
 | [2026-08-junction-spacing](./2026-08-junction-spacing/README.md)                                 | Is deciding one text junction enough, and how much of pangu.js applies?      | Enough — 98.93%, in 958 bytes against 6.5 KB.            |
 | [2026-08-backdrop-filter-corner-thread](./2026-08-backdrop-filter-corner-thread/README.md)       | Why does a blurred bar leave a hairline on a rounded frame's corner?         | Its clip is rasterised apart — 248px to 25.              |
+| [2026-08-glass-fade-perceptual-alpha](./2026-08-glass-fade-perceptual-alpha/README.md)           | What does one α mean to a glass surface, driving blur and tint together?     | The tint is even, the radius is not — and it quantises.  |
 | [2026-08-navigation-stack-depth-cost](./2026-08-navigation-stack-depth-cost/README.md)           | What does keeping every view mounted cost as the stack gets deeper?          | The commit, not the animation — ~1ms per level.          |
 | [2026-08-drum-cylinder-height](./2026-08-drum-cylinder-height/README.md)                         | How tall is a drum, if not `itemHeight * rows`?                              | Its circumscribed cylinder, projected — 4× range.        |
 | [2026-08-wheel-typeahead-platform](./2026-08-wheel-typeahead-platform/README.md)                 | What does the platform already do when you type into a picker?               | Two buffers — a prefix with a clock, digits without.     |

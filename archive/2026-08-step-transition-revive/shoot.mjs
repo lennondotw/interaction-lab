@@ -10,7 +10,7 @@ import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
-const STORY = `${STORYBOOK}/iframe.html?viewMode=story&reactScan=false&id=animations-steptransition--slide-mode`;
+const STORY = `${STORYBOOK}/iframe.html?viewMode=story&reactScan=false&id=components-step-transition--slide-mode`;
 const SHOTS = new URL('__screenshots__/', import.meta.url);
 const NAME = process.argv[2] ?? 'stage';
 const GAP = Number(process.env.GAP ?? 140);

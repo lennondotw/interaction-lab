@@ -395,7 +395,7 @@ async function runTickPhase(browser) {
  */
 async function runStoryPhase(browser) {
   const page = await browser.newPage({ deviceScaleFactor: DPR, viewport: { width: 900, height: 700 } });
-  const storyId = 'demos-glass-fade--material-strength-mapped';
+  const storyId = 'studies-glass-fade--material-strength-mapped';
   const url = `${STORYBOOK_URL}/iframe.html?id=${storyId}&viewMode=story`;
   const response = await page.goto(url, { waitUntil: 'load' }).catch(() => null);
   if (response === null || !response.ok()) {

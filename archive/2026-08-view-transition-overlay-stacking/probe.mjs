@@ -1,7 +1,7 @@
 /**
  * Measures what a View Transition commit does to overlays that are not part of
  * the component running it, against the real
- * `Demos/Buffered Split Layout/View Transition Commit` story.
+ * `Studies/Buffered split layout/View transition commit` story.
  *
  * The story is driven exactly as a user would drive it — one viewport resize,
  * which is the component's own debounced commit path. The overlays are the
@@ -44,7 +44,7 @@ import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
 const SHOTS = new URL('__screenshots__/', import.meta.url);
-const STORY = 'demos-buffered-split-layout-view-transition-commit--expanded';
+const STORY = 'studies-buffered-split-layout-view-transition-commit--expanded';
 
 const VIEWPORT = { width: 1100, height: 760 };
 /** Sits well inside the left pane at a 0.6 split, over its paragraph column. */

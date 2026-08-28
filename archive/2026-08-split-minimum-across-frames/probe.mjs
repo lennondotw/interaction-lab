@@ -1,7 +1,7 @@
 /**
  * Measures whether a split pane can be held at a stale width without ever being
  * painted below its own minimum, against the real
- * `Demos/Buffered Split Layout/Live Commit` story.
+ * `Studies/Buffered split layout/Live commit` story.
  *
  * The story's window-resize policy is to hold the leading pane's width and let the
  * trailing pane absorb the whole viewport change live. Held width plus shrinking
@@ -43,7 +43,7 @@
 import { chromium } from 'playwright';
 
 const STORYBOOK = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
-const STORY = 'demos-buffered-split-layout-live-commit--default';
+const STORY = 'studies-buffered-split-layout-live-commit--default';
 const PANE_BOX_FLOOR_PX = 340;
 const HEIGHT = 800;
 const WIDE = 1200;

@@ -111,7 +111,7 @@ node archive/2026-07-animate-presence-exit-batching/probe.mjs
 ```
 
 The probe drives the three real stories under
-`Demos/AnimatePresence exit batching` — it presses each story's Run button, waits
+`Studies/AnimatePresence exit batching` — it presses each story's Run button, waits
 for the scripted run to finish, and reads the numbers back out of the rendered
 trace panel. It does not re-implement the scenarios, so it cannot drift from what
 the stories show. Timings vary by a few tens of ms per run; the orders of

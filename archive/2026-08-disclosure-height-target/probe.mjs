@@ -1,6 +1,6 @@
 /**
  * Measures what a disclosure animation should own — a length or a ratio — against the
- * real `Demos/DisclosureHeight` story and the real `Components/FileTree` story.
+ * real `Studies/Disclosure height` story and the real `Components/File tree` story.
  *
  * Three parts, because the question has two halves and a verdict:
  *
@@ -167,7 +167,7 @@ console.log(
 // mechanisms — the four candidates, through the demo story's own instrument
 // ---------------------------------------------------------------------------
 
-await story('demos-disclosureheight--interrupted');
+await story('studies-disclosure-height--interrupted');
 
 const setDelay = async (ms) => {
   await page.evaluate((value) => {
@@ -228,7 +228,7 @@ table([
 // shipped — the component after the switch
 // ---------------------------------------------------------------------------
 
-await story('components-filetree--with-actions');
+await story('components-file-tree--with-actions');
 
 const shipped = await page.evaluate(async (interruptAt) => {
   const row = (id) => document.querySelector(`[data-file-tree-node="${CSS.escape(id)}"]`);
@@ -299,7 +299,7 @@ const shipped = await page.evaluate(async (interruptAt) => {
   };
 }, INTERRUPT_MS);
 
-console.log('\nshipped — Components/FileTree, same interrupt\n');
+console.log('\nshipped — Components/File tree, same interrupt\n');
 table([
   ['step', 'stall', 'settled', 'moved', 'track ends on', 'distinct row pitches'],
   [

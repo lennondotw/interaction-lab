@@ -1,6 +1,6 @@
 /**
  * Measures when `AnimatePresence` actually removes an exiting child, against the
- * three real `Demos/AnimatePresence exit batching` stories.
+ * three real `Studies/AnimatePresence exit batching` stories.
  *
  * Each story owns a scripted run and a DOM trace panel; this probe presses Run,
  * waits for the script to finish, and reads the trace back out. Nothing is
