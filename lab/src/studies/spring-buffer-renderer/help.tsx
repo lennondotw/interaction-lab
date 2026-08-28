@@ -7,7 +7,10 @@ import { Button } from '#src/components/button/button.js';
 export const HelpTrigger: FC = () => {
   return (
     <Drawer.Root dismissible container={document.body} modal>
-      <Drawer.Trigger>
+      {/* asChild, or vaul renders its own button around this one — a <button> inside a
+          <button>, which is invalid HTML and which React reports at runtime. With it, the
+          trigger's handlers and aria state land on the Button instead. */}
+      <Drawer.Trigger asChild>
         <Button size="sm" color="blue">
           About this
         </Button>

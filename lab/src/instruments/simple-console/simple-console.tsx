@@ -1,6 +1,6 @@
 import { cn } from '@monorepo/utils';
 import { throttle, type ThrottledFunction } from 'es-toolkit';
-import { FC, useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { FC, Fragment, useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 
 import { SimpleConsoleLogger } from './simple-console-logger.js';
 
@@ -71,15 +71,17 @@ export const SimpleConsoleRender: FC<{ console: SimpleConsoleLogger; className?:
       onTouchMove={handleScroll}
       ref={containerRef}
     >
+      {/* The key belongs on the fragment, not on one of the two cells inside it — a
+          log is two grid children, and keying only the second left the whole list
+          unkeyed as far as React was concerned. The index is the identity here: the
+          log is append-only, so a row never moves once written. */}
       {logs.map((log, index) => (
-        <>
+        <Fragment key={index}>
           <span className="min-w-0 self-start justify-self-end opacity-70">
             {new Date(log.timestamp).toLocaleTimeString()}
           </span>
-          <div className="min-w-0" key={index}>
-            {log.message}
-          </div>
-        </>
+          <div className="min-w-0">{log.message}</div>
+        </Fragment>
       ))}
     </div>
   );
