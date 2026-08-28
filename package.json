@@ -9,6 +9,7 @@
     "lint": "oxlint --max-warnings=0",
     "lint:type-aware": "oxlint --type-aware --max-warnings=0",
     "prepare": "husky",
+    "smoke:stories": "node scripts/smoke-stories.mjs",
     "sort-package-json:check": "sort-package-json '**/package.json' --ignore '**/node_modules/' --ignore '**/dist/' --ignore '**/dist-*/' --check",
     "sort-package-json:sort": "sort-package-json '**/package.json' --ignore '**/node_modules/' --ignore '**/dist/' --ignore '**/dist-*/'",
     "test:packages": "pnpm --filter '*' --workspace-concurrency=-2 run test",
