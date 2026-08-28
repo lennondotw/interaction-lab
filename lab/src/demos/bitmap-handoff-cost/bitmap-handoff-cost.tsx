@@ -1,9 +1,9 @@
 import { cn } from '@monorepo/utils';
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Field, Segmented, Stat } from '#src/animations/sdf-edge-trace/controls.js';
 import { Button } from '#src/components/button/button.js';
-import { LiveScope } from '#src/components/live-scope/live-scope.js';
+import { Field, Segmented, Stat } from '#src/instruments/controls/controls.js';
+import { LiveScope } from '#src/instruments/live-scope/live-scope.js';
 
 import { EncodeWorkerClient } from './encode-worker-client.js';
 import { FrameLog } from './frame-log.js';

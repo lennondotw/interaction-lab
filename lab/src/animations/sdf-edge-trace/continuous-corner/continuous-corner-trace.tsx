@@ -35,9 +35,9 @@ import { useIntervalEffect } from '@react-hookz/web';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FC } from 'react';
 
 import { squirclePath } from '#src/components/continuous-corner/squircle-path.js';
+import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
 
 import { buildPath2D } from '../contour-path.js';
-import { Field, Segmented, Stat, Toggle } from '../controls.js';
 import { ContourTracer, type FieldShape } from '../field.js';
 import { CELL_SIZES, RollingMedian } from '../shape.js';
 import { drawCentreHandles, useShapeDrag } from '../use-shape-drag.js';

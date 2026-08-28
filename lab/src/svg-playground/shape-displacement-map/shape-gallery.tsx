@@ -1,7 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { type FC } from 'react';
 
-import { Stat } from '#src/animations/sdf-edge-trace/controls.js';
+import { Stat } from '#src/instruments/controls/controls.js';
 
 import type { GlassLook } from './glass-look.js';
 import { SHAPES } from './shape-catalogue.js';

@@ -28,9 +28,9 @@ import { useAnimationFrame } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 
 import { Button } from '#src/components/button/button.js';
+import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
 
 import { timeBatched } from '../bench-timing.js';
-import { Field, Segmented, Stat, Toggle } from '../controls.js';
 import { ContourTracer, quadtreeSafeView, type FieldShape, type TraceConfig, type Traversal } from '../field.js';
 import { ShapeRegistry, useRegisteredRect } from '../rect-registry.js';
 import { CELL_SIZES, RollingMedian } from '../shape.js';

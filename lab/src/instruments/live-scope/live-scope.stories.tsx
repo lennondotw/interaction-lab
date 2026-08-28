@@ -9,7 +9,7 @@ import { LiveScope, type LiveScopeSample } from './live-scope.js';
  * it, and the last one removes the chrome entirely to get a sparkline out of the same code.
  */
 const meta: Meta = {
-  title: 'Components/LiveScope',
+  title: 'Instruments/Live scope',
   parameters: { layout: 'centered' },
 };
 

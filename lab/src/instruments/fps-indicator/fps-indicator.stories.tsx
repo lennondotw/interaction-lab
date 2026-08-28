@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FpsIndicator } from './fps-indicator.js';
 
 const meta: Meta = {
-  title: 'Components/FpsIndicator',
+  title: 'Instruments/FPS indicator',
   parameters: {
     layout: 'centered',
   },

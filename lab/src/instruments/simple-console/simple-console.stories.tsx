@@ -8,7 +8,7 @@ import { useSimpleConsoleLogger } from './simple-console-logger.js';
 import { SimpleConsoleRender } from './simple-console.js';
 
 const meta: Meta = {
-  title: 'Demos/SimpleConsole',
+  title: 'Instruments/Simple console',
 };
 
 export default meta;

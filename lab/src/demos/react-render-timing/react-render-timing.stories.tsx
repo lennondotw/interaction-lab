@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { useSimpleConsoleLogger } from '../simple-console/simple-console-logger.js';
-import { SimpleConsoleRender } from '../simple-console/simple-console.js';
+import { useSimpleConsoleLogger } from '#src/instruments/simple-console/simple-console-logger.js';
+import { SimpleConsoleRender } from '#src/instruments/simple-console/simple-console.js';
+
 import { ReactRenderTiming } from './react-render-timing.js';
 
 const meta: Meta = {
