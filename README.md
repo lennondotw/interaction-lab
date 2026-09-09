@@ -46,6 +46,8 @@ fork pull requests never receive deployment credentials.
 `wrangler.jsonc` defines static assets and SPA fallback. The custom domain and
 preview-only Access policy are managed in the Cloudflare dashboard. Keep Access
 enabled before enabling preview URLs; the CI token cannot manage Access or DNS.
+The Access team domain is `lennondotw.cloudflareaccess.com`; GitHub OAuth uses
+`https://lennondotw.cloudflareaccess.com/cdn-cgi/access/callback`.
 Workers Builds is not connected, so GitHub Actions is the only automatic publisher.
 
 Repository secrets are `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The token
@@ -53,8 +55,8 @@ is stored in 1Password's Personal vault as
 **Cloudflare · interaction-lab · GitHub Actions Deploy**, with scope and rotation
 instructions. It grants Workers Scripts Edit on the personal Cloudflare account.
 
-The former Pages project `interaction-lab` at `demos-storybook.pages.dev` is kept
-as a migration rollback reference, with automatic builds disabled after cutover.
+The former Pages project `interaction-lab` at `demos-storybook.pages.dev` is retired.
+Web Analytics uses a standalone `lab.lennon.sh` site and no longer depends on Pages.
 To roll back a Workers release, select the previous active production version in
 Cloudflare Deployments; do not promote an arbitrary branch preview.
 
