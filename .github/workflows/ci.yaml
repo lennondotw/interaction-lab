@@ -120,3 +120,64 @@ jobs:
             lab/storybook-static/
           if-no-files-found: error
           include-hidden-files: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Storybook to Workers
+    needs: [lint, test, build-storybook]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+    concurrency:
+      group: cloudflare-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check branch is still current
+        id: current
+        env:
+          BRANCH_REF: ${{ github.ref }}
+        run: |
+          remote_sha=$(git ls-remote origin "$BRANCH_REF" | cut -f1)
+          echo "deploy=$([[ "$remote_sha" == "$GITHUB_SHA" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js with corepack
+        if: steps.current.outputs.deploy == 'true'
+        uses: ./.github/actions/setup-node
+
+      - name: Install dependencies
+        if: steps.current.outputs.deploy == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Download verified Storybook build
+        if: steps.current.outputs.deploy == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: storybook-static
+          path: lab/storybook-static
+
+      - name: Deploy production or upload a protected preview
+        if: steps.current.outputs.deploy == 'true'
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          if [[ "$GITHUB_REF" == 'refs/heads/main' ]]; then
+            pnpm exec wrangler deploy --message "$GITHUB_SHA"
+            deployment_url='https://lab.lennon.sh'
+          else
+            branch_hash=$(printf '%s' "$GITHUB_REF_NAME" | sha256sum | cut -c1-12)
+            preview_alias="branch-$branch_hash"
+            pnpm exec wrangler versions upload --preview-alias "$preview_alias" --message "$GITHUB_SHA"
+            deployment_url="https://$preview_alias-interaction-lab.reekystive.workers.dev"
+          fi
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          printf '### Storybook deployment\n\nCommit: %s\n\n[Open Storybook](%s)\n' "$GITHUB_SHA" "$deployment_url" >> "$GITHUB_STEP_SUMMARY"

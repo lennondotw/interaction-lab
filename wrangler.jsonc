@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "interaction-lab",
+  "compatibility_date": "2026-09-09",
+  "workers_dev": true,
+  "preview_urls": true,
+  // Domain and Access policies are managed in the Cloudflare dashboard.
+  "assets": {
+    "directory": "./lab/storybook-static",
+    "not_found_handling": "single-page-application",
+  },
+}
