@@ -36,6 +36,7 @@ longer version, alongside the conventions for writing a story.
 
 GitHub Actions deploys the `storybook-static` artifact from the same workflow run
 to Cloudflare Workers after lint, typechecking, tests, and the Storybook build pass.
+The Worker origin is <https://interaction-lab.lennondotw.workers.dev>.
 Pushes to `main` publish production at <https://lab.lennon.sh>. Other branch pushes
 upload a version with a stable preview alias, without changing production. Preview
 links appear in the deployment job summary and GitHub environment, and require

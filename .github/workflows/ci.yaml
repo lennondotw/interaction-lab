@@ -177,7 +177,7 @@ jobs:
             branch_hash=$(printf '%s' "$GITHUB_REF_NAME" | sha256sum | cut -c1-12)
             preview_alias="branch-$branch_hash"
             pnpm exec wrangler versions upload --preview-alias "$preview_alias" --message "$GITHUB_SHA"
-            deployment_url="https://$preview_alias-interaction-lab.reekystive.workers.dev"
+            deployment_url="https://$preview_alias-interaction-lab.lennondotw.workers.dev"
           fi
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           printf '### Storybook deployment\n\nCommit: %s\n\n[Open Storybook](%s)\n' "$GITHUB_SHA" "$deployment_url" >> "$GITHUB_STEP_SUMMARY"
