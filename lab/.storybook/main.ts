@@ -15,9 +15,9 @@ const viteFinal = (config: UserConfig): UserConfig => {
 const addCloudflareAnalytics: StorybookConfig['managerHead'] = (head, { configType }) => {
   if (configType !== 'PRODUCTION') return head;
 
-  // Preserve the existing Pages analytics site when serving the build on Workers.
+  // Use the standalone lab.lennon.sh analytics site, independent of Pages.
   // This is the public beacon identifier, not the deployment API credential.
-  const beacon = `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"a508ed9b8e354a989f82710e4daef568"}'></script>`;
+  const beacon = `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"df2afb915d614581a4c172bcde696094"}'></script>`;
   return `${head ?? ''}\n${beacon}`;
 };
 
