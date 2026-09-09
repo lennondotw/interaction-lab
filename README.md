@@ -32,6 +32,31 @@ preference: a component that imports a study has its dependency backwards, since
 the study is the thing that is about the component. `lab/src/docs` carries the
 longer version, alongside the conventions for writing a story.
 
+## Deployment
+
+GitHub Actions deploys the `storybook-static` artifact from the same workflow run
+to Cloudflare Workers after lint, typechecking, tests, and the Storybook build pass.
+Pushes to `main` publish production at <https://lab.lennon.sh>. Other branch pushes
+upload a version with a stable preview alias, without changing production. Preview
+links appear in the deployment job summary and GitHub environment, and require
+Cloudflare Access sign-in. Pull request events run validation without deploying;
+fork pull requests never receive deployment credentials.
+
+`wrangler.jsonc` defines static assets and SPA fallback. The custom domain and
+preview-only Access policy are managed in the Cloudflare dashboard. Keep Access
+enabled before enabling preview URLs; the CI token cannot manage Access or DNS.
+Workers Builds is not connected, so GitHub Actions is the only automatic publisher.
+
+Repository secrets are `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The token
+is stored in 1Password's Personal vault as
+**Cloudflare · interaction-lab · GitHub Actions Deploy**, with scope and rotation
+instructions. It grants Workers Scripts Edit on the personal Cloudflare account.
+
+The former Pages project `interaction-lab` at `demos-storybook.pages.dev` is kept
+as a migration rollback reference, with automatic builds disabled after cutover.
+To roll back a Workers release, select the previous active production version in
+Cloudflare Deployments; do not promote an arbitrary branch preview.
+
 ## Toolchain
 
 pnpm workspace with a strict catalog, Vite 8, React 19, Storybook 10, vitest, `tsgo` for typechecking via project references, and the oxc family for lint and format.
