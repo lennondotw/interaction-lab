@@ -1,0 +1,70 @@
+@reference "../../../../packages/tailwindcss/tailwindcss.css";
+
+@layer components {
+  [data-slot='message-bubble'] {
+    /* Insets inferred from the Figma body's 162 × 36 / text box's 136 × 18.
+       Typography is intentionally 14/17; the corner radius remains an
+       optical approximation of the reference. */
+    --message-bubble-fill: #2196ff;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    box-sizing: border-box;
+    width: fit-content;
+    min-width: 38px;
+    max-width: 100%;
+    padding: 9px 13px;
+    border-radius: 18px;
+    background: var(--message-bubble-fill);
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 17px;
+    letter-spacing: 0;
+    text-align: start;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  [data-slot='message-bubble'] > [data-slot='message-bubble-content'] {
+    /* Center the intrinsic content box inside the minimum-width bubble,
+       while wrapped text keeps its normal start alignment. */
+    min-width: 0;
+    max-width: 100%;
+    min-height: 1lh;
+  }
+
+  [data-slot='message-bubble'][data-variant='incoming'] {
+    --message-bubble-fill: #e5e5ea;
+    color: #000;
+
+    @variant dark {
+      /* Sampled from the supplied desktop screenshot after ICC conversion. */
+      --message-bubble-fill: #3b3b3d;
+      color: #e1e1e1;
+    }
+  }
+
+  [data-slot='message-bubble'][data-tail]::before {
+    /* 19 × 14 tail, overlapping the body by 9px (5px visible below it).
+       This curve is an optical reconstruction, not an exported Figma vector.
+       A clipped fill needs no background-colored cutout, so the bubble can
+       sit on any canvas. The tail never changes the text's layout width. */
+    content: '';
+    position: absolute;
+    left: 5px;
+    bottom: -5px;
+    width: 19px;
+    height: 14px;
+    background: var(--message-bubble-fill);
+    clip-path: path('M 3 0 H 19 C 15 5 9 11 1 14 Q -1 14 1 11 C 4 7 3 3 3 0 Z');
+    pointer-events: none;
+  }
+
+  [data-slot='message-bubble'][data-variant='outgoing'][data-tail]::before {
+    right: 5px;
+    left: auto;
+    transform: scaleX(-1);
+  }
+}
