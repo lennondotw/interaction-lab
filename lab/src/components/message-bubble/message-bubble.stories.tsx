@@ -33,7 +33,7 @@ export const IncomingWithoutTail: Story = { args: { variant: 'incoming', tail: f
 export const AllVariants: Story = {
   parameters: { controls: { disable: true } },
   render: () => (
-    <div className="flex max-w-full flex-wrap justify-center gap-x-12 gap-y-8">
+    <div className="flex max-w-full flex-wrap justify-center gap-x-12 gap-y-6">
       <div className="flex min-w-0 flex-col items-start gap-6">
         <MessageBubble variant="incoming" tail={false}>
           A little room for a thought.
