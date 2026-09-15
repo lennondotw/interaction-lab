@@ -6,7 +6,12 @@ import { Segmented } from '#src/instruments/controls/controls.js';
 import { Button } from '../button/index.js';
 import { useChatSendFlight } from '../chat-send-flight/chat-send-flight.js';
 import { MessageInput } from '../message-input/index.js';
-import { ChatScrollContainer, type ChatMessage, type ChatScrollState } from './chat-scroll-container.js';
+import {
+  ChatScrollContainer,
+  type ChatListItem,
+  type ChatMessage,
+  type ChatScrollState,
+} from './chat-scroll-container.js';
 
 const conversation: Omit<ChatMessage, 'id'>[] = [
   { variant: 'incoming', content: 'A little room for a thought.' },
@@ -260,7 +265,7 @@ function ChatDemo({
         >
           <span>Animation speed</span>
           <Segmented
-            options={[0.1, 0.25, 0.5, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
+            options={[0.1, 0.25, 0.5, 0.75, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
             value={animationSpeed}
             onChange={setAnimationSpeed}
           />
@@ -292,4 +297,67 @@ export const WithMessageInput: Story = {
 export const InsertInHistory: Story = {
   parameters: { controls: { disable: true } },
   render: () => <ChatDemo withMessageInput withHistoryInsertion />,
+};
+
+function MixedItemsDemo() {
+  const [items, setItems] = useState<ChatListItem[]>([
+    ...messages.slice(-12, -1),
+    { ...messages.at(-1)!, variant: 'incoming' },
+  ]);
+  const [animationSpeed, setAnimationSpeed] = useState(0.25);
+  const sequence = useRef(0);
+
+  function insertDate() {
+    const id = `date-${++sequence.current}`;
+    setItems((previous) => [
+      ...previous.slice(0, -1),
+      {
+        id,
+        kind: 'content',
+        gapBefore: 16,
+        content: (
+          <div className="flex justify-center text-xs text-neutral-500 dark:text-neutral-400">
+            <time dateTime="2026-09-15">Tuesday, September 15</time>
+          </div>
+        ),
+      },
+      previous.at(-1)!,
+    ]);
+  }
+
+  function appendContent() {
+    const id = `notice-${++sequence.current}`;
+    setItems((previous) => [
+      ...previous,
+      {
+        id,
+        kind: 'content',
+        content: (
+          <p className="m-0 text-center text-xs text-neutral-500 dark:text-neutral-400">You are all caught up.</p>
+        ),
+      },
+    ]);
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <ChatScrollContainer items={items} animationSpeed={animationSpeed} className="min-h-0 flex-1" />
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button onClick={insertDate}>Insert date before last item</Button>
+        <Button onClick={appendContent}>Append notice</Button>
+      </div>
+      <fieldset aria-label="Animation speed" className="m-0 flex justify-center border-0 p-0">
+        <Segmented
+          options={[0.25, 1].map((value) => ({ value, label: `${value}×` }))}
+          value={animationSpeed}
+          onChange={setAnimationSpeed}
+        />
+      </fieldset>
+    </div>
+  );
+}
+
+export const MixedItems: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => <MixedItemsDemo />,
 };
