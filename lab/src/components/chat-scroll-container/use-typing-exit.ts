@@ -1,6 +1,7 @@
 import { animate, useMotionValue } from 'motion/react';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
+import { readChatItemGap } from './chat-items.js';
 import { registerChatTransition, type ChatLayoutEntry } from './chat-layout.js';
 import {
   chatEnterOffset,
@@ -62,8 +63,8 @@ export function useTypingExit(
     } else if (visible && present && !geometry && entryRequested.current) {
       const row = rowRef.current;
       if (!row) return;
-      const gap = Number.parseFloat(getComputedStyle(row).marginTop);
-      setGeometry({ height: row.getBoundingClientRect().height + gap, gap, entry: true });
+      const gap = readChatItemGap(row);
+      setGeometry({ height: row.getBoundingClientRect().height, gap, entry: true });
     } else if (!visible && present && !geometry) {
       entryRequested.current = false;
       const row = rowRef.current;
@@ -72,9 +73,9 @@ export function useTypingExit(
         setPresent(false);
         return;
       }
-      const gap = Number.parseFloat(getComputedStyle(row).marginTop);
+      const gap = readChatItemGap(row);
       progress.jump(0);
-      setGeometry({ height: row.getBoundingClientRect().height + gap, gap });
+      setGeometry({ height: row.getBoundingClientRect().height, gap });
     }
   }, [visible, present, geometry, replacing, reducedMotion, progress, opacity, offset]);
 

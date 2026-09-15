@@ -1,5 +1,6 @@
 import { animate, motionValue } from 'motion/react';
 
+import { readChatItemGap } from './chat-items.js';
 import { registerChatLayout, type ChatLayoutEntry } from './chat-layout.js';
 import { chatLayoutSpring } from './chat-presence.js';
 
@@ -10,7 +11,7 @@ export interface ReadingAnchor {
 
 interface Measurement {
   row: HTMLElement;
-  bubble: HTMLElement;
+  body: HTMLElement;
   height: number;
   gap: number;
   width: number;
@@ -23,7 +24,7 @@ interface Insertion extends ChatLayoutEntry {
   fromSize: number;
   fromGap: number;
   currentGap: number;
-  newMessage: boolean;
+  newItem: boolean;
 }
 
 /** Layout alone owns expansion. Bubble visuals and flight clocks remain independent. */
@@ -43,11 +44,11 @@ export function createChatInsertions(
   }
 
   function readingElement(row: HTMLElement) {
-    return row.querySelector<HTMLElement>(':scope > [data-message-id]') ?? row;
+    return row.querySelector<HTMLElement>(':scope > [data-chat-item-id], :scope > [data-chat-item-body]') ?? row;
   }
 
   function isEntering(row: HTMLElement) {
-    return [...entries].some((entry) => entry.row === row && entry.newMessage);
+    return [...entries].some((entry) => entry.row === row && entry.newItem);
   }
 
   function remember() {
@@ -58,7 +59,7 @@ export function createChatInsertions(
       snapshots.set(row, {
         top: rect.top - origin + viewport.scrollTop,
         height: rect.height,
-        gap: Number.parseFloat(getComputedStyle(row).marginTop),
+        gap: [...entries].find((entry) => entry.row === row)?.currentGap ?? readChatItemGap(row),
       });
     }
   }
@@ -77,8 +78,8 @@ export function createChatInsertions(
 
   function captureAnchor(): ReadingAnchor | undefined {
     const top = viewport.getBoundingClientRect().top;
-    // Follow the existing bubble, not its temporary slot: moving a gap inside
-    // that slot must not move the reading anchor. New hidden bubbles cannot own it.
+    // Follow the existing body, not its temporary slot: moving a gap inside
+    // that slot must not move the reading anchor. New hidden bodies cannot own it.
     const row = rows().find(
       (row) => snapshots.has(row) && !isEntering(row) && readingElement(row).getBoundingClientRect().bottom > top
     );
@@ -87,17 +88,17 @@ export function createChatInsertions(
   }
 
   function restore(entry: Insertion) {
-    const { row, bubble } = entry.measurement;
-    for (const property of ['height', 'width', 'margin-top', 'overflow', 'display', 'flex-direction']) {
+    const { row, body } = entry.measurement;
+    for (const property of ['height', 'width', 'padding-top']) {
       row.style.removeProperty(property);
     }
-    bubble.style.removeProperty('margin-top');
-    bubble.style.removeProperty('flex-shrink');
+    body.style.removeProperty('margin-top');
+    body.style.removeProperty('flex-shrink');
     delete row.dataset.chatInserting;
   }
 
   function apply(entry: Insertion, height: number) {
-    const { row, bubble, gap, width } = entry.measurement;
+    const { row, body, gap, width } = entry.measurement;
     const total = entry.measurement.height + gap;
     const progress = total === entry.fromSize ? 1 : (height - entry.fromSize) / (total - entry.fromSize);
     entry.currentGap = entry.fromGap + (gap - entry.fromGap) * Math.max(0, Math.min(1, progress));
@@ -105,14 +106,11 @@ export function createChatInsertions(
     Object.assign(row.style, {
       height: `${height}px`,
       width: `${width}px`,
-      marginTop: '0px',
-      // The slot animates spacing only; the bubble and its tail retain their full paint area.
-      overflow: 'visible',
-      display: 'flex',
-      flexDirection: 'column',
+      paddingTop: '0px',
     });
-    bubble.style.marginTop = `${entry.currentGap}px`;
-    bubble.style.flexShrink = '0';
+    // Keep the leading space inside the slot without imposing a minimum slot height.
+    body.style.marginTop = `${entry.currentGap}px`;
+    body.style.flexShrink = '0';
     row.dataset.chatInserting = '';
     entry.remaining = entry.measurement.height + gap - row.getBoundingClientRect().height;
   }
@@ -152,33 +150,32 @@ export function createChatInsertions(
   remember();
   const api = {
     /** Call after React commits, before paint and before starting visual entrances. */
-    insert(ids: Set<string>, localSend: boolean, replacement?: { bubble: HTMLElement; row: HTMLElement }) {
+    insert(ids: Set<string>, localSend: boolean, replacement?: { body: HTMLElement; row: HTMLElement }) {
       const anchor = anchorFromSnapshot();
       const previousTyping = replacement && snapshots.get(replacement.row);
       const replacementHeight = replacement
         ? previousTyping
           ? previousTyping.height + previousTyping.gap
-          : replacement.row.getBoundingClientRect().height +
-            Number.parseFloat(getComputedStyle(replacement.row).marginTop)
+          : replacement.row.getBoundingClientRect().height
         : 0;
       // Read the final intrinsic layout in one batch, then restore active slots.
       for (const entry of entries) restore(entry);
       const measurements = rows().flatMap((row): Measurement[] => {
-        const bubble = row.querySelector<HTMLElement>(':scope > [data-message-id]');
-        if (!bubble) return [];
+        const body = row.querySelector<HTMLElement>(':scope > [data-chat-item-id]');
+        if (!body) return [];
         return [
           {
             row,
-            bubble,
-            height: bubble.getBoundingClientRect().height,
-            gap: Number.parseFloat(getComputedStyle(row).marginTop),
+            body,
+            height: body.getBoundingClientRect().height,
+            gap: readChatItemGap(row),
             width: row.getBoundingClientRect().width,
           },
         ];
       });
       if (replacement) {
         replacement.row.style.height = '0px';
-        replacement.row.style.marginTop = '0px';
+        replacement.row.style.paddingTop = '0px';
         const visual = replacement.row.firstElementChild as HTMLElement;
         // Match the declared replacement style. React clears it when typing
         // reopens, returning the indicator to normal flow in the same commit.
@@ -186,13 +183,13 @@ export function createChatInsertions(
       }
       for (const measurement of measurements) {
         let entry = [...entries].find((item) => item.row === measurement.row);
-        const isNew = ids.has(measurement.bubble.dataset.messageId!);
+        const isNew = ids.has(measurement.body.dataset.chatItemId!);
         const previous = snapshots.get(measurement.row);
         const gapChanged = previous && !entry && previous.gap !== measurement.gap;
         if (!entry && !isNew && !gapChanged) continue;
         if (!entry) {
           const initial = isNew
-            ? measurement.bubble === replacement?.bubble
+            ? measurement.body === replacement?.body
               ? replacementHeight
               : 0
             : measurement.height + previous!.gap;
@@ -206,7 +203,7 @@ export function createChatInsertions(
             fromSize: initial,
             fromGap,
             currentGap: fromGap,
-            newMessage: isNew,
+            newItem: isNew,
           };
           entries.add(entry);
         }

@@ -35,6 +35,7 @@ export function animateChatEntrance(
   layer.inert = true;
   const visual = element.cloneNode(true) as HTMLElement;
   visual.removeAttribute('data-message-id');
+  visual.removeAttribute('data-chat-item-id');
   visual.removeAttribute('id');
   visual.dataset.chatEntrance = '';
   visual.style.marginTop = '0px';

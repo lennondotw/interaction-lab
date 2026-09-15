@@ -4,6 +4,7 @@ import { useCallback, useLayoutEffect, useRef, type ComponentPropsWithoutRef } f
 
 import { MessageBubble, TypingBubble } from '../message-bubble/index.js';
 import { createChatInsertions } from './chat-insertions.js';
+import { chatItemGap, chatItemStyle, isChatMessage, type ChatListItem, type ChatMessage } from './chat-items.js';
 import { animateChatEntrance } from './chat-presence.js';
 import { createChatScrollController, type ChatScrollState } from './chat-scroll-controller.js';
 import { useTypingExit } from './use-typing-exit.js';
@@ -12,16 +13,12 @@ import './chat-scroll-container.css';
 
 export type { ChatScrollState } from './chat-scroll-controller.js';
 
-export interface ChatMessage {
-  id: string;
-  content: string;
-  variant: 'incoming' | 'outgoing';
-  /** Messages fade upward by default; composer sends explicitly use the external flight hook. */
-  entrance?: 'fade' | 'flight';
-}
+export type { ChatMessage, ChatListItem, ChatContentItem } from './chat-items.js';
 
 export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'section'> {
-  messages: readonly ChatMessage[];
+  /** Ordered messages and custom content. Takes precedence over the messages shorthand. */
+  items?: readonly ChatListItem[];
+  messages?: readonly ChatMessage[];
   /** Show the remote typing indicator after the last message. */
   incomingTyping?: boolean;
   bottomThreshold?: number;
@@ -31,9 +28,12 @@ export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'sect
   onScrollStateChange?: (state: ChatScrollState) => void;
 }
 
+const emptyItems: readonly ChatListItem[] = [];
+
 /** The host supplies the container's width and height; only the message list scrolls. */
 export function ChatScrollContainer({
   messages,
+  items: suppliedItems,
   incomingTyping = false,
   bottomThreshold = 2,
   animationSpeed = 1,
@@ -42,11 +42,12 @@ export function ChatScrollContainer({
   className,
   ...props
 }: ChatScrollContainerProps) {
+  const items = suppliedItems ?? messages ?? emptyItems;
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLOListElement>(null);
   const controllerRef = useRef<ReturnType<typeof createChatScrollController> | null>(null);
-  const previousIds = useRef(new Set(messages.map(({ id }) => id)));
-  const previousMessages = useRef(messages);
+  const previousIds = useRef(new Set(items.map(({ id }) => id)));
+  const previousItems = useRef(items);
   const insertionsRef = useRef<ReturnType<typeof createChatInsertions> | null>(null);
   const entranceAnimations = useRef(new Set<ReturnType<typeof animateChatEntrance>>());
   const reducedMotion = useReducedMotion();
@@ -101,31 +102,35 @@ export function ChatScrollContainer({
   }, [bottomThreshold, animationSpeed, reducedMotion, onScrollStateChange]);
 
   useLayoutEffect(() => {
-    const inserted = messages.filter(({ id }) => !previousIds.current.has(id));
-    const messagesChanged = previousMessages.current !== messages;
-    previousMessages.current = messages;
-    previousIds.current = new Set(messages.map(({ id }) => id));
-    const bubbles = [...(contentRef.current?.querySelectorAll<HTMLElement>('[data-message-id]') ?? [])];
-    const incomingIds = new Set(inserted.filter((message) => message.variant === 'incoming').map(({ id }) => id));
-    const entranceIds = new Set(inserted.filter((message) => message.entrance !== 'flight').map(({ id }) => id));
+    const inserted = items.filter(({ id }) => !previousIds.current.has(id));
+    const itemsChanged = previousItems.current !== items;
+    previousItems.current = items;
+    previousIds.current = new Set(items.map(({ id }) => id));
+    const bodies = [...(contentRef.current?.querySelectorAll<HTMLElement>('[data-chat-item-id]') ?? [])];
+    const incomingIds = new Set(
+      inserted.filter((item) => isChatMessage(item) && item.variant === 'incoming').map(({ id }) => id)
+    );
+    const entranceIds = new Set(
+      inserted.filter((item) => !isChatMessage(item) || item.entrance !== 'flight').map(({ id }) => id)
+    );
     const replacement =
       typingMounted && !incomingTyping && !typingReplacing
-        ? bubbles.find((bubble) => incomingIds.has(bubble.dataset.messageId!))
+        ? bodies.find((body) => incomingIds.has(body.dataset.chatItemId!))
         : undefined;
-    if (messagesChanged) {
+    if (itemsChanged) {
       insertionsRef.current?.insert(
         new Set(inserted.map(({ id }) => id)),
-        inserted.some((message) => message.variant === 'outgoing'),
-        replacement && typing.rowRef.current ? { bubble: replacement, row: typing.rowRef.current } : undefined
+        inserted.some((item) => isChatMessage(item) && item.variant === 'outgoing'),
+        replacement && typing.rowRef.current ? { body: replacement, row: typing.rowRef.current } : undefined
       );
     }
     if (!reducedMotion) {
-      for (const bubble of bubbles) {
-        if (!entranceIds.has(bubble.dataset.messageId!)) continue;
-        const fadeOnly = bubble === replacement;
-        if (fadeOnly) replaceTypingWith(bubble);
+      for (const body of bodies) {
+        if (!entranceIds.has(body.dataset.chatItemId!)) continue;
+        const fadeOnly = body === replacement;
+        if (fadeOnly) replaceTypingWith(body);
         const animation = animateChatEntrance(
-          bubble,
+          body,
           Math.max(0.01, animationSpeed),
           () => entranceAnimations.current.delete(animation),
           { fadeOnly }
@@ -133,12 +138,12 @@ export function ChatScrollContainer({
         entranceAnimations.current.add(animation);
       }
     }
-    if (!messagesChanged && !typing.preparingEntry) controllerRef.current?.contentChanged();
+    if (!itemsChanged && !typing.preparingEntry) controllerRef.current?.contentChanged();
     // Presentation copies must reflect committed grouping before the next paint.
     for (const animation of entranceAnimations.current) animation.sync();
     if (!typing.preparingEntry) insertionsRef.current?.remember();
   }, [
-    messages,
+    items,
     typingPresent,
     reducedMotion,
     animationSpeed,
@@ -170,23 +175,43 @@ export function ChatScrollContainer({
         {/* Bound the scroll extent to layout height. Entrance visuals render outside
             this surface; their hidden measurement anchors must not extend it. */}
         <ol ref={contentRef} className={cn('m-0 flex list-none flex-col overflow-clip p-5', contentClassName)}>
-          {messages.map((message, index) => (
-            <li
-              key={message.id}
-              className={cn('min-w-0 max-w-[80%]', message.variant === 'outgoing' ? 'self-end' : 'self-start')}
-            >
-              <MessageBubble
-                data-message-id={message.id}
-                variant={message.variant}
-                tail={(messages[index + 1]?.variant ?? (incomingTyping ? 'incoming' : undefined)) !== message.variant}
+          {items.map((item, index) => {
+            const message = isChatMessage(item);
+            const next = items[index + 1];
+            const nextVariant = isChatMessage(next) ? next.variant : !next && incomingTyping ? 'incoming' : undefined;
+            const align = message ? (item.variant === 'outgoing' ? 'end' : 'start') : (item.align ?? 'stretch');
+            return (
+              <li
+                key={item.id}
+                data-chat-item=""
+                className={cn(
+                  'min-w-0',
+                  message && 'max-w-[80%]',
+                  align === 'end' ? 'self-end' : align === 'start' ? 'self-start' : 'self-stretch'
+                )}
+                style={chatItemStyle(chatItemGap(item, items[index - 1]))}
               >
-                {message.content}
-              </MessageBubble>
-            </li>
-          ))}
+                {message ? (
+                  <MessageBubble
+                    data-chat-item-id={item.id}
+                    data-message-id={item.id}
+                    variant={item.variant}
+                    tail={nextVariant !== item.variant}
+                  >
+                    {item.content}
+                  </MessageBubble>
+                ) : (
+                  <div data-chat-item-id={item.id} className="flow-root min-w-0">
+                    {item.content}
+                  </div>
+                )}
+              </li>
+            );
+          })}
           {typing.present && (
             <li
               ref={typing.rowRef}
+              data-chat-item=""
               className="relative self-start"
               data-slot={
                 typing.replacing
@@ -198,9 +223,13 @@ export function ChatScrollContainer({
                       : 'chat-typing-row'
               }
               aria-hidden={!incomingTyping && typing.geometry ? true : undefined}
-              style={typing.geometry ? { height: typing.geometry.height, marginTop: 0 } : undefined}
+              style={{
+                ...chatItemStyle(chatItemGap({ id: 'typing', variant: 'incoming', content: '' }, items.at(-1))),
+                ...(typing.geometry ? { height: typing.geometry.height, paddingTop: 0 } : {}),
+              }}
             >
               <TypingBubble
+                data-chat-item-body=""
                 className={typing.geometry ? 'left-0' : undefined}
                 style={typing.geometry ? { position: 'absolute', top: typing.geometry.gap } : undefined}
               />
