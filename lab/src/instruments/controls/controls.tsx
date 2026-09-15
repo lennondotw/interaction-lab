@@ -74,6 +74,7 @@ export const Segmented = <T extends string | number>({ options, value, onChange,
         type="button"
         title={option.title}
         disabled={option.disabled}
+        aria-pressed={option.value === value}
         onClick={() => onChange(option.value)}
         className={cn(
           `

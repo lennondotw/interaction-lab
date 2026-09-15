@@ -1,0 +1,9 @@
+@layer components {
+  [data-slot='chat-scroll-viewport'] > ol > li + li {
+    margin-top: 3px;
+  }
+
+  [data-slot='chat-scroll-viewport'] > ol > li:has(> [data-slot='message-bubble'][data-tail]) + li {
+    margin-top: 8px;
+  }
+}
