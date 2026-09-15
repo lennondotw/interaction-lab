@@ -14,22 +14,34 @@ export interface ChatMessage extends ChatItemBase {
   entrance?: 'fade' | 'flight';
 }
 
-/** Dates, unread markers, and other content share the message insertion layout. */
+/** Custom content shares the built-in item insertion layout. */
 export interface ChatContentItem extends ChatItemBase {
   kind: 'content';
   content: ReactNode;
   align?: 'start' | 'end' | 'stretch';
 }
 
-export type ChatListItem = ChatMessage | ChatContentItem;
+export interface ChatDateItem extends ChatItemBase {
+  kind: 'date';
+  dateTime: string;
+  label: string;
+}
+
+export interface ChatStatusItem extends ChatItemBase {
+  kind: 'status';
+  content: string;
+}
+
+export type ChatListItem = ChatMessage | ChatContentItem | ChatDateItem | ChatStatusItem;
 
 export function isChatMessage(item: ChatListItem | undefined): item is ChatMessage {
-  return item !== undefined && item.kind !== 'content';
+  return item !== undefined && (item.kind === undefined || item.kind === 'message');
 }
 
 export function chatItemGap(item: ChatListItem, previous: ChatListItem | undefined) {
   if (!previous) return 0;
   if (item.gapBefore !== undefined) return item.gapBefore;
+  if (item.kind === 'date' || previous.kind === 'date') return 16;
   return isChatMessage(item) && isChatMessage(previous) && item.variant === previous.variant ? 3 : 8;
 }
 

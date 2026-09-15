@@ -5,6 +5,7 @@ import { useCallback, useLayoutEffect, useRef, type ComponentPropsWithoutRef } f
 import { MessageBubble, TypingBubble } from '../message-bubble/index.js';
 import { createChatInsertions } from './chat-insertions.js';
 import { chatItemGap, chatItemStyle, isChatMessage, type ChatListItem, type ChatMessage } from './chat-items.js';
+import { ChatDateLabel, ChatStatusLabel } from './chat-list-labels.js';
 import { animateChatEntrance } from './chat-presence.js';
 import { createChatScrollController, type ChatScrollState } from './chat-scroll-controller.js';
 import { useTypingExit } from './use-typing-exit.js';
@@ -13,7 +14,7 @@ import './chat-scroll-container.css';
 
 export type { ChatScrollState } from './chat-scroll-controller.js';
 
-export type { ChatMessage, ChatListItem, ChatContentItem } from './chat-items.js';
+export type { ChatMessage, ChatListItem, ChatContentItem, ChatDateItem, ChatStatusItem } from './chat-items.js';
 
 export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'section'> {
   /** Ordered messages and custom content. Takes precedence over the messages shorthand. */
@@ -179,7 +180,13 @@ export function ChatScrollContainer({
             const message = isChatMessage(item);
             const next = items[index + 1];
             const nextVariant = isChatMessage(next) ? next.variant : !next && incomingTyping ? 'incoming' : undefined;
-            const align = message ? (item.variant === 'outgoing' ? 'end' : 'start') : (item.align ?? 'stretch');
+            const align = message
+              ? item.variant === 'outgoing'
+                ? 'end'
+                : 'start'
+              : item.kind === 'content'
+                ? (item.align ?? 'stretch')
+                : 'stretch';
             return (
               <li
                 key={item.id}
@@ -200,6 +207,12 @@ export function ChatScrollContainer({
                   >
                     {item.content}
                   </MessageBubble>
+                ) : item.kind === 'date' ? (
+                  <ChatDateLabel data-chat-item-id={item.id} dateTime={item.dateTime}>
+                    {item.label}
+                  </ChatDateLabel>
+                ) : item.kind === 'status' ? (
+                  <ChatStatusLabel data-chat-item-id={item.id}>{item.content}</ChatStatusLabel>
                 ) : (
                   <div data-chat-item-id={item.id} className="flow-root min-w-0">
                     {item.content}
