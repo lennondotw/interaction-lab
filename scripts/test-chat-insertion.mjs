@@ -13,7 +13,8 @@ try {
   const viewport = page.locator('[data-slot="chat-scroll-viewport"]');
   const input = page.getByRole('textbox', { name: 'Message', exact: true });
   const toggle = page.getByRole('button', { name: /^Typing (on|off)$/ });
-  const receive = page.getByRole('button', { name: 'Receive a message', exact: true });
+  const receiveWhileTyping = page.getByRole('button', { name: 'Receive a message', exact: true });
+  const receive = page.getByRole('button', { name: 'Receive a message and turn typing off', exact: true });
   const settle = async () => {
     await page.waitForFunction(() => {
       const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
@@ -41,6 +42,9 @@ try {
             : undefined,
           top: v.scrollTop,
           distance: v.scrollHeight - v.clientHeight - v.scrollTop,
+          entranceOffsets: [...document.querySelectorAll('[data-chat-entrance]')].map(
+            (visual) => new DOMMatrixReadOnly(getComputedStyle(visual).transform).m42
+          ),
           slots: [...v.querySelectorAll('[data-chat-inserting]')].map((e) => e.getBoundingClientRect().height),
           unclipped: [...v.querySelectorAll('[data-chat-inserting]')].every(
             (row) => getComputedStyle(row).overflow === 'visible'
@@ -105,6 +109,20 @@ try {
         'Typing follows the composer clearance without additional layout displacement'
       );
   }
+
+  // Receiving without changing typing inserts a regular message before the indicator.
+  await sample();
+  await receiveWhileTyping.click();
+  await settle();
+  const continuedTyping = await frames();
+  assert.equal(await viewport.locator('[data-slot="typing-bubble"]').count(), 1);
+  assert.equal(await viewport.locator('[data-slot="typing-replacement"]').count(), 0);
+  assert.equal(await viewport.locator('[data-message-id]').last().getAttribute('data-tail'), null);
+  assert.ok(
+    continuedTyping.some((f) => f.entranceOffsets.some((offset) => offset > 0)),
+    'Receive uses the default upward entrance when typing stays on'
+  );
+  assert.ok(continuedTyping.every((f) => f.distance <= 1 && f.mode === 'following'));
 
   await page.evaluate(() => {
     Math.random = () => 0.8;

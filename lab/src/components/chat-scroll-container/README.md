@@ -6,14 +6,16 @@ The story connects the flight hook explicitly; it is not built into `ChatScrollC
 
 ## List items and spacing ownership
 
-Use `items` for a heterogeneous list of `ChatMessage` and `ChatContentItem`. The existing `messages`
+Use `items` for a heterogeneous list of `ChatMessage`, `ChatDateItem`, `ChatStatusItem`, and `ChatContentItem`. The existing `messages`
 prop remains a shorthand for a message-only list; `items` takes precedence if both are supplied.
-IDs must be stable and unique across every item type. Custom items use `kind: 'content'` and accept
-React content, so dates and unread markers do not require changes to the insertion engine.
+IDs must be stable and unique across every item type. Date items use `kind: 'date'`, `dateTime`, and `label`; status items use `kind: 'status'` and `content`.
+The list renders them with the exported `ChatDateLabel` and `ChatStatusLabel` components. Both share
+message insertion layout, top alignment, and the default entrance. Custom items still accept React
+content through `kind: 'content'`.
 
 The list has zero gap and its item boxes touch edge to edge. Each item owns its **leading** space,
 including that space in its measured footprint in both natural layout and animated layout. The first
-item has no leading gap; adjacent messages from the same side use 3px, and other boundaries use 8px.
+item has no leading gap; adjacent messages from the same side use 3px, date boundaries use 16px, and other boundaries use 8px.
 An item's `gapBefore` overrides that boundary's default. Outer list padding and composer clearance
 remain container responsibilities. Custom content should keep its external spacing in `gapBefore`.
 
@@ -23,8 +25,8 @@ Measurement and reading anchors use the generic item body, without depending on 
 
 Every newly inserted item uses the shared expanding layout slot and, by default, **opacity 0 to 1
 with a 20px upward entrance**. Content stays full size and top aligned after its owned leading gap;
-shrinking or growing the slot never bottom-aligns or clips that content. Layout uses the 35 / 1
-spring; the default visual entrance uses 32 / 1. Initial history renders without entrance animation.
+shrinking or growing the slot never bottom-aligns or clips that content. Layout uses the 28 / 1
+spring; the default visual entrance uses 26 / 1. Initial history renders without entrance animation.
 Composer flight and typing-to-message crossfade remain explicit special cases. Typing keeps its
 reversible exit lifecycle while using the same spacing ownership and top alignment. This does not
 add a general removal animation for arbitrary items.
@@ -35,17 +37,52 @@ add a general removal animation for arbitrary items.
     { id: 'hello', variant: 'incoming', content: 'Hello.' },
     {
       id: 'date',
-      kind: 'content',
-      gapBefore: 16,
-      content: <time dateTime="2026-09-15">Tuesday, September 15</time>,
+      kind: 'date',
+      dateTime: '2026-09-15',
+      label: 'Tuesday, September 15',
     },
-    { id: 'reply', variant: 'outgoing', content: 'Good morning.', gapBefore: 16 },
+    { id: 'reply', variant: 'outgoing', content: 'Good morning.' },
+    { id: 'status', kind: 'status', content: 'Looking up the cafe…' },
   ]}
 />
 ```
 
 The `Mixed Items` story inserts a date before the final item and appends a plain notice, both using
 the default entrance. It also exercises the next message's gap changing when a date splits a group.
+
+The manual stories expose both receive paths: `Receive a message` preserves typing and inserts
+before the indicator using the regular upward fade. `Receive a message and turn typing off` commits
+the reply and typing-off together, replacing the indicator with a crossfade. Automatic replies use
+the latter behavior for their first reply. The container follows the supplied item and typing state;
+it does not implicitly turn typing off when a message arrives.
+
+## Automatic reply demonstration
+
+The `Automatic Replies` story keeps only the composer and 0.25× / 1× animation controls.
+`Automatic Replies With Guide` reuses the same `ChatDemo` and adds the happy-path inputs, expected
+replies, and label cues alongside it (below it on narrow screens). The guide reads `demoConversation`
+directly; the complete presenter walkthrough is also recorded in that preset's code comment. Try this
+conversation in order: `Hey!`, `Coffee this afternoon?`, `Where should we meet?`, `What time?`,
+and `See you there!`. Each preset returns one to three related messages. The first send inserts a
+`Today` date item before the outgoing message. The coffee preset inserts a status item halfway
+between its second and third replies. Labels remain in the timeline. These insertion rules belong
+to the story; the list provides the reusable types, rendering, spacing, and animation.
+
+For a taller composer, replace the short coffee invitation with this bulleted preset (paste it,
+or use Shift+Enter for line breaks). Both versions match the same conversation:
+
+```text
+- Good coffee
+- A quiet table outside
+- A walk by the park afterward
+```
+
+Matching ignores capitalization, repeated whitespace, and final `.`, `!`, or `?` characters.
+Unmatched input selects exactly one fallback using a stable text hash. The same normalized input
+also produces the same 800–1200ms reply delays, including the wait after typing starts. Typing begins
+after 600ms and stops with the first reply; it does not reappear between replies in that batch.
+Playback controls affect motion only. Rapid sends queue complete reply plans in submission order,
+and leaving the story cancels the timer. Presets and hashing live in `chat-demo-replies.ts`.
 
 ## Bottom following and user control
 
@@ -60,7 +97,7 @@ Following is explicit state, not a value recomputed from distance on every scrol
 The bottom-zone distance is `max(0, scrollHeight - clientHeight - scrollTop)`. The component defaults
 to a 2px threshold; the stories also offer 20px to expose edge cases. Being inside this zone does not
 by itself enable following, and moving outside it during a programmatic animation does not disable
-following. A separate 0.5px geometry tolerance identifies a settled bottom and our own scroll writes.
+following. A separate 0.5px geometry tolerance identifies a settled bottom and equivalent spring targets.
 
 ### Giving control to the user
 
@@ -90,11 +127,29 @@ from detached history, and that new scroll remains interruptible.
 
 ### Separating layout movement from user scrolling
 
-Every programmatic write records the actual resulting `scrollTop`, including browser rounding, so
-its later native `scroll` event is not interpreted as user intent. Changes in content or viewport
-height also distinguish layout-driven movement. Explicit layout-animation ticks must still run when
-integer `scrollHeight` is unchanged: a fractional collapse can clamp `scrollTop` by 0.5px. Skipping
-that tick previously caused typing-off to be misclassified as an upward user scroll.
+The controller uses one position-observation cursor for both layout callbacks and native `scroll`
+events. Every programmatic write records its actual resulting position immediately, including
+browser rounding. A later or coalesced event therefore has no unobserved movement to interpret.
+The layout cache used to decide whether a spring needs retargeting is separate from this cursor.
+
+A native upward displacement counts as a browser clamp only when the scroll range shrank and the
+position reached the new bottom boundary. Fractional content/viewport measurements detect changes
+that integer `scrollHeight` misses; the boundary comparison allows 1px for integer rounding. This
+is not the configurable follow threshold. A layout change alone never excuses arbitrary scrolling.
+
+Reconcile position **before** updating the layout cache or taking any early return, including while
+`animating`. Either callback can arrive first. In the interrupted-send regression, typing replacement
+shortened the list and the browser clamped `scrollTop`. The layout callback updated the old height
+before the queued `scroll` arrived, erasing evidence of the shrink. The stale position then looked
+like user input, detached following, and left the flight waiting forever for the real row to arrive.
+Keep this ownership rule in the controller; do not add per-message suppression flags or timeout
+windows. Genuine upward wheel/pointer/key input still detaches immediately, and unowned movement
+away from the new boundary remains user-controlled even during a layout animation.
+
+`scripts/test-chat-scroll-ownership.mjs` covers both callback orders, duplicate events, integer and
+fractional clamps during catch-up, and real escape during resizing. It also runs the fresh-page
+0.25x `Hey!` → scroll up → multiline bullet send → automatic replies regression without a rescue
+scroll. Composer resize, typing exit/replacement, and future row types share the same policy.
 
 First mount waits for the complete layout, including composer measurement and bottom clearance,
 then positions at the bottom before paint without animation. At an already settled bottom, composer
@@ -238,10 +293,10 @@ subsequent native scroll event from being mistaken for an upward user scroll.
 ## Parameters and interruption
 
 Springs use natural angular frequency / damping ratio, converted to Motion's physical parameters
-by the shared helper: `22 / 0.8` for flight, `28 / 1` for scrolling, destination compensation, and
-typing exit visuals, `32 / 1` for typing and message entrance visuals, and `35 / 1` for message
+by the shared helper: `18 / 0.8` for flight, `22 / 1` for scrolling, destination compensation, and
+typing exit visuals, `26 / 1` for typing and message entrance visuals, and `28 / 1` for message
 insertion and typing placeholder height changes.
-Mass defaults to 1. Vertical flight progress starts 80ms later. The story's animation speed control
+Mass defaults to 1. Vertical flight progress starts 100ms later. The story's animation speed control
 applies to all of these animations.
 
 An upward wheel gesture, a pointer press in the scrolling area, or a scroll key cancels the flight

@@ -17,7 +17,7 @@ try {
   const indicator = page.locator('[data-slot="typing-bubble"]');
   const toggle = page.getByRole('button', { name: /^Typing (on|off)$/ });
   const lastMessage = viewport.locator('[data-message-id]').last();
-  const receive = page.getByRole('button', { name: 'Receive a message', exact: true });
+  const receive = page.getByRole('button', { name: 'Receive a message and turn typing off', exact: true });
   const input = page.getByRole('textbox', { name: 'Message', exact: true });
   const top = () => viewport.evaluate((element) => element.scrollTop);
   const settled = () =>
