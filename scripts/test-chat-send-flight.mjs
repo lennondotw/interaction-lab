@@ -308,7 +308,12 @@ try {
       // the intended quarter-speed motion but below the witnessed 16px jump.
       const allowedTravel = 6 * Math.max(1, (current.time - previous.time) / (1000 / 60));
       assert.ok(Math.abs(current.top - previous.top) < allowedTravel, 'No jump when the destination moves');
-      assert.ok(current.width <= before.width + 1, 'The original shape never restarts from composer width');
+      // An underdamped shrink can undershoot the final width, then recover.
+      // That recovery must not be confused with restarting from composer width.
+      assert.ok(
+        current.width <= Math.max(before.width, current.targetWidth) + 1,
+        'The original shape never restarts from composer width'
+      );
     }
     const lastFlying = burstFrames.findLast((frame) => frame.flying);
     assert.ok(Math.abs(lastFlying.top - lastFlying.actualTop) <= 1, 'Compensation settles before handoff');

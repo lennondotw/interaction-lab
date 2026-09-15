@@ -6,12 +6,12 @@ import { hasChatLayoutAnimation, projectedChatY } from '../chat-scroll-container
 
 import './chat-send-flight.css';
 
-export const chatSendFlightSpring = toSpringPhysics({ angularFrequency: 22, dampingRatio: 0.8 });
-export const chatSendFlightLag = 80;
+export const chatSendFlightSpring = toSpringPhysics({ angularFrequency: 18, dampingRatio: 0.8 });
+export const chatSendFlightLag = 100;
 const springOptions = { ...chatSendFlightSpring, keyframes: [0, 1] };
 const destinationSpring = {
   type: 'spring',
-  ...toSpringPhysics({ angularFrequency: 28, dampingRatio: 1 }),
+  ...toSpringPhysics({ angularFrequency: 22, dampingRatio: 1 }),
   restDelta: 0.1,
   restSpeed: 1,
 } as const;

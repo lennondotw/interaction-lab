@@ -3,19 +3,19 @@ import { animate, cancelFrame, frame } from 'motion/react';
 
 export const chatPresenceSpring = {
   type: 'spring',
-  ...toSpringPhysics({ angularFrequency: 28, dampingRatio: 1 }),
+  ...toSpringPhysics({ angularFrequency: 22, dampingRatio: 1 }),
   restDelta: 0.001,
   restSpeed: 0.01,
 } as const;
 
 export const chatEnterSpring = {
   ...chatPresenceSpring,
-  ...toSpringPhysics({ angularFrequency: 32, dampingRatio: 1 }),
+  ...toSpringPhysics({ angularFrequency: 26, dampingRatio: 1 }),
 } as const;
 
 export const chatLayoutSpring = {
   ...chatPresenceSpring,
-  ...toSpringPhysics({ angularFrequency: 35, dampingRatio: 1 }),
+  ...toSpringPhysics({ angularFrequency: 28, dampingRatio: 1 }),
 } as const;
 
 export const chatEnterOffset = 20;

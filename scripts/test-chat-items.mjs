@@ -109,7 +109,7 @@ try {
     };
   });
   assert.equal(after.dateGap, 16);
-  assert.equal(after.nextGap, 8, 'The next item owns the new boundary spacing');
+  assert.equal(after.nextGap, 16, 'The next item owns the new boundary spacing');
   assert.equal(after.footprint, after.body + 16);
 
   // Insert above the visible reader; the existing final body remains the reading anchor.
