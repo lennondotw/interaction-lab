@@ -26,7 +26,7 @@ interface Options {
 
 const spring = {
   type: 'spring',
-  ...toSpringPhysics({ angularFrequency: 28, dampingRatio: 1 }),
+  ...toSpringPhysics({ angularFrequency: 22, dampingRatio: 1 }),
   restDelta: 0.1,
   restSpeed: 1,
 } as const;
@@ -39,8 +39,6 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   let reason = 'Initial position';
   let generation = 0;
   let reportFrame = 0;
-  let previousTop = viewport.scrollTop;
-  let writtenTop: number | undefined;
   let anchorRemainder = 0;
   let previousHeight = viewport.scrollHeight;
   let previousViewportHeight = viewport.clientHeight;
@@ -53,6 +51,48 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   const position = motionValue(viewport.scrollTop);
   const bottom = () => Math.max(0, viewport.scrollHeight - viewport.clientHeight);
   const distance = () => Math.max(0, bottom() - viewport.scrollTop);
+
+  function readScrollPosition() {
+    return {
+      top: viewport.scrollTop,
+      bottom: bottom(),
+      // Integer scrollHeight misses fractional clamps at non-default browser zoom.
+      contentHeight: content.getBoundingClientRect().height,
+      viewportHeight: viewport.getBoundingClientRect().height,
+    };
+  }
+  let observedScroll = readScrollPosition();
+
+  function observeScroll() {
+    const previous = observedScroll;
+    const current = readScrollPosition();
+    const delta = current.top - previous.top;
+    const rangeShrank =
+      current.bottom < previous.bottom ||
+      current.contentHeight < previous.contentHeight ||
+      current.viewportHeight > previous.viewportHeight;
+    // A browser clamp can precede either the layout callback or the scroll event.
+    // Consume both through ONE position cursor, independently of the layout cache
+    // below. Advancing previousHeight alone loses the evidence of a shrink before
+    // its queued scroll arrives (e.g. typing replacement during a send flight).
+    // Only movement to the new lower boundary is a clamp. A layout change does
+    // not grant a blanket exemption to user scrolling elsewhere in the viewport.
+    // scrollHeight/clientHeight are integers; the actual boundary can differ by
+    // up to one CSS pixel. This is rounding tolerance, not the bottom-zone setting.
+    const clamped = delta < 0 && rangeShrank && Math.abs(current.top - current.bottom) <= 1;
+    observedScroll = current;
+    if (!clamped && delta !== 0) {
+      anchorRemainder = 0;
+      if (pointerHeld) pointerMovedDown = delta > 0;
+      if (delta < 0) detach('User scrolled up');
+      else if (mode === 'detached' && !pointerHeld && distance() <= options.threshold) {
+        mode = 'following';
+        reason = 'User returned to bottom zone';
+        // Restore eligibility without pulling the remaining threshold pixels into place.
+      }
+    }
+    return Math.abs(previous.bottom - previous.top) <= positionTolerance;
+  }
 
   function report() {
     if (!options.onStateChange || reportFrame) return;
@@ -73,8 +113,9 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
 
   function write(top: number) {
     viewport.scrollTop = Math.max(0, Math.min(bottom(), top));
-    writtenTop = viewport.scrollTop;
-    previousTop = viewport.scrollTop;
+    // Record the actual (possibly rounded/clamped) result immediately. A delayed
+    // or coalesced scroll event then has zero delta; ownership never expires on a timer.
+    observedScroll = readScrollPosition();
     report();
   }
 
@@ -83,7 +124,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     mode = 'detached'; // Close the write gate before stopping/resetting MotionValue.
     generation++;
     position.jump(viewport.scrollTop);
-    previousTop = viewport.scrollTop;
+    observedScroll = readScrollPosition();
     reason = cause;
     report();
   }
@@ -136,6 +177,9 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   ) {
     // Wait for the complete initial layout, including composer clearance.
     if (!initialLayoutMeasured) return;
+    // Reconcile before any early return or layout-cache update, even while a spring
+    // is animating. Native clamps are observations, not new user intent or writes.
+    const wasAtBottom = observeScroll();
     const bottomPadding = Number.parseFloat(getComputedStyle(content).paddingBottom);
     const paddingDelta = bottomPadding - previousBottomPadding;
     // ResizeObserver can report a frame already applied by an insertion callback.
@@ -156,10 +200,6 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       report();
       return;
     }
-    // Shrinking clearance can clamp scrollTop before ResizeObserver runs. Compare
-    // the previously recorded geometry, not that already-clamped DOM position.
-    const wasAtBottom =
-      Math.abs(Math.max(0, previousHeight - previousViewportHeight) - previousTop) <= positionTolerance;
     previousBottomPadding = bottomPadding;
     previousHeight = viewport.scrollHeight;
     previousViewportHeight = viewport.clientHeight;
@@ -186,24 +226,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function onScroll() {
-    const top = viewport.scrollTop;
-    const delta = top - previousTop;
-    const layoutChanged = previousHeight !== viewport.scrollHeight || previousViewportHeight !== viewport.clientHeight;
-    previousTop = top;
-    previousHeight = viewport.scrollHeight;
-    previousViewportHeight = viewport.clientHeight;
-    const ownScroll = writtenTop !== undefined && Math.abs(top - writtenTop) <= positionTolerance;
-    writtenTop = undefined;
-    if (!ownScroll && !layoutChanged) {
-      anchorRemainder = 0;
-      if (pointerHeld && delta !== 0) pointerMovedDown = delta > 0;
-      if (delta < 0) detach('User scrolled up');
-      else if (delta > 0 && mode === 'detached' && !pointerHeld && distance() <= options.threshold) {
-        mode = 'following';
-        reason = 'User returned to bottom zone';
-        // Restore eligibility without pulling the remaining threshold pixels into place.
-      }
-    }
+    observeScroll();
     report();
   }
 
