@@ -1,0 +1,99 @@
+@reference "../../../../packages/tailwindcss/tailwindcss.css";
+
+@layer components {
+  [data-slot='typing-bubble'] {
+    --typing-bubble-fill: #e5e5ea;
+    --typing-dot-dim: #b4b4ba;
+    --typing-dot-bright: #85858c;
+    --typing-period: 1.2s;
+    --typing-stagger: 0.2s;
+    /* Rounded from the supplied 2x reference. The 28px body leaves 5px below.
+       Keep this layout height in sync with padding-block × 2 + line-height
+       of [data-slot='message-bubble'] in ./message-bubble.css (currently 33px). */
+    display: flex;
+    flex: none;
+    align-items: flex-start;
+    width: 45px;
+    height: 33px;
+
+    @variant dark {
+      --typing-bubble-fill: #3a3a3d;
+      --typing-dot-dim: #5c5c5f;
+      --typing-dot-bright: #828284;
+    }
+  }
+
+  [data-slot='typing-bubble-body'] {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 100%;
+    height: 28px;
+    border-radius: 14px;
+    background: var(--typing-bubble-fill);
+  }
+
+  [data-slot='typing-bubble-body']::before,
+  [data-slot='typing-bubble-body']::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: var(--typing-bubble-fill);
+    pointer-events: none;
+  }
+
+  /* Two circles form the tail; neither changes the body's layout size. */
+  [data-slot='typing-bubble-body']::before {
+    left: 0;
+    bottom: -2px;
+    width: 10px;
+    height: 10px;
+  }
+
+  [data-slot='typing-bubble-body']::after {
+    left: -3.5px;
+    bottom: -5px;
+    width: 5px;
+    height: 5px;
+  }
+
+  [data-slot='typing-bubble-dot'] {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--typing-dot-dim);
+    /* Fixed phase offsets repeat without changing dot geometry or layout. */
+    animation: typing-bubble-color var(--typing-period) ease-in-out infinite;
+    animation-delay: calc(-1 * var(--typing-period));
+  }
+
+  [data-slot='typing-bubble-dot']:nth-child(2) {
+    animation-delay: calc(var(--typing-stagger) - var(--typing-period));
+  }
+
+  [data-slot='typing-bubble-dot']:nth-child(3) {
+    animation-delay: calc(2 * var(--typing-stagger) - var(--typing-period));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-slot='typing-bubble-dot'] {
+      animation: none;
+      background: var(--typing-dot-bright);
+    }
+  }
+
+  @keyframes typing-bubble-color {
+    0%,
+    100% {
+      background-color: var(--typing-dot-dim);
+    }
+
+    50% {
+      background-color: var(--typing-dot-bright);
+    }
+  }
+}

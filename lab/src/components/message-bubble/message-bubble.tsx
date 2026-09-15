@@ -25,7 +25,11 @@ export function MessageBubble({
       data-tail={tail || undefined}
       className={className}
     >
-      <div data-slot="message-bubble-content">{children}</div>
+      <div data-slot="message-bubble-content">
+        {children}
+        {/* A final newline needs a line box to preserve its trailing empty line. */}
+        {typeof children === 'string' && children.endsWith('\n') && <br aria-hidden="true" />}
+      </div>
     </div>
   );
 }

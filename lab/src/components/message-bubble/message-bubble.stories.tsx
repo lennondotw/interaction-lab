@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { MessageBubble } from './message-bubble.js';
+import { TypingBubble } from './typing-bubble.js';
 
 const meta = {
   title: 'Components/Message bubble',
@@ -28,6 +29,11 @@ export const Outgoing: Story = {};
 export const OutgoingWithoutTail: Story = { args: { tail: false } };
 export const Incoming: Story = { args: { variant: 'incoming' } };
 export const IncomingWithoutTail: Story = { args: { variant: 'incoming', tail: false } };
+
+export const Typing: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => <TypingBubble />,
+};
 
 /** Side-by-side comparison isolates the effect of direction and tail on the same text. */
 export const AllVariants: Story = {
@@ -64,6 +70,8 @@ export const Multiline: Story = {
 export const SingleCharacter: Story = { args: { children: 'A' } };
 
 export const Empty: Story = { args: { children: '' } };
+
+export const Whitespace: Story = { args: { children: '\n  Room around these words.  \n\n' } };
 
 export const UnbrokenText: Story = {
   args: { children: 'OneVeryLongUnbrokenWordThatKeepsGoingUntilItNeedsToWrapOntoAnotherLine' },

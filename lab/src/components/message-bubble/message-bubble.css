@@ -2,8 +2,8 @@
 
 @layer components {
   [data-slot='message-bubble'] {
-    /* Insets inferred from the Figma body's 162 × 36 / text box's 136 × 18.
-       Typography is intentionally 14/17; the corner radius remains an
+    /* Tuned to 8px vertical insets and 14/17 typography (33px for one line).
+       Horizontal insets follow the reference; the corner radius remains an
        optical approximation of the reference. */
     --message-bubble-fill: #2196ff;
     position: relative;
@@ -13,7 +13,9 @@
     width: fit-content;
     min-width: 38px;
     max-width: 100%;
-    padding: 9px 13px;
+    /* Keep padding-block × 2 + line-height in sync with the layout height of
+       [data-slot='typing-bubble'] in ./typing-bubble.css (currently 33px). */
+    padding: 8px 13px;
     border-radius: 18px;
     background: var(--message-bubble-fill);
     color: #fff;
@@ -23,7 +25,7 @@
     line-height: 17px;
     letter-spacing: 0;
     text-align: start;
-    white-space: pre-wrap;
+    white-space: break-spaces;
     overflow-wrap: anywhere;
   }
 
