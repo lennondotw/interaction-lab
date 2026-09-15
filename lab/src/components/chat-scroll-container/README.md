@@ -4,6 +4,49 @@ The `With Message Input` story combines the scroll container, composer, and send
 The list owns layout and scrolling; a visual copy handles the transition from composer to bubble.
 The story connects the flight hook explicitly; it is not built into `ChatScrollContainer`.
 
+## List items and spacing ownership
+
+Use `items` for a heterogeneous list of `ChatMessage` and `ChatContentItem`. The existing `messages`
+prop remains a shorthand for a message-only list; `items` takes precedence if both are supplied.
+IDs must be stable and unique across every item type. Custom items use `kind: 'content'` and accept
+React content, so dates and unread markers do not require changes to the insertion engine.
+
+The list has zero gap and its item boxes touch edge to edge. Each item owns its **leading** space,
+including that space in its measured footprint in both natural layout and animated layout. The first
+item has no leading gap; adjacent messages from the same side use 3px, and other boundaries use 8px.
+An item's `gapBefore` overrides that boundary's default. Outer list padding and composer clearance
+remain container responsibilities. Custom content should keep its external spacing in `gapBefore`.
+
+Inserting an item immediately updates the logical order, grouping, and tails. It can also change the
+next item's leading gap; both slots transition toward their new targets in the same layout update.
+Measurement and reading anchors use the generic item body, without depending on bubble markup.
+
+Every newly inserted item uses the shared expanding layout slot and, by default, **opacity 0 to 1
+with a 20px upward entrance**. Content stays full size and top aligned after its owned leading gap;
+shrinking or growing the slot never bottom-aligns or clips that content. Layout uses the 35 / 1
+spring; the default visual entrance uses 32 / 1. Initial history renders without entrance animation.
+Composer flight and typing-to-message crossfade remain explicit special cases. Typing keeps its
+reversible exit lifecycle while using the same spacing ownership and top alignment. This does not
+add a general removal animation for arbitrary items.
+
+```tsx
+<ChatScrollContainer
+  items={[
+    { id: 'hello', variant: 'incoming', content: 'Hello.' },
+    {
+      id: 'date',
+      kind: 'content',
+      gapBefore: 16,
+      content: <time dateTime="2026-09-15">Tuesday, September 15</time>,
+    },
+    { id: 'reply', variant: 'outgoing', content: 'Good morning.', gapBefore: 16 },
+  ]}
+/>
+```
+
+The `Mixed Items` story inserts a date before the final item and appends a plain notice, both using
+the default entrance. It also exercises the next message's gap changing when a date splits a group.
+
 ## Bottom following and user control
 
 Following is explicit state, not a value recomputed from distance on every scroll event.
