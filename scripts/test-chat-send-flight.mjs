@@ -7,6 +7,27 @@ const browser = await chromium.launch();
 const base = process.env.STORYBOOK_URL ?? 'http://localhost:6009';
 try {
   const page = await browser.newPage({ viewport: { width: 1000, height: 900 }, reducedMotion: 'no-preference' });
+  // Independently measure the fully expanded DOM, without changing rendered layout.
+  await page.addInitScript(() => {
+    window.finalMessageTop = (viewport, target) => {
+      const slots = [...viewport.querySelectorAll('[data-chat-inserting]')];
+      const styles = slots.map((row) => [row.style.cssText, row.querySelector('[data-message-id]').style.cssText]);
+      for (const row of slots) {
+        const bubble = row.querySelector('[data-message-id]');
+        row.style.removeProperty('height');
+        row.style.removeProperty('margin-top');
+        bubble.style.removeProperty('margin-top');
+      }
+      const top =
+        target.getBoundingClientRect().top -
+        Math.max(0, viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop);
+      slots.forEach((row, index) => {
+        row.style.cssText = styles[index][0];
+        row.querySelector('[data-message-id]').style.cssText = styles[index][1];
+      });
+      return top;
+    };
+  });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(
@@ -19,6 +40,8 @@ try {
       const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
       return (
         document.querySelector('#storybook-root strong')?.textContent === 'following' &&
+        !viewport.querySelector('[data-chat-inserting]') &&
+        !document.querySelector('[data-chat-send-flight]') &&
         viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 1
       );
     });
@@ -104,12 +127,14 @@ try {
     ''
   );
 
-  // The button fills a wide composer before sending. Final bubble wrapping is
-  // taller, so its unscaled text must stay inside the animated body.
+  // Explicit long input keeps wrapping coverage independent of short demo-button copy.
+  // Final bubble wrapping is taller, so text must stay inside the animated body.
+  await input.fill(
+    'I like the idea of leaving the afternoon open. We could start with a short walk and see where we end up, without trying to fit too many things into one day.\n\nI will bring my camera in case the light is good, but I am equally happy to just sit somewhere and talk.'
+  );
+  await settled();
   await page.evaluate(() => {
     window.longFlightFrames = [];
-    window.originalRandom = Math.random;
-    Math.random = () => 0.8;
     const observer = new MutationObserver(() => {
       const carrier = document.querySelector('[data-chat-send-flight]');
       if (!carrier) return;
@@ -124,10 +149,9 @@ try {
     observer.observe(document.querySelector('#storybook-root'), { subtree: true, childList: true, attributes: true });
     window.stopLongSampling = () => {
       observer.disconnect();
-      Math.random = window.originalRandom;
     };
   });
-  await page.getByRole('button', { name: 'Send a message', exact: true }).click();
+  await input.press('Enter');
   await page.waitForFunction(() => window.longFlightFrames.length > 0);
   await page.screenshot({ path: '/tmp/chat-send-flight-long-clipped.png' });
   await page.waitForFunction(() => !document.querySelector('[data-chat-send-flight]'));
@@ -141,7 +165,7 @@ try {
   );
   for (const frame of longFrames) {
     assert.equal(frame.overflow, 'clip');
-    assert.ok(Math.abs(frame.text.top - frame.body.top - 9) < 1, 'First line retains its top inset');
+    assert.ok(Math.abs(frame.text.top - frame.body.top - 8) < 1, 'First line retains its top inset');
     for (const key of ['x', 'y', 'width', 'height']) {
       assert.ok(Math.abs(frame.clip[key] - frame.body[key]) < 1, 'Text clipping follows the visual body');
     }
@@ -167,7 +191,7 @@ try {
           time: performance.now(),
           flying: Boolean(carrier),
           top: (carrier ?? target).getBoundingClientRect().top,
-          predicted: target.getBoundingClientRect().top - remaining,
+          predicted: window.finalMessageTop(viewport, target),
           remaining,
           visibility: getComputedStyle(target).visibility,
         });
@@ -224,13 +248,91 @@ try {
   await input.press('Enter');
   await page.waitForFunction(() => !document.querySelector('[data-chat-send-flight]'));
   assert.equal(await viewport.locator('[data-message-id][style*="hidden"]').count(), 0);
+
+  // A second identical message moves the first destination by one row. Exercise
+  // both mid-flight and late retargeting without restarting the first shape.
+  await page.getByText('0.25×', { exact: true }).click();
+  for (const sendGap of [500, 1400]) {
+    await settled();
+    await page.evaluate(() => {
+      window.burstFrames = [];
+      let first;
+      let running = true;
+      window.stopBurstSampling = () => {
+        running = false;
+      };
+      function sample() {
+        const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
+        const carriers = [...document.querySelectorAll('[data-chat-send-flight]')];
+        first ??= carriers[0];
+        if (first) {
+          const target = viewport.querySelector(`[data-message-id="${first.dataset.messageId}"]`);
+          const flying = first.isConnected;
+          const body = (flying ? first : target).getBoundingClientRect();
+          const actual = target.getBoundingClientRect();
+          window.burstFrames.push({
+            time: performance.now(),
+            flying,
+            count: carriers.length,
+            top: body.top,
+            width: body.width,
+            targetWidth: actual.width,
+            actualTop: actual.top,
+            destination: window.finalMessageTop(viewport, target),
+          });
+        }
+        if (running) requestAnimationFrame(sample);
+      }
+      requestAnimationFrame(sample);
+    });
+    await input.fill('1');
+    await input.press('Enter');
+    await page.waitForTimeout(sendGap);
+    await input.fill('1');
+    await input.press('Enter');
+    await page.waitForFunction(() => window.burstFrames.some((frame) => !frame.flying));
+    await page.waitForFunction(() => !document.querySelector('[data-chat-send-flight]'));
+    const burstFrames = await page.evaluate(() => {
+      window.stopBurstSampling();
+      return window.burstFrames;
+    });
+    const insertion = burstFrames.findIndex((frame) => frame.count === 2);
+    assert.ok(insertion > 0, 'Both identical messages overlap in flight');
+    const before = burstFrames[insertion - 1];
+    assert.ok(Math.abs(burstFrames[insertion].destination - before.destination + 36) < 1);
+    const boundary = burstFrames.filter((frame) => frame.time >= before.time && frame.time <= before.time + 120);
+    for (let index = 1; index < boundary.length; index++) {
+      const previous = boundary[index - 1];
+      const current = boundary[index];
+      // Allow 6px per 60Hz frame (scaled for missed frames), comfortably above
+      // the intended quarter-speed motion but below the witnessed 16px jump.
+      const allowedTravel = 6 * Math.max(1, (current.time - previous.time) / (1000 / 60));
+      assert.ok(Math.abs(current.top - previous.top) < allowedTravel, 'No jump when the destination moves');
+      assert.ok(current.width <= before.width + 1, 'The original shape never restarts from composer width');
+    }
+    const lastFlying = burstFrames.findLast((frame) => frame.flying);
+    assert.ok(Math.abs(lastFlying.top - lastFlying.actualTop) <= 1, 'Compensation settles before handoff');
+    if (sendGap === 1400) {
+      assert.ok(
+        burstFrames.some(
+          (frame) =>
+            frame.flying &&
+            Math.abs(frame.width - frame.targetWidth) < 0.1 &&
+            Math.abs(frame.top - frame.destination) > 2
+        ),
+        'Shape finishes while the independent destination compensation is still moving'
+      );
+    }
+    assert.equal(await viewport.locator('[data-message-id][style*="hidden"]').count(), 0);
+  }
+  await page.getByText('1×', { exact: true }).click();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await input.fill('Without motion.');
   await input.press('Enter');
   assert.equal(await page.locator('[data-chat-send-flight]').count(), 0);
   assert.deepEqual(errors, []);
   console.log(
-    `PASS: ${frames.length} flight samples; measured multi-line departure, moving arrival, text scale, tail, interruption, burst cleanup, reduced motion.`
+    `PASS: ${frames.length} flight samples; measured multi-line departure, moving arrival, text scale, tail, interruption, continuous burst retargeting, handoff, reduced motion.`
   );
 } finally {
   await browser.close();

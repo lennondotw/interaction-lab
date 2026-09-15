@@ -36,14 +36,87 @@ try {
     await waitMode('following');
     await page.waitForFunction(() => {
       const element = document.querySelector('[data-slot="chat-scroll-viewport"]');
-      return element.scrollHeight - element.clientHeight - element.scrollTop < 1;
+      return (
+        !element.querySelector('[data-chat-inserting]') &&
+        element.scrollHeight - element.clientHeight - element.scrollTop < 1
+      );
     });
   }
 
   await settle();
+  // A zoomed browser can clamp scrollTop by half a CSS pixel while its integer
+  // scrollHeight stays unchanged. This must remain a layout-owned scroll.
+  const fractionalClamp = await page.evaluate(async () => {
+    const { createChatScrollController } =
+      await import('/src/components/chat-scroll-container/chat-scroll-controller.ts');
+    const viewport = document.createElement('div');
+    viewport.style.cssText =
+      'position:fixed;inset:0 auto auto 0;width:100px;height:100px;overflow:auto;overflow-anchor:none;zoom:2';
+    const content = document.createElement('div');
+    content.style.cssText = 'height:200px;padding-bottom:0';
+    viewport.append(content);
+    document.body.append(viewport);
+    const modes = [];
+    const controller = createChatScrollController(viewport, content, {
+      threshold: 20,
+      reducedMotion: false,
+      animationSpeed: 1,
+      onStateChange: (state) => modes.push(state.mode),
+    });
+    const flush = async () => {
+      for (let frame = 0; frame < 3; frame++) await new Promise(requestAnimationFrame);
+    };
+    try {
+      await flush();
+      const before = { top: viewport.scrollTop, height: viewport.scrollHeight };
+      content.style.height = '199.5px';
+      controller.contentChanged(false, { animatedLayout: true });
+      await flush();
+      return { before, after: { top: viewport.scrollTop, height: viewport.scrollHeight }, modes };
+    } finally {
+      controller.dispose();
+      viewport.remove();
+    }
+  });
+  assert.equal(fractionalClamp.after.height, fractionalClamp.before.height);
+  assert.equal(fractionalClamp.before.top - fractionalClamp.after.top, 0.5);
+  assert.ok(fractionalClamp.modes.length > 1);
+  assert.ok(
+    fractionalClamp.modes.every((mode) => mode === 'following'),
+    'Fractional collapse retains following'
+  );
+
+  // Sends without a composer paint a full-size visual outside the layout surface.
+  await page.getByText('0.25×', { exact: true }).click();
+  await send.click();
+  await viewport.locator('[data-chat-inserting]').waitFor({ state: 'attached' });
+  const sendVisual = await viewport.evaluate((viewport) => {
+    const row = viewport.querySelector('[data-chat-inserting]');
+    const bubble = row.querySelector('[data-message-id]');
+    const visual = viewport.parentElement.querySelector('[data-chat-entrance]');
+    return {
+      overflow: getComputedStyle(row).overflow,
+      slotHeight: row.getBoundingClientRect().height,
+      bodyHeight: bubble.getBoundingClientRect().height,
+      topGap: bubble.getBoundingClientRect().top - row.getBoundingClientRect().top,
+      sourceHidden: getComputedStyle(bubble).visibility === 'hidden',
+      visualHeight: visual?.getBoundingClientRect().height,
+      visualOutsideScroller: visual != null && !viewport.contains(visual),
+    };
+  });
+  assert.equal(sendVisual.overflow, 'visible');
+  assert.ok(sendVisual.slotHeight < sendVisual.bodyHeight);
+  assert.equal(sendVisual.topGap, 3, 'Bubble stays at the top of its slot after the same-group gap');
+  assert.ok(sendVisual.sourceHidden && sendVisual.visualOutsideScroller);
+  assert.equal(sendVisual.visualHeight, sendVisual.bodyHeight, 'Full bubble height is independent of slot height');
+  await settle();
+  await page.locator('[data-chat-entrance]').waitFor({ state: 'detached' });
+  await page.getByText('1×', { exact: true }).click();
+
   await receive.click();
-  await waitMode('animating');
-  assert.ok((await geometry()).distance > 20, 'Following survives distance beyond the debug threshold');
+  await viewport.locator('[data-chat-inserting]').waitFor({ state: 'attached' });
+  assert.equal(await mode.textContent(), 'following', 'Settled following uses the expanding layout directly');
+  assert.ok((await geometry()).distance <= 1, 'The current layout remains pinned throughout entry');
   await settle();
 
   await wheel(-5);
@@ -155,12 +228,15 @@ try {
   assert.ok(
     await composerPage
       .locator('[data-slot="chat-scroll-viewport"]')
-      .evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop > 1),
+      .evaluate((element) => Boolean(element.querySelector('[data-chat-inserting]'))),
     'Messages after mount still animate'
   );
   await composerPage.waitForFunction(() => {
     const element = document.querySelector('[data-slot="chat-scroll-viewport"]');
-    return element.scrollHeight - element.clientHeight - element.scrollTop < 1;
+    return (
+      !element.querySelector('[data-chat-inserting]') &&
+      element.scrollHeight - element.clientHeight - element.scrollTop < 1
+    );
   });
   const composerViewport = composerPage.locator('[data-slot="chat-scroll-viewport"]');
   const composerGeometry = () =>
@@ -175,7 +251,10 @@ try {
   await composer.pressSequentially('Second line');
   await composerPage.waitForFunction(() => {
     const element = document.querySelector('[data-slot="chat-scroll-viewport"]');
-    return element.scrollHeight - element.clientHeight - element.scrollTop < 1;
+    return (
+      !element.querySelector('[data-chat-inserting]') &&
+      element.scrollHeight - element.clientHeight - element.scrollTop < 1
+    );
   });
   const followingGrowth = await composerGeometry();
   assert.equal(followingGrowth.padding - beforeGrowth.padding, 17, 'Composer growth increases bottom clearance');
