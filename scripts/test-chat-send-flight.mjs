@@ -15,7 +15,7 @@ try {
       for (const row of slots) {
         const bubble = row.querySelector('[data-message-id]');
         row.style.removeProperty('height');
-        row.style.removeProperty('margin-top');
+        row.style.removeProperty('padding-top');
         bubble.style.removeProperty('margin-top');
       }
       const top =
