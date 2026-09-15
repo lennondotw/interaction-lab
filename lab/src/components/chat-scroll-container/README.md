@@ -161,8 +161,10 @@ gap so this tail change does not add a spacing jump. Reopening during exit rever
 progress and restores the normal row.
 
 Typing entry measures its natural 33px body and preceding gap before paint, then expands a temporary
-slot from zero to that complete footprint. Its visual fades in from 20px below and stays aligned to
-the slot's bottom, so following can make room smoothly without pushing typing under the composer.
+slot from zero to that complete footprint. Like message bubbles, its visual stays aligned to the
+slot's top after the preceding gap, for both entry and exit. Slot height never offsets that anchor;
+the separate 20px entrance transform fades it upward from below. It can initially pass behind the
+floating composer as the list makes room, then settles above it with the normal clearance.
 Pending entry height participates in the shared final-layout projection used by scrolling and flights.
 After expansion, the indicator returns to natural flow. Incoming messages use the same visual offset;
 all presence transitions share the story's animation speed control.

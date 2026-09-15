@@ -135,12 +135,8 @@ export function useTypingExit(
       layout.remaining = visible
         ? geometry.height - row.getBoundingClientRect().height
         : -row.getBoundingClientRect().height;
-      if (geometry.entry) {
-        const visual = row.querySelector<HTMLElement>('[data-slot="typing-bubble"]')!;
-        // Keep entry aligned to the slot's bottom. At a followed bottom only
-        // the requested 20px visual offset moves, while history makes room smoothly.
-        visual.style.top = `${geometry.gap - geometry.height * Math.max(0, Math.min(1, value))}px`;
-      }
+      // Entry and exit keep the declared top inset. Slot height only changes
+      // spacing; the independent visual offset supplies the entrance/exit motion.
       if (geometry.replacement?.isConnected) {
         const visual = row.querySelector<HTMLElement>('[data-slot="typing-bubble"]')!;
         visual.style.top = `${geometry.replacement.getBoundingClientRect().top - row.getBoundingClientRect().top}px`;
