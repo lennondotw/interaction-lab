@@ -52,6 +52,7 @@
        A clipped fill needs no background-colored cutout, so the bubble can
        sit on any canvas. The tail never changes the text's layout width. */
     content: '';
+    opacity: var(--message-bubble-tail-opacity, 1);
     position: absolute;
     left: 5px;
     bottom: -5px;

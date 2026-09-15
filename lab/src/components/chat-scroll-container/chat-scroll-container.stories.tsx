@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Segmented } from '#src/instruments/controls/controls.js';
 
 import { Button } from '../button/index.js';
+import { useChatSendFlight } from '../chat-send-flight/chat-send-flight.js';
 import { MessageInput } from '../message-input/index.js';
 import { ChatScrollContainer, type ChatMessage, type ChatScrollState } from './chat-scroll-container.js';
 
@@ -73,37 +74,103 @@ export const LongList: Story = {
   args: { className: 'size-full' },
 };
 
-function SendMessagesDemo() {
+function ChatDemo({ withMessageInput = false }: { withMessageInput?: boolean }) {
   const [chatMessages, setChatMessages] = useState(messages);
   const [threshold, setThreshold] = useState(20);
+  const [animationSpeed, setAnimationSpeed] = useState(1);
   const [scrollState, setScrollState] = useState<ChatScrollState>();
+  const [draft, setDraft] = useState('');
+  const [sendAfterLayout, setSendAfterLayout] = useState(false);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
+  const nextMessageId = useRef(messages.length + 1);
+  const depart = useChatSendFlight(hostRef, chatMessages, animationSpeed);
+
+  useLayoutEffect(() => {
+    const composer = composerRef.current;
+    const host = hostRef.current;
+    if (!composer || !host) return;
+    const measure = () =>
+      host.style.setProperty('--chat-composer-height', `${composer.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(composer);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!sendAfterLayout) return;
+    // The textarea resizes in its layout effect. Let ResizeObserver deliver
+    // composer clearance and bottom-position updates before submitting.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => composerRef.current?.requestSubmit());
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [sendAfterLayout]);
+
+  function sendMessage(variant: ChatMessage['variant'], content: string) {
+    const id = `message-${nextMessageId.current++}`;
+    if (variant === 'outgoing') depart(id);
+    setChatMessages((previous) => [...previous, { id, variant, content }]);
+  }
 
   function appendMessage(variant: ChatMessage['variant']) {
     const options = messageOptions[variant];
     const content = options[Math.floor(Math.random() * options.length)]!;
-    setChatMessages((previous) => [
-      ...previous,
-      {
-        id: `message-${previous.length + 1}`,
-        variant,
-        content,
-      },
-    ]);
+    if (withMessageInput && variant === 'outgoing') {
+      setDraft(content);
+      setSendAfterLayout(true);
+      return;
+    }
+    sendMessage(variant, content);
   }
 
   return (
     <div className="flex size-full flex-col gap-3">
-      <ChatScrollContainer
-        messages={chatMessages}
-        bottomThreshold={threshold}
-        onScrollStateChange={setScrollState}
-        className="flex-1"
-      />
+      <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
+        <ChatScrollContainer
+          messages={chatMessages}
+          bottomThreshold={threshold}
+          animationSpeed={animationSpeed}
+          onScrollStateChange={setScrollState}
+          className="col-start-1 row-start-1"
+          contentClassName={withMessageInput ? 'pb-[calc(var(--chat-composer-height,0px)+0.75rem)]' : undefined}
+        />
+        {withMessageInput && (
+          <form
+            ref={composerRef}
+            aria-label="Compose message"
+            className="pointer-events-none z-10 col-start-1 row-start-1 flex min-w-0 self-end p-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSendAfterLayout(false);
+              if (!draft.trim()) return;
+              sendMessage('outgoing', draft.trim());
+              setDraft('');
+            }}
+          >
+            <MessageInput
+              className="pointer-events-auto flex-1"
+              value={draft}
+              onChange={(event) => {
+                setSendAfterLayout(false);
+                setDraft(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
+          </form>
+        )}
+      </div>
       <div className="flex shrink-0 flex-wrap justify-center gap-2">
         <Button type="button" onClick={() => appendMessage('incoming')}>
           Receive a message
         </Button>
-        <Button type="button" onClick={() => appendMessage('outgoing')}>
+        <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
           Send a message
         </Button>
       </div>
@@ -125,6 +192,17 @@ function SendMessagesDemo() {
             />
           </fieldset>
         </div>
+        <fieldset
+          aria-label="Animation speed"
+          className="m-0 flex min-w-0 flex-wrap items-center justify-between gap-2 border-0 p-0"
+        >
+          <span>Animation speed</span>
+          <Segmented
+            options={[0.1, 0.25, 0.5, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
+            value={animationSpeed}
+            onChange={setAnimationSpeed}
+          />
+        </fieldset>
         <div className="grid grid-cols-2 gap-x-4">
           <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
           <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
@@ -141,65 +219,10 @@ function SendMessagesDemo() {
 
 export const SendMessages: Story = {
   parameters: { controls: { disable: true } },
-  render: () => <SendMessagesDemo />,
+  render: () => <ChatDemo />,
 };
-
-function WithMessageInputDemo() {
-  const [chatMessages, setChatMessages] = useState(messages);
-  const [draft, setDraft] = useState('');
-  const hostRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLFormElement>(null);
-
-  useLayoutEffect(() => {
-    const composer = composerRef.current;
-    const host = hostRef.current;
-    if (!composer || !host) return;
-    const measure = () =>
-      host.style.setProperty('--chat-composer-height', `${composer.getBoundingClientRect().height}px`);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(composer);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div ref={hostRef} className="grid size-full min-h-0 min-w-0">
-      <ChatScrollContainer
-        messages={chatMessages}
-        className="col-start-1 row-start-1"
-        contentClassName="pb-[calc(var(--chat-composer-height,0px)+0.75rem)]"
-      />
-      <form
-        ref={composerRef}
-        aria-label="Compose message"
-        className="pointer-events-none z-10 col-start-1 row-start-1 flex min-w-0 self-end p-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!draft.trim()) return;
-          setChatMessages((previous) => [
-            ...previous,
-            { id: `message-${previous.length + 1}`, variant: 'outgoing', content: draft.trim() },
-          ]);
-          setDraft('');
-        }}
-      >
-        <MessageInput
-          className="pointer-events-auto flex-1"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-        />
-      </form>
-    </div>
-  );
-}
 
 export const WithMessageInput: Story = {
   parameters: { controls: { disable: true } },
-  render: () => <WithMessageInputDemo />,
+  render: () => <ChatDemo withMessageInput />,
 };

@@ -18,6 +18,8 @@ export interface ChatMessage {
 export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'section'> {
   messages: readonly ChatMessage[];
   bottomThreshold?: number;
+  /** Playback rate for programmatic scrolling. Native gestures remain immediate. */
+  animationSpeed?: number;
   contentClassName?: string;
   onScrollStateChange?: (state: ChatScrollState) => void;
 }
@@ -26,6 +28,7 @@ export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'sect
 export function ChatScrollContainer({
   messages,
   bottomThreshold = 2,
+  animationSpeed = 1,
   contentClassName,
   onScrollStateChange,
   className,
@@ -42,6 +45,7 @@ export function ChatScrollContainer({
     const controller = createChatScrollController(viewportRef.current, contentRef.current, {
       threshold: 2,
       reducedMotion: true,
+      animationSpeed: 1,
     });
     controllerRef.current = controller;
     return () => {
@@ -54,9 +58,10 @@ export function ChatScrollContainer({
     controllerRef.current?.updateOptions({
       threshold: Math.max(0, bottomThreshold),
       reducedMotion: reducedMotion === true,
+      animationSpeed: Math.max(0.01, animationSpeed),
       onStateChange: onScrollStateChange,
     });
-  }, [bottomThreshold, reducedMotion, onScrollStateChange]);
+  }, [bottomThreshold, animationSpeed, reducedMotion, onScrollStateChange]);
 
   useLayoutEffect(() => {
     const previousIndex = messages.findIndex((message) => message.id === previousLastId.current);
@@ -89,7 +94,11 @@ export function ChatScrollContainer({
               key={message.id}
               className={cn('min-w-0 max-w-[80%]', message.variant === 'outgoing' ? 'self-end' : 'self-start')}
             >
-              <MessageBubble variant={message.variant} tail={messages[index + 1]?.variant !== message.variant}>
+              <MessageBubble
+                data-message-id={message.id}
+                variant={message.variant}
+                tail={messages[index + 1]?.variant !== message.variant}
+              >
                 {message.content}
               </MessageBubble>
             </li>

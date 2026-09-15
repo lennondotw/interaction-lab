@@ -1,3 +1,4 @@
+import { toSpringPhysics } from '@monorepo/utils';
 import { animate, motionValue } from 'motion/react';
 
 export type ChatScrollMode = 'following' | 'animating' | 'detached';
@@ -16,11 +17,16 @@ export interface ChatScrollState {
 interface Options {
   threshold: number;
   reducedMotion: boolean;
+  animationSpeed: number;
   onStateChange?: (state: ChatScrollState) => void;
 }
 
-// Critical damping: damping = 2 * sqrt(stiffness * mass).
-const spring = { type: 'spring', mass: 1, stiffness: 225, damping: 30, restDelta: 0.1, restSpeed: 1 } as const;
+const spring = {
+  type: 'spring',
+  ...toSpringPhysics({ angularFrequency: 28, dampingRatio: 1 }),
+  restDelta: 0.1,
+  restSpeed: 1,
+} as const;
 const positionTolerance = 0.5;
 
 /** Owns programmatic scrolling only; native input never has its default action cancelled. */
@@ -35,6 +41,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   let previousHeight = viewport.scrollHeight;
   let previousViewportHeight = viewport.clientHeight;
   let animationTarget = 0;
+  let animation: ReturnType<typeof animate> | undefined;
   let pointerHeld = false;
   let pointerMovedDown = false;
   let initialLayoutMeasured = false;
@@ -79,7 +86,8 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   function scrollToBottom(cause: string, { instant = false } = {}) {
     const target = bottom();
     if (mode === 'animating' && target === animationTarget && !options.reducedMotion && !instant) return;
-    const velocity = mode === 'animating' ? position.getVelocity() : 0;
+    // The generator runs in normal-speed time; MotionValue reports wall-clock velocity.
+    const velocity = mode === 'animating' ? position.getVelocity() / options.animationSpeed : 0;
     const run = ++generation;
     position.stop();
     mode = 'following';
@@ -93,7 +101,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     }
     mode = 'animating';
     report();
-    animate(position, target, {
+    animation = animate(position, target, {
       ...spring,
       velocity,
       onComplete: () => {
@@ -104,6 +112,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
         report();
       },
     });
+    animation.speed = options.animationSpeed;
   }
 
   const unsubscribe = position.on('change', (top) => {
@@ -211,6 +220,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     updateOptions(next: Options) {
       const needsReport = options.threshold !== next.threshold || (!options.onStateChange && next.onStateChange);
       options = next;
+      if (animation) animation.speed = options.animationSpeed;
       if (options.reducedMotion && mode === 'animating') scrollToBottom('Reduced motion');
       if (needsReport) report();
     },

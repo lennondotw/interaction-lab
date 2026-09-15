@@ -1,0 +1,30 @@
+@layer components {
+  [data-slot='chat-send-flight-layer'] {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: clip;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  [data-chat-send-flight] {
+    position: absolute;
+    max-width: none;
+    margin: 0;
+    transform-origin: center;
+    will-change: transform;
+  }
+
+  [data-slot='chat-send-flight-clip'] {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    border-radius: inherit;
+  }
+
+  [data-slot='chat-send-flight-clip'] > [data-slot='message-bubble-content'] {
+    position: absolute;
+    transform-origin: center top;
+  }
+}
