@@ -1,6 +1,9 @@
 import { toSpringPhysics } from '@monorepo/utils';
 import { animate, motionValue } from 'motion/react';
 
+import type { ReadingAnchor } from './chat-insertions.js';
+import { finalChatBottom } from './chat-layout.js';
+
 export type ChatScrollMode = 'following' | 'animating' | 'detached';
 
 export interface ChatScrollState {
@@ -38,6 +41,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   let reportFrame = 0;
   let previousTop = viewport.scrollTop;
   let writtenTop: number | undefined;
+  let anchorRemainder = 0;
   let previousHeight = viewport.scrollHeight;
   let previousViewportHeight = viewport.clientHeight;
   let animationTarget = 0;
@@ -60,7 +64,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
         nearBottom: distance() <= options.threshold,
         threshold: options.threshold,
         scrollTop: viewport.scrollTop,
-        target: bottom(),
+        target: finalChatBottom(viewport),
         velocity: mode === 'animating' ? position.getVelocity() : 0,
         reason,
       });
@@ -75,6 +79,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function detach(cause: string) {
+    anchorRemainder = 0;
     mode = 'detached'; // Close the write gate before stopping/resetting MotionValue.
     generation++;
     position.jump(viewport.scrollTop);
@@ -84,8 +89,14 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function scrollToBottom(cause: string, { instant = false } = {}) {
-    const target = bottom();
-    if (mode === 'animating' && target === animationTarget && !options.reducedMotion && !instant) return;
+    const target = instant ? bottom() : finalChatBottom(viewport);
+    if (
+      mode === 'animating' &&
+      Math.abs(target - animationTarget) <= positionTolerance &&
+      !options.reducedMotion &&
+      !instant
+    )
+      return;
     // The generator runs in normal-speed time; MotionValue reports wall-clock velocity.
     const velocity = mode === 'animating' ? position.getVelocity() / options.animationSpeed : 0;
     const run = ++generation;
@@ -119,11 +130,32 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     if (mode === 'animating') write(top);
   });
 
-  function contentChanged(localSend = false) {
+  function contentChanged(
+    localSend = false,
+    { animatedLayout = false, anchor }: { animatedLayout?: boolean; anchor?: ReadingAnchor } = {}
+  ) {
     // Wait for the complete initial layout, including composer clearance.
     if (!initialLayoutMeasured) return;
     const bottomPadding = Number.parseFloat(getComputedStyle(content).paddingBottom);
     const paddingDelta = bottomPadding - previousBottomPadding;
+    // ResizeObserver can report a frame already applied by an insertion callback.
+    // Do not turn that notification into a second scroll animation. A new natural
+    // row (such as typing) is a separate change and must still animate into view.
+    // Explicit layout ticks must run even when integer scrollHeight is unchanged:
+    // fractional shrinkage can still clamp scrollTop and needs to be recorded
+    // as layout-owned scrolling before the native scroll event arrives.
+    if (
+      !localSend &&
+      !animatedLayout &&
+      !anchor &&
+      paddingDelta === 0 &&
+      previousHeight === viewport.scrollHeight &&
+      previousViewportHeight === viewport.clientHeight &&
+      (mode !== 'animating' || Math.abs(finalChatBottom(viewport) - animationTarget) <= positionTolerance)
+    ) {
+      report();
+      return;
+    }
     // Shrinking clearance can clamp scrollTop before ResizeObserver runs. Compare
     // the previously recorded geometry, not that already-clamped DOM position.
     const wasAtBottom =
@@ -131,15 +163,23 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     previousBottomPadding = bottomPadding;
     previousHeight = viewport.scrollHeight;
     previousViewportHeight = viewport.clientHeight;
+    if (!localSend && mode === 'detached' && anchor?.element.isConnected) {
+      const requestedTop =
+        viewport.scrollTop + anchor.element.getBoundingClientRect().top - anchor.top + anchorRemainder;
+      write(requestedTop);
+      // Native scrollTop may round fractional CSS pixels. Carry that fraction
+      // into the next layout tick instead of accumulating visible reading drift.
+      anchorRemainder = Math.max(-1, Math.min(1, requestedTop - viewport.scrollTop));
+    }
     if (localSend || mode !== 'detached') {
-      // Only a settled bottom position follows composer resizing immediately.
+      // Only a settled bottom follows composer resizing or animated layout directly.
       // An active message spring simply receives the new target, without a position jump.
       if (paddingDelta !== 0 && !localSend && mode === 'following' && !wasAtBottom) {
         report();
         return;
       }
       scrollToBottom(localSend ? 'Local message sent' : paddingDelta !== 0 ? 'Composer resized' : 'Content resized', {
-        instant: paddingDelta !== 0 && mode === 'following' && wasAtBottom && !localSend,
+        instant: (paddingDelta !== 0 || animatedLayout) && mode === 'following' && wasAtBottom,
       });
     }
     report();
@@ -155,6 +195,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     const ownScroll = writtenTop !== undefined && Math.abs(top - writtenTop) <= positionTolerance;
     writtenTop = undefined;
     if (!ownScroll && !layoutChanged) {
+      anchorRemainder = 0;
       if (pointerHeld && delta !== 0) pointerMovedDown = delta > 0;
       if (delta < 0) detach('User scrolled up');
       else if (delta > 0 && mode === 'detached' && !pointerHeld && distance() <= options.threshold) {

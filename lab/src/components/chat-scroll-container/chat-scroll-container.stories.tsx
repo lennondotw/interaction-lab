@@ -50,6 +50,21 @@ const messageOptions: Record<ChatMessage['variant'], readonly string[]> = {
   ],
 };
 
+const composerMessageOptions = [
+  'Yes.',
+  'On my way!',
+  'That sounds good.',
+  'See you soon.',
+  'Let me grab my notebook.',
+  'I will meet you outside.',
+  'We can take the scenic route.',
+  'Thanks for the update.',
+  'I found a quiet place nearby.',
+  'Let us pick this up tomorrow.',
+  'The afternoon light looks lovely.',
+  'I will bring some coffee.',
+] as const;
+
 const meta = {
   title: 'Components/Chat scroll container',
   component: ChatScrollContainer,
@@ -74,13 +89,20 @@ export const LongList: Story = {
   args: { className: 'size-full' },
 };
 
-function ChatDemo({ withMessageInput = false }: { withMessageInput?: boolean }) {
+function ChatDemo({
+  withMessageInput = false,
+  withHistoryInsertion = false,
+}: {
+  withMessageInput?: boolean;
+  withHistoryInsertion?: boolean;
+}) {
   const [chatMessages, setChatMessages] = useState(messages);
   const [threshold, setThreshold] = useState(20);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [scrollState, setScrollState] = useState<ChatScrollState>();
   const [draft, setDraft] = useState('');
   const [sendAfterLayout, setSendAfterLayout] = useState(false);
+  const [incomingTyping, setIncomingTyping] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const nextMessageId = useRef(messages.length + 1);
@@ -110,12 +132,17 @@ function ChatDemo({ withMessageInput = false }: { withMessageInput?: boolean }) 
 
   function sendMessage(variant: ChatMessage['variant'], content: string) {
     const id = `message-${nextMessageId.current++}`;
-    if (variant === 'outgoing') depart(id);
-    setChatMessages((previous) => [...previous, { id, variant, content }]);
+    const entrance = withMessageInput && variant === 'outgoing' ? 'flight' : 'fade';
+    if (entrance === 'flight') depart(id);
+    if (variant === 'incoming') setIncomingTyping(false);
+    setChatMessages((previous) => [...previous, { id, variant, content, entrance }]);
   }
 
   function appendMessage(variant: ChatMessage['variant']) {
-    const options = messageOptions[variant];
+    const options =
+      withMessageInput && !withHistoryInsertion && variant === 'outgoing'
+        ? composerMessageOptions
+        : messageOptions[variant];
     const content = options[Math.floor(Math.random() * options.length)]!;
     if (withMessageInput && variant === 'outgoing') {
       setDraft(content);
@@ -125,11 +152,26 @@ function ChatDemo({ withMessageInput = false }: { withMessageInput?: boolean }) 
     sendMessage(variant, content);
   }
 
+  function insertInHistory(variant: ChatMessage['variant']) {
+    const id = `message-${nextMessageId.current++}`;
+    const message: ChatMessage = {
+      id,
+      variant,
+      entrance: 'fade',
+      content: 'A note inserted before the last message.\nThe surrounding conversation keeps its place.',
+    };
+    setChatMessages((previous) => {
+      const index = Math.max(0, previous.length - 1);
+      return [...previous.slice(0, index), message, ...previous.slice(index)];
+    });
+  }
+
   return (
     <div className="flex size-full flex-col gap-3">
       <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
         <ChatScrollContainer
           messages={chatMessages}
+          incomingTyping={withMessageInput && incomingTyping}
           bottomThreshold={threshold}
           animationSpeed={animationSpeed}
           onScrollStateChange={setScrollState}
@@ -145,7 +187,7 @@ function ChatDemo({ withMessageInput = false }: { withMessageInput?: boolean }) 
               event.preventDefault();
               setSendAfterLayout(false);
               if (!draft.trim()) return;
-              sendMessage('outgoing', draft.trim());
+              sendMessage('outgoing', draft);
               setDraft('');
             }}
           >
@@ -167,12 +209,32 @@ function ChatDemo({ withMessageInput = false }: { withMessageInput?: boolean }) 
         )}
       </div>
       <div className="flex shrink-0 flex-wrap justify-center gap-2">
+        {withHistoryInsertion && (
+          <>
+            <Button type="button" onClick={() => insertInHistory('incoming')}>
+              Insert incoming in history
+            </Button>
+            <Button type="button" onClick={() => insertInHistory('outgoing')}>
+              Insert outgoing in history
+            </Button>
+          </>
+        )}
         <Button type="button" onClick={() => appendMessage('incoming')}>
           Receive a message
         </Button>
         <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
           Send a message
         </Button>
+        {withMessageInput && (
+          <Button
+            type="button"
+            aria-pressed={incomingTyping}
+            allPossibleContents={['Typing on', 'Typing off']}
+            onClick={() => setIncomingTyping((previous) => !previous)}
+          >
+            {incomingTyping ? 'Typing on' : 'Typing off'}
+          </Button>
+        )}
       </div>
       <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-neutral-500/20 p-3 text-xs leading-5 text-neutral-600 tabular-nums dark:text-neutral-400">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -225,4 +287,9 @@ export const SendMessages: Story = {
 export const WithMessageInput: Story = {
   parameters: { controls: { disable: true } },
   render: () => <ChatDemo withMessageInput />,
+};
+
+export const InsertInHistory: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => <ChatDemo withMessageInput withHistoryInsertion />,
 };

@@ -1,12 +1,20 @@
 import { toSpringPhysics } from '@monorepo/utils';
-import { animate, calcGeneratorDuration, spring } from 'motion/react';
+import { animate, calcGeneratorDuration, motionValue, spring } from 'motion/react';
 import { useLayoutEffect, useRef, type RefObject } from 'react';
+
+import { hasChatLayoutAnimation, projectedChatY } from '../chat-scroll-container/chat-layout.js';
 
 import './chat-send-flight.css';
 
 export const chatSendFlightSpring = toSpringPhysics({ angularFrequency: 22, dampingRatio: 0.8 });
 export const chatSendFlightLag = 80;
 const springOptions = { ...chatSendFlightSpring, keyframes: [0, 1] };
+const destinationSpring = {
+  type: 'spring',
+  ...toSpringPhysics({ angularFrequency: 28, dampingRatio: 1 }),
+  restDelta: 0.1,
+  restSpeed: 1,
+} as const;
 export const chatSendFlightDuration = calcGeneratorDuration(spring(springOptions)) + chatSendFlightLag;
 
 interface Flight {
@@ -58,6 +66,7 @@ function startFlight(
   layer.inert = true;
   const carrier = target.cloneNode(true) as HTMLElement;
   carrier.removeAttribute('id');
+  carrier.style.margin = '0';
   carrier.dataset.chatSendFlight = '';
   const content = carrier.querySelector<HTMLElement>('[data-slot="message-bubble-content"]')!;
   const targetContent = target.querySelector<HTMLElement>('[data-slot="message-bubble-content"]')!;
@@ -71,13 +80,20 @@ function startFlight(
   host.append(layer);
   target.style.visibility = 'hidden';
   const generator = spring(springOptions);
+  const initialDestinationY = projectedChatY(viewport, target, readBox(target).y);
+  const destinationOffset = motionValue(0);
+  let destinationOffsetTarget = 0;
+  let playbackSpeed = speed;
+  let offsetAnimation: ReturnType<typeof animate> | undefined;
   let stopped = false;
   let arrivalFrame = 0;
   let animation: ReturnType<typeof animate> | undefined;
   const flight: Flight = {
     stop,
     setSpeed: (nextSpeed) => {
+      playbackSpeed = nextSpeed;
       if (animation) animation.speed = nextSpeed;
+      if (offsetAnimation) offsetAnimation.speed = nextSpeed;
     },
   };
 
@@ -85,6 +101,7 @@ function startFlight(
     if (stopped) return;
     stopped = true;
     animation?.stop();
+    destinationOffset.destroy();
     cancelAnimationFrame(arrivalFrame);
     target.style.visibility = originalVisibility;
     layer.remove();
@@ -99,7 +116,18 @@ function startFlight(
     // Project the real layout anchor to the bottom scroll position. Re-evaluate
     // clearance and later messages, but subtract scrolling that hasn't happened yet.
     const to = readBox(target);
-    const destinationY = to.y - remainingScroll();
+    const destinationY = projectedChatY(viewport, target, to.y);
+    const nextOffsetTarget = destinationY - initialDestinationY;
+    if (Math.abs(nextOffsetTarget - destinationOffsetTarget) > 0.01) {
+      destinationOffsetTarget = nextOffsetTarget;
+      // Only subsequent layout displacement follows a new target. The original
+      // flight clock and shape stay uninterrupted, even during a burst of sends.
+      offsetAnimation = animate(destinationOffset, destinationOffsetTarget, {
+        ...destinationSpring,
+        velocity: destinationOffset.getVelocity() / playbackSpeed,
+      });
+      offsetAnimation.speed = playbackSpeed;
+    }
     const textRect = targetContent.getBoundingClientRect();
     const hostRect = host.getBoundingClientRect();
     if (!to.width || !to.height) {
@@ -112,7 +140,7 @@ function startFlight(
     const scaleX = mix(from.width, to.width, horizontal) / to.width;
     const scaleY = mix(from.height, to.height, vertical) / to.height;
     const x = mix(from.x, to.x, horizontal) - to.x;
-    const y = mix(from.y, destinationY, vertical) - destinationY;
+    const y = mix(from.y, initialDestinationY, vertical) + destinationOffset.get() - destinationY;
     const corners = from.corners.map((radius, index) => mix(radius, to.corners[index]!, horizontal));
     Object.assign(carrier.style, {
       left: `${to.x - hostRect.x - to.width / 2}px`,
@@ -141,9 +169,16 @@ function startFlight(
 
   function arrive() {
     if (!paint(chatSendFlightDuration)) return;
-    // The short flight can finish before a long catch-up scroll. Keep its visual
-    // at the destination until the real row arrives, then hand off within one CSS pixel.
-    if (remainingScroll() <= 1) stop();
+    // Shape finishes on its original clock. Keep only the placement compensation
+    // alive until both it and the real row arrive, then hand off within one CSS pixel.
+    const handoffDistance = Math.abs(carrier.getBoundingClientRect().top - target.getBoundingClientRect().top);
+    if (
+      remainingScroll() <= 1 &&
+      !hasChatLayoutAnimation(viewport) &&
+      !destinationOffset.isAnimating() &&
+      handoffDistance <= 1
+    )
+      stop();
     else arrivalFrame = requestAnimationFrame(arrive);
   }
 

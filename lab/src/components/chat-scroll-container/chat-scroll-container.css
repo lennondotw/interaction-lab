@@ -1,9 +1,32 @@
 @layer components {
+  [data-slot='chat-entrance-layer'] {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  [data-chat-entrance] {
+    position: absolute;
+    max-width: none;
+    margin: 0;
+  }
+
   [data-slot='chat-scroll-viewport'] > ol > li + li {
     margin-top: 3px;
   }
 
   [data-slot='chat-scroll-viewport'] > ol > li:has(> [data-slot='message-bubble'][data-tail]) + li {
     margin-top: 8px;
+  }
+
+  /* Tail visibility follows intent immediately. Retain the typing row's group
+     gap while its natural footprint is captured for the exit placeholder. */
+  [data-slot='chat-scroll-viewport']
+    > ol
+    > li:has(> [data-slot='message-bubble'][data-variant='incoming'])
+    + [data-slot='chat-typing-row'] {
+    margin-top: 3px;
   }
 }
