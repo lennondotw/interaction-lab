@@ -80,6 +80,12 @@ function startFlight(
   host.append(layer);
   target.style.visibility = 'hidden';
   const generator = spring(springOptions);
+  const initialTarget = readBox(target);
+  const initialText = targetContent.getBoundingClientRect();
+  // Start at the normal bubble inset within the composer box. Express that
+  // position relative to its center, keeping the final text wrapping width.
+  const initialTextOffset =
+    -from.width / 2 + initialText.left - (initialTarget.x - initialTarget.width / 2) + initialText.width / 2;
   const initialDestinationY = projectedChatY(viewport, target, readBox(target).y);
   const destinationOffset = motionValue(0);
   let destinationOffsetTarget = 0;
@@ -155,10 +161,21 @@ function startFlight(
       '--message-bubble-tail-opacity',
       String(Math.max(0, Math.min(1, (vertical - 0.55) / 0.45)))
     );
+    // Shared spring progress keeps text and body motion synchronized. The linear
+    // factor preserves an approximately constant early inset; the fourth power
+    // delays centering until later. Weight and slope reach zero at q=1, so text
+    // shares the body's overshoot with continuous position and velocity.
+    // See chat-scroll-container/README.md: Text placement during flight.
+    const q = Math.max(0, Math.min(1, horizontal));
+    const offsetDecay = (1 - q) * (1 - q ** 4);
+    const targetTextOffset = textRect.left + textRect.width / 2 - to.x;
+    const textOffset = mix(targetTextOffset, initialTextOffset, offsetDecay);
     Object.assign(content.style, {
-      left: `${textRect.left - (to.x - to.width / 2)}px`,
-      // Keep the first line inside the visual top inset while the body is shorter
-      // than the final text layout. Additional lines are revealed below it.
+      // Convert the visual center offset to local top-left coordinates, then
+      // counter-scale text and insets so glyphs retain their natural dimensions.
+      left: `${to.width / 2 + (textOffset - textRect.width / 2) / scaleX}px`,
+      // Keep the first line at the visual top inset; reveal extra wrapped lines
+      // below it as the body grows. Horizontal centering does not affect this.
       top: `${(textRect.top - (to.y - to.height / 2)) / scaleY}px`,
       width: `${textRect.width}px`,
       height: `${textRect.height}px`,
