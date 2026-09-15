@@ -1,11 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { Segmented } from '#src/instruments/controls/controls.js';
 
 import { Button } from '../button/index.js';
 import { useChatSendFlight } from '../chat-send-flight/chat-send-flight.js';
 import { MessageInput } from '../message-input/index.js';
+import { createDemoReplyPlan, demoConversation, type DemoReplyPlan } from './chat-demo-replies.js';
 import {
   ChatScrollContainer,
   type ChatListItem,
@@ -77,9 +78,15 @@ const meta = {
   args: { messages },
   argTypes: { messages: { control: false } },
   decorators: [
-    (Story) => (
+    (Story, context) => (
       <div className="flex min-h-svh items-center justify-center px-4 py-8">
-        <div className="h-[min(640px,calc(100svh-64px))] w-full max-w-md">
+        <div
+          className={
+            context.parameters.happyPathGuide
+              ? 'grid w-full max-w-4xl grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]'
+              : 'h-[min(640px,calc(100svh-64px))] w-full max-w-md'
+          }
+        >
           <Story />
         </div>
       </div>
@@ -97,11 +104,13 @@ export const LongList: Story = {
 function ChatDemo({
   withMessageInput = false,
   withHistoryInsertion = false,
+  automaticReplies = false,
 }: {
   withMessageInput?: boolean;
   withHistoryInsertion?: boolean;
+  automaticReplies?: boolean;
 }) {
-  const [chatMessages, setChatMessages] = useState(messages);
+  const [chatItems, setChatItems] = useState<ChatListItem[]>(messages);
   const [threshold, setThreshold] = useState(20);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [scrollState, setScrollState] = useState<ChatScrollState>();
@@ -111,7 +120,18 @@ function ChatDemo({
   const hostRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const nextMessageId = useRef(messages.length + 1);
-  const depart = useChatSendFlight(hostRef, chatMessages, animationSpeed);
+  const hasSent = useRef(false);
+  const replyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pendingReplies = useRef<DemoReplyPlan[]>([]);
+  const depart = useChatSendFlight(hostRef, chatItems, animationSpeed);
+
+  useEffect(
+    () => () => {
+      clearTimeout(replyTimer.current);
+      pendingReplies.current = [];
+    },
+    []
+  );
 
   useLayoutEffect(() => {
     const composer = composerRef.current;
@@ -139,8 +159,55 @@ function ChatDemo({
     const id = `message-${nextMessageId.current++}`;
     const entrance = withMessageInput && variant === 'outgoing' ? 'flight' : 'fade';
     if (entrance === 'flight') depart(id);
-    if (variant === 'incoming') setIncomingTyping(false);
-    setChatMessages((previous) => [...previous, { id, variant, content, entrance }]);
+    const insertDate = automaticReplies && variant === 'outgoing' && !hasSent.current;
+    if (variant === 'outgoing') hasSent.current = true;
+    const date: ChatListItem[] = insertDate
+      ? [
+          {
+            id: `date-${id}`,
+            kind: 'date',
+            dateTime: new Date().toISOString(),
+            label: 'Today',
+          },
+        ]
+      : [];
+    setChatItems((previous) => [...previous, ...date, { id, variant, content, entrance }]);
+  }
+
+  function startReplyBatch() {
+    const plan = pendingReplies.current[0]!;
+    // Reply plans keep both content and real-time delays reproducible at any playback speed.
+    const receive = (index: number) => {
+      setIncomingTyping(false);
+      sendMessage('incoming', plan.replies[index]!);
+      if (index + 1 < plan.replies.length) {
+        const delay = plan.delays[index + 1]!;
+        if (plan.status?.beforeReply === index + 1) {
+          const status = plan.status;
+          replyTimer.current = setTimeout(() => {
+            const id = `status-${nextMessageId.current++}`;
+            setChatItems((previous) => [
+              ...previous,
+              {
+                id,
+                kind: 'status',
+                content: status.label,
+              },
+            ]);
+            replyTimer.current = setTimeout(() => receive(index + 1), delay / 2);
+          }, delay / 2);
+        } else {
+          replyTimer.current = setTimeout(() => receive(index + 1), delay);
+        }
+      } else {
+        pendingReplies.current.shift();
+        if (pendingReplies.current.length > 0) startReplyBatch();
+      }
+    };
+    replyTimer.current = setTimeout(() => {
+      setIncomingTyping(true);
+      replyTimer.current = setTimeout(() => receive(0), plan.delays[0]);
+    }, 600);
   }
 
   function appendMessage(variant: ChatMessage['variant']) {
@@ -165,7 +232,7 @@ function ChatDemo({
       entrance: 'fade',
       content: 'A note inserted before the last message.\nThe surrounding conversation keeps its place.',
     };
-    setChatMessages((previous) => {
+    setChatItems((previous) => {
       const index = Math.max(0, previous.length - 1);
       return [...previous.slice(0, index), message, ...previous.slice(index)];
     });
@@ -175,11 +242,11 @@ function ChatDemo({
     <div className="flex size-full flex-col gap-3">
       <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
         <ChatScrollContainer
-          messages={chatMessages}
+          items={chatItems}
           incomingTyping={withMessageInput && incomingTyping}
-          bottomThreshold={threshold}
+          bottomThreshold={automaticReplies ? 2 : threshold}
           animationSpeed={animationSpeed}
-          onScrollStateChange={setScrollState}
+          onScrollStateChange={automaticReplies ? undefined : setScrollState}
           className="col-start-1 row-start-1"
           contentClassName={withMessageInput ? 'pb-[calc(var(--chat-composer-height,0px)+0.75rem)]' : undefined}
         />
@@ -194,6 +261,10 @@ function ChatDemo({
               if (!draft.trim()) return;
               sendMessage('outgoing', draft);
               setDraft('');
+              if (automaticReplies) {
+                pendingReplies.current.push(createDemoReplyPlan(draft));
+                if (pendingReplies.current.length === 1) startReplyBatch();
+              }
             }}
           >
             <MessageInput
@@ -213,73 +284,96 @@ function ChatDemo({
           </form>
         )}
       </div>
-      <div className="flex shrink-0 flex-wrap justify-center gap-2">
-        {withHistoryInsertion && (
-          <>
-            <Button type="button" onClick={() => insertInHistory('incoming')}>
-              Insert incoming in history
-            </Button>
-            <Button type="button" onClick={() => insertInHistory('outgoing')}>
-              Insert outgoing in history
-            </Button>
-          </>
-        )}
-        <Button type="button" onClick={() => appendMessage('incoming')}>
-          Receive a message
-        </Button>
-        <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
-          Send a message
-        </Button>
-        {withMessageInput && (
-          <Button
-            type="button"
-            aria-pressed={incomingTyping}
-            allPossibleContents={['Typing on', 'Typing off']}
-            onClick={() => setIncomingTyping((previous) => !previous)}
-          >
-            {incomingTyping ? 'Typing on' : 'Typing off'}
-          </Button>
-        )}
-      </div>
-      <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-neutral-500/20 p-3 text-xs leading-5 text-neutral-600 tabular-nums dark:text-neutral-400">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            State:{' '}
-            <strong className="text-neutral-900 dark:text-neutral-100">{scrollState?.mode ?? 'following'}</strong>
-          </span>
-          <fieldset aria-label="Bottom zone" className="m-0 flex min-w-0 items-center gap-2 border-0 p-0">
-            <span>Bottom zone</span>
-            <Segmented
-              options={[
-                { value: 2, label: '2 px' },
-                { value: 20, label: '20 px · debug' },
-              ]}
-              value={threshold}
-              onChange={setThreshold}
-            />
-          </fieldset>
-        </div>
-        <fieldset
-          aria-label="Animation speed"
-          className="m-0 flex min-w-0 flex-wrap items-center justify-between gap-2 border-0 p-0"
-        >
-          <span>Animation speed</span>
+      {automaticReplies ? (
+        <fieldset aria-label="Animation speed" className="m-0 flex shrink-0 justify-center border-0 p-0">
           <Segmented
-            options={[0.1, 0.25, 0.5, 0.75, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
+            options={[0.25, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
             value={animationSpeed}
             onChange={setAnimationSpeed}
           />
         </fieldset>
-        <div className="grid grid-cols-2 gap-x-4">
-          <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
-          <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
-          <span>Distance: {scrollState?.distance.toFixed(2) ?? '0.00'} px</span>
-          <span>Velocity: {scrollState?.velocity.toFixed(0) ?? '0'} px/s</span>
-          <span>Position: {scrollState?.scrollTop.toFixed(2) ?? '0.00'} px</span>
-          <span>Target: {scrollState?.target.toFixed(2) ?? '0.00'} px</span>
-        </div>
-        <span>Last transition: {scrollState?.reason ?? 'Initial position'}</span>
-      </div>
+      ) : (
+        <>
+          <div className="flex shrink-0 flex-wrap justify-center gap-2">
+            {withHistoryInsertion && (
+              <>
+                <Button type="button" onClick={() => insertInHistory('incoming')}>
+                  Insert incoming in history
+                </Button>
+                <Button type="button" onClick={() => insertInHistory('outgoing')}>
+                  Insert outgoing in history
+                </Button>
+              </>
+            )}
+            <Button type="button" onClick={() => appendMessage('incoming')}>
+              Receive a message
+            </Button>
+            {withMessageInput && (
+              <Button
+                type="button"
+                onClick={() => {
+                  setIncomingTyping(false);
+                  appendMessage('incoming');
+                }}
+              >
+                Receive a message and turn typing off
+              </Button>
+            )}
+            <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
+              Send a message
+            </Button>
+            {withMessageInput && (
+              <Button
+                type="button"
+                aria-pressed={incomingTyping}
+                allPossibleContents={['Typing on', 'Typing off']}
+                onClick={() => setIncomingTyping((previous) => !previous)}
+              >
+                {incomingTyping ? 'Typing on' : 'Typing off'}
+              </Button>
+            )}
+          </div>
+          <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-neutral-500/20 p-3 text-xs leading-5 text-neutral-600 tabular-nums dark:text-neutral-400">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                State:{' '}
+                <strong className="text-neutral-900 dark:text-neutral-100">{scrollState?.mode ?? 'following'}</strong>
+              </span>
+              <fieldset aria-label="Bottom zone" className="m-0 flex min-w-0 items-center gap-2 border-0 p-0">
+                <span>Bottom zone</span>
+                <Segmented
+                  options={[
+                    { value: 2, label: '2 px' },
+                    { value: 20, label: '20 px · debug' },
+                  ]}
+                  value={threshold}
+                  onChange={setThreshold}
+                />
+              </fieldset>
+            </div>
+            <fieldset
+              aria-label="Animation speed"
+              className="m-0 flex min-w-0 flex-wrap items-center justify-between gap-2 border-0 p-0"
+            >
+              <span>Animation speed</span>
+              <Segmented
+                options={[0.1, 0.25, 0.5, 0.75, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
+                value={animationSpeed}
+                onChange={setAnimationSpeed}
+              />
+            </fieldset>
+            <div className="grid grid-cols-2 gap-x-4">
+              <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
+              <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
+              <span>Distance: {scrollState?.distance.toFixed(2) ?? '0.00'} px</span>
+              <span>Velocity: {scrollState?.velocity.toFixed(0) ?? '0'} px/s</span>
+              <span>Position: {scrollState?.scrollTop.toFixed(2) ?? '0.00'} px</span>
+              <span>Target: {scrollState?.target.toFixed(2) ?? '0.00'} px</span>
+            </div>
+            <span>Last transition: {scrollState?.reason ?? 'Initial position'}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -299,6 +393,63 @@ export const InsertInHistory: Story = {
   render: () => <ChatDemo withMessageInput withHistoryInsertion />,
 };
 
+export const AutomaticReplies: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => <ChatDemo withMessageInput automaticReplies />,
+};
+
+function HappyPathGuide() {
+  return (
+    <aside
+      aria-label="Happy path guide"
+      className="flex min-w-0 flex-col gap-4 text-xs leading-5 text-neutral-500 dark:text-neutral-400"
+    >
+      <div className="flex flex-col gap-1">
+        <h2 className="m-0 text-sm font-medium text-neutral-900 dark:text-neutral-100">Happy path</h2>
+        <p className="m-0">
+          Send these in order. Wait for each reply batch before continuing. Paste the list or use Shift+Enter for line
+          breaks.
+        </p>
+      </div>
+      <ol className="m-0 flex list-none flex-col gap-4 p-0">
+        {demoConversation.map((step, index) => (
+          <li key={step.input} className="flex flex-col gap-1">
+            <span className="font-medium text-neutral-700 dark:text-neutral-200">{index + 1}. You send</span>
+            <pre className="m-0 whitespace-pre-wrap break-words font-mono text-neutral-900 dark:text-neutral-100">
+              {step.input}
+            </pre>
+            {index === 0 && <p className="m-0 italic">Today appears before your first message.</p>}
+            <div className="flex flex-col gap-1">
+              {step.replies.map((reply, replyIndex) => (
+                <div key={reply} className="flex flex-col gap-1">
+                  {step.status?.beforeReply === replyIndex && <p className="m-0 italic">Status: {step.status.label}</p>}
+                  <p className="m-0">Reply: {reply}</p>
+                </div>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="m-0">
+        Typing starts after 0.6s. Replies arrive 0.8–1.2s apart. Playback speed changes motion only.
+      </p>
+    </aside>
+  );
+}
+
+/** The same automatic chat, with a reading guide sourced from its actual reply presets. */
+export const AutomaticRepliesWithGuide: Story = {
+  parameters: { controls: { disable: true }, happyPathGuide: true },
+  render: () => (
+    <>
+      <div className="h-[min(640px,calc(100svh-64px))] min-w-0">
+        <ChatDemo withMessageInput automaticReplies />
+      </div>
+      <HappyPathGuide />
+    </>
+  ),
+};
+
 function MixedItemsDemo() {
   const [items, setItems] = useState<ChatListItem[]>([
     ...messages.slice(-12, -1),
@@ -313,13 +464,9 @@ function MixedItemsDemo() {
       ...previous.slice(0, -1),
       {
         id,
-        kind: 'content',
-        gapBefore: 16,
-        content: (
-          <div className="flex justify-center text-xs text-neutral-500 dark:text-neutral-400">
-            <time dateTime="2026-09-15">Tuesday, September 15</time>
-          </div>
-        ),
+        kind: 'date',
+        dateTime: '2026-09-15',
+        label: 'Tuesday, September 15',
       },
       previous.at(-1)!,
     ]);
