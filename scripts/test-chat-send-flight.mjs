@@ -68,6 +68,8 @@ try {
         target: target.getBoundingClientRect().toJSON(),
         scale: [matrix.a, matrix.d],
         contentScale: [inverse.a, inverse.d],
+        textRect: content.getBoundingClientRect().toJSON(),
+        targetTextRect: target.querySelector('[data-slot="message-bubble-content"]').getBoundingClientRect().toJSON(),
         tail: Number(getComputedStyle(carrier).getPropertyValue('--message-bubble-tail-opacity')),
         visibility: getComputedStyle(target).visibility,
         inScroller: viewport.contains(carrier),
@@ -108,7 +110,19 @@ try {
   for (const frame of frames) {
     assert.ok(Math.abs(frame.scale[0] * frame.contentScale[0] - 1) < 0.001);
     assert.ok(Math.abs(frame.scale[1] * frame.contentScale[1] - 1) < 0.001);
+    assert.ok(Math.abs(frame.textRect.width - frame.targetTextRect.width) < 0.1, 'Text retains final wrapping width');
   }
+  const firstInset = first.textRect.left - first.rect.left;
+  const targetInset = first.targetTextRect.left - first.target.left;
+  assert.ok(Math.abs(firstInset - targetInset) < 1, 'The initial text position stays left-aligned');
+  assert.ok(
+    frames.some((frame) => Math.abs(frame.textRect.left - frame.rect.left - targetInset) > 1),
+    'Text gently moves inward from the bubble edge during flight'
+  );
+  assert.ok(
+    frames.every((frame) => frame.textRect.left >= frame.rect.left && frame.textRect.right <= frame.rect.right),
+    'Text stays horizontally inside the moving body'
+  );
   assert.equal(first.tail, 0);
   assert.ok(
     frames.some((frame) => frame.tail > 0.9),
@@ -118,6 +132,11 @@ try {
   assert.ok(
     Math.abs(last.rect.x - last.target.x) < 1 && Math.abs(last.rect.y - last.target.y) < 1,
     'Flight converges on the moving list anchor'
+  );
+  assert.ok(
+    Math.abs(last.textRect.left - last.targetTextRect.left) < 1 &&
+      Math.abs(last.textRect.top - last.targetTextRect.top) < 1,
+    'Text converges before the flight hands off to the real bubble'
   );
   assert.equal(
     await viewport
@@ -330,6 +349,89 @@ try {
     }
     assert.equal(await viewport.locator('[data-message-id][style*="hidden"]').count(), 0);
   }
+  // The text shares body motion near arrival, while preserving its original
+  // departure inset. Exercise the short-text/wide-composer worst case as well
+  // as final wrapping that is taller than the composer, at quarter speed.
+  const geometryPage = await browser.newPage({
+    viewport: { width: 390, height: 647 },
+    deviceScaleFactor: 3,
+    reducedMotion: 'no-preference',
+  });
+  geometryPage.on('pageerror', (error) => errors.push(error.message));
+  for (const width of [390, 1000]) {
+    await geometryPage.setViewportSize({ width, height: 647 });
+    for (const [label, message] of [
+      ['short', 'Hey!'],
+      ['bullets', '- Good coffee\n- A quiet table outside\n- A walk by the park afterward'],
+      [
+        'long',
+        'I like the idea of leaving the afternoon open. We could start with a short walk and see where we end up, without trying to fit too many things into one day.',
+      ],
+    ]) {
+      await geometryPage.goto(
+        `${base}/iframe.html?id=components-chat-scroll-container--automatic-replies&viewMode=story&reactScan=false`
+      );
+      const draft = geometryPage.getByRole('textbox', { name: 'Message', exact: true });
+      await geometryPage.getByText('0.25×', { exact: true }).click();
+      await draft.fill(message);
+      await geometryPage.evaluate(() => {
+        window.centerFrames = [];
+        const observer = new MutationObserver(() => {
+          const body = document.querySelector('[data-chat-send-flight]');
+          if (!body) return;
+          const target = document.querySelector(
+            `[data-slot="chat-scroll-viewport"] [data-message-id="${body.dataset.messageId}"]`
+          );
+          window.centerFrames.push({
+            body: body.getBoundingClientRect().toJSON(),
+            text: body.querySelector('[data-slot="message-bubble-content"]').getBoundingClientRect().toJSON(),
+            target: target.getBoundingClientRect().toJSON(),
+            targetText: target.querySelector('[data-slot="message-bubble-content"]').getBoundingClientRect().toJSON(),
+          });
+        });
+        observer.observe(document.querySelector('#storybook-root'), {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeFilter: ['style'],
+        });
+        window.stopCenterSampling = () => observer.disconnect();
+      });
+      await draft.press('Enter');
+      await geometryPage.waitForFunction(() => window.centerFrames.length > 0);
+      await geometryPage.waitForTimeout(450);
+      await geometryPage.screenshot({ path: `/tmp/chat-send-center-${width}-${label}.png` });
+      await geometryPage.waitForFunction(() => !document.querySelector('[data-chat-send-flight]'));
+      const samples = await geometryPage.evaluate(() => {
+        window.stopCenterSampling();
+        return window.centerFrames;
+      });
+      const start = samples[0];
+      const inset = start.targetText.left - start.target.left;
+      assert.ok(Math.abs(start.text.left - start.body.left - inset) < 1, 'Preserve the initial left inset');
+      for (const frame of samples) {
+        assert.ok(
+          frame.text.left >= frame.body.left && frame.text.right <= frame.body.right,
+          `${width}/${label}: no horizontal text clipping`
+        );
+        assert.ok(Math.abs(frame.text.top - frame.body.top - 8) < 1, 'Vertical reveal remains top-aligned');
+        assert.ok(Math.abs(frame.text.width - frame.targetText.width) < 0.1, 'No text scaling or rewrapping');
+      }
+      const overshoot = samples.filter((frame) => frame.body.width < frame.target.width - 0.2);
+      assert.ok(overshoot.length > 0, 'Capture body width undershoot');
+      const relativeCenter = (body, text) => text.left + text.width / 2 - body.left - body.width / 2;
+      const centerError = Math.max(
+        ...overshoot.map((frame) =>
+          Math.abs(relativeCenter(frame.body, frame.text) - relativeCenter(frame.target, frame.targetText))
+        )
+      );
+      assert.ok(centerError < 0.2, 'Text moves with the bubble center throughout overshoot');
+      console.log(
+        `PASS: ${width}/${label}, ${samples.length} samples, overshoot center error ${centerError.toFixed(3)}px`
+      );
+    }
+  }
+  await geometryPage.close();
   await page.getByText('1×', { exact: true }).click();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await input.fill('Without motion.');

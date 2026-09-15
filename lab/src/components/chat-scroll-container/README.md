@@ -172,8 +172,45 @@ stays hidden while a visual copy animates from the captured composer geometry in
 
 The copy sits outside the scroller and below the composer, so the composer's glass can cover it.
 Translation and scaling use `transform`, with inverse scaling on the text to preserve its font size.
-Text wraps at the final bubble width. Any lines that do not yet fit are clipped to the moving body
-and revealed as it grows.
+Text wraps at the final bubble width and starts at the bubble's normal left/top inset within the
+captured composer box. The text's `left top` transform origin lets inverse scaling preserve both
+its natural glyph size and its visual insets.
+
+### Text placement during flight
+
+The text starts close to the left edge so sending feels continuous with the composer. As the body
+narrows, its text gradually settles around the bubble center. During overshoot, text and body move
+together, keeping the message visually cohesive.
+
+Horizontal placement derives from the same spring progress that moves and resizes the bubble:
+
+```text
+q = clamp(horizontalSpringProgress, 0, 1)
+offsetWeight = (1 - q) * (1 - q^4)
+textOffset = targetTextOffset + (initialTextOffset - targetTextOffset) * offsetWeight
+textCenterX = currentBubbleCenterX + textOffset
+```
+
+Offsets are measured from the bubble center to the text-box center in visual CSS pixels. The initial
+offset preserves the departure's left inset using the final text wrapping width. The target offset
+comes from the real bubble's measured layout; it is zero for centered text boxes. Painting converts
+the resulting center offset into local `left` coordinates and compensates for the carrier's scale.
+
+The linear factor keeps early motion close to a constant left inset. The fourth-power factor delays
+most of the inward adjustment until later in the flight. At arrival, the offset weight and its first
+derivative are both zero, so entering or leaving overshoot preserves continuous position and velocity.
+Clamping applies only to this relative offset: the bubble's spring retains its natural overshoot,
+and the text shares that motion. Because placement derives from the flight's progress, playback-speed
+changes and destination compensation stay synchronized with it.
+
+Vertical placement keeps the first line at the visual top inset. Final bubble wrapping may require
+more lines than the wider composer, so lines are clipped to the moving body and revealed downward
+as it grows. This preserves the first line's position throughout the height change.
+
+`scripts/test-chat-send-flight.mjs` samples narrow and wide viewports at 0.25x with short text, bullets,
+and long text. It checks the departure inset, horizontal containment, shared center motion during
+overshoot, natural text dimensions, and vertical top alignment, alongside history sends, consecutive
+sends, interruption, and handoff.
 
 The hidden message remains the layout anchor. When expansion finishes, the row returns to natural
 sizing without changing its footprint. The visual copy hands off only after its own animation finishes,

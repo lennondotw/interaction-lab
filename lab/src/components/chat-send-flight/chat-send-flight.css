@@ -25,6 +25,6 @@
 
   [data-slot='chat-send-flight-clip'] > [data-slot='message-bubble-content'] {
     position: absolute;
-    transform-origin: center top;
+    transform-origin: left top;
   }
 }
