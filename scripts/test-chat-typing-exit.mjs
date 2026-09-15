@@ -92,6 +92,11 @@ try {
           bubbleHeight: bubble?.getBoundingClientRect().height,
           opacity: placeholder ? Number(getComputedStyle(placeholder.firstElementChild).opacity) : null,
           offset: bubble ? new DOMMatrix(getComputedStyle(bubble).transform).m42 : null,
+          anchorInset: bubble
+            ? bubble.getBoundingClientRect().top -
+              placeholder.getBoundingClientRect().top -
+              new DOMMatrix(getComputedStyle(bubble).transform).m42
+            : null,
         });
         if (running) requestAnimationFrame(sample);
       }
@@ -119,6 +124,8 @@ try {
       assert.equal(frame.mode, 'following', 'Layout shrink is never mistaken for user scrolling');
       if (frame.bubbleHeight !== undefined)
         assert.ok(Math.abs(frame.bubbleHeight - 33) < 0.01, 'Fade without squashing');
+      if (frame.anchorInset !== null)
+        assert.ok(Math.abs(frame.anchorInset - gap) < 0.02, 'Exit stays anchored to the slot top');
       if (index > 0) {
         const previous = frames[index - 1];
         const allowedTravel = 6 * Math.max(1, (frame.time - previous.time) / (1000 / 60));
@@ -153,6 +160,7 @@ try {
           bubbleHeight: typing.getBoundingClientRect().height,
           position: getComputedStyle(typing).position,
           offset: new DOMMatrix(getComputedStyle(typing).transform).m42,
+          top: Number.parseFloat(getComputedStyle(typing).top),
           sourceTail: source.hasAttribute('data-tail'),
           visualTail: visual?.hasAttribute('data-tail'),
         };
@@ -168,6 +176,7 @@ try {
         bubbleHeight: 33,
         position: 'absolute',
         offset: 20,
+        top: 3,
         sourceTail: false,
         visualTail: false,
       },
@@ -185,6 +194,11 @@ try {
           height: typing.parentElement.getBoundingClientRect().height,
           bottom: typing.getBoundingClientRect().bottom,
           composerTop: composer.getBoundingClientRect().top,
+          anchorInset:
+            typing.getBoundingClientRect().top -
+            typing.parentElement.getBoundingClientRect().top -
+            new DOMMatrix(getComputedStyle(typing).transform).m42,
+          entering: typing.parentElement.dataset.slot === 'typing-entry-placeholder',
           distance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
         });
         await new Promise(requestAnimationFrame);
@@ -207,11 +221,12 @@ try {
       );
     }
     assert.ok(
-      reentryFrames.every((sample) => sample.bottom <= sample.composerTop),
-      'Typing stays above the composer throughout reentry'
+      reentryFrames.every((sample) => !sample.entering || Math.abs(sample.anchorInset - 3) < 0.02),
+      'Entry stays anchored to the slot top while its height changes'
     );
     await settled();
     assert.equal(await indicator.evaluate((element) => getComputedStyle(element).position), 'static');
+    assert.ok(reentryFrames.at(-1).bottom <= reentryFrames.at(-1).composerTop, 'Typing settles above the composer');
     await toggle.click();
     await gone();
     await settled();
