@@ -83,6 +83,34 @@ jobs:
       - name: Run tests
         run: pnpm -w run test:packages
 
+  chat-interactions:
+    runs-on: ubuntu-latest
+    name: Chat interaction contracts
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-cache
+        with:
+          restore-key-prefix: 'chat-interactions'
+      - run: pnpm install --frozen-lockfile
+      - name: Build workspace dependencies
+        run: pnpm run tsc:build:upstream
+        working-directory: lab
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run chat contracts
+        run: pnpm -w run test:chat
+      - name: Upload regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-interactions
+          path: artifacts/chat-tests/
+          if-no-files-found: warn
+
   build-storybook:
     runs-on: ubuntu-latest
     name: Build storybook
@@ -124,7 +152,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy Storybook to Workers
-    needs: [lint, test, build-storybook]
+    needs: [lint, test, chat-interactions, build-storybook]
     if: github.event_name == 'push'
     permissions:
       contents: read

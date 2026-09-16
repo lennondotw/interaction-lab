@@ -3,16 +3,26 @@
 Run browser regressions against a live development Storybook. The scripts import development modules
 and use independent Playwright pages; a static production build is not an equivalent test target.
 
-From the repository root, for example:
+From the repository root:
 
 ```sh
-STORYBOOK_URL=http://localhost:6010 node scripts/test-chat-send-flight.mjs
-STORYBOOK_URL=http://localhost:6010 node scripts/test-chat-layout-transactions.mjs
-STORYBOOK_URL=http://localhost:6010 node scripts/test-chat-typing-handoff.mjs
+pnpm exec playwright install chromium
+pnpm test:chat
+# Or reuse an existing development server:
+STORYBOOK_URL=http://localhost:6010 pnpm test:chat
+# Run a focused regression directly:
+STORYBOOK_URL=http://localhost:6010 node scripts/test-chat-contracts.mjs
 ```
 
-These are focused regression entry points, not a promise that every behavior is covered by CI or that
-every script runs automatically. This documentation change does not itself rerun the full browser suite.
+`test:chat` starts an isolated Storybook on port 6199 (override with `CHAT_TEST_PORT`) unless
+`STORYBOOK_URL` is supplied. It runs the browser regressions serially, fails on the first failure,
+limits each script to three minutes, and stops only processes it owns. Logs and artifacts produced
+in that run are collected under `artifacts/chat-tests/`. No failed attempt is silently retried.
+The CI **Chat interaction contracts** job runs this command in Chromium and gates deployment.
+
+The [behavior contracts](./behavior-contracts.md) identify the intended outcomes these regressions
+protect. Synthetic events exercise controller branches; real browser interactions and frame samples
+cover the composed stories. Neither alone reproduces every native trackpad gesture.
 
 ## Geometry and flight
 
@@ -27,10 +37,26 @@ measured body bounds; debug decoration is not evidence of a changed layout box b
 
 ## Scrolling and composer
 
+- [Interaction contracts](../../../../../scripts/test-chat-contracts.mjs): explicit flight cancellation and non-cancellation signals, pending departures, pointer-held restoration, atomic typing replacement boundaries, geometry, and disposal.
+- [Velocity checks](../../../../../scripts/test-chat-scroll-velocity.mjs): retarget carries measured velocity at 0.25x and 1x; the response must differ from a restart at rest. Tolerances allow animation-frame sampling and do not assert strict velocity continuity.
+
 - [Scroll policy checks](../../../../../scripts/test-chat-scroll.mjs): initial positioning, threshold
   escape/restoration, local/remote insertion, keyboard and pointer control, composer resizing, and reduced motion.
+- [History scroll checks](../../../../../scripts/test-chat-history-scroll.mjs): outgoing history insertion at 8px/100px above bottom preserves detached reading position, while a subsequent local send still catches up.
+- [Catch-up checks](../../../../../scripts/test-chat-catch-up.mjs): 8px/100px upward escape followed by one or two sends at 0.1x/1x; projected target stability, layout/frame continuity, final bottom alignment, and flight handoff. Controller fixtures force both faster and slower layout expansion. See the [continuity contract](./catch-up-continuity.md); frame bounds are regression checks, not a proof of strict mathematical continuity.
 - [Scroll ownership checks](../../../../../scripts/test-chat-scroll-ownership.mjs): callback ordering,
   fractional/integer clamps, native interruption, and the interrupted automatic-reply flight scenario.
+
+[Bottom-line checks](../../../../../scripts/test-chat-bottom-line.mjs) inject a visible, zero-height
+line at the content end, after messages and typing but before composer clearance. Starting fully
+settled, they sample animation frames through typing entry/exit/reopening, replacement, append,
+history insertion, and composer send at 0.1x and 1x. The line must stay within 1 CSS px of its starting
+position, with at most 1 CSS px total excursion, and reported state must remain `following`. The
+pixel tolerance accounts for native scroll rounding; an `animating` catch-up fails even within it.
+The probe checks that the marker adds no scroll extent and that layout actually changes during each
+sequence. This is a settled-bottom invariant, not a claim about sends from detached history or changes
+to composer clearance. Frame samples are saved to `/tmp/chat-bottom-line.json`; use `HEADED=1` to watch
+the amber line in the test browser. The test does not add a permanent marker to the component.
 
 At 20px debug threshold, scroll upward slightly while still inside the zone: following must remain
 cancelled. A later downward return can restore eligibility. At a settled bottom, grow/shrink/grow the
@@ -48,6 +74,7 @@ In **Automatic Replies**, use 0.25x, send `Hey!`, scroll upward about 100px, the
   interruption, and reduced motion.
 - [Typing handoff checks](../../../../../scripts/test-chat-typing-handoff.mjs): immediate, partial, settled,
   long-reply, and reopened replacements at 0.1x, including footprint and velocity continuity.
+- [Exit/insertion checks](../../../../../scripts/test-chat-typing-exit-insertion.mjs): receive and history insertion during an active typing exit; the new slot starts at zero, existing rows and typing retain their positions at commit, and the content end remains pinned.
 - [Layout transaction checks](../../../../../scripts/test-chat-layout-transactions.mjs): the 8px-to-3px
   neighbor gap, intrinsic growth/shrinkage, and geometry-read budgets with 100 and 10,000 mounted rows.
 
@@ -59,7 +86,7 @@ Also test ordinary receive while typing stays on, and exit followed by rapid re-
 The large-row fixture isolates layout-manager measurement cost. It does not benchmark React rendering,
 all flight copies, overall browser frame time, or a virtualized integration.
 
-The [automatic-reply checks](../../../../../scripts/test-chat-auto-replies.mjs) exercise the composed conversation flow and guide.
+The [automatic-reply checks](../../../../../scripts/test-chat-auto-replies.mjs) exercise the composed conversation flow and guide as an optional, separately invoked demo regression. They are not part of `test:chat`.
 
 ## Parameters
 

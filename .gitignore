@@ -42,3 +42,6 @@ workspace-tmp/
 .wrangler/
 .dev.vars*
 .playwright-mcp/
+
+# Browser regression artifacts
+/artifacts/
