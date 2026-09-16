@@ -31,19 +31,27 @@ export function useTypingExit(
   const opacity = useMotionValue(0);
   const offset = useMotionValue(chatEnterOffset);
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
+  const releaseLayoutRef = useRef<(() => void) | null>(null);
   const visualAnimations = useRef<ReturnType<typeof animate>[]>([]);
   const speedRef = useRef(animationSpeed);
   const entryRequested = useRef(false);
   const preparingEntry = visible && (replacing || (!geometry && (!present || entryRequested.current)));
   const replaceWith = useCallback(
     (replacement: HTMLElement) => {
-      // The insertion slot takes over typing's measured footprint and grows to
-      // the received row. Keep this existing visual for the simultaneous crossfade.
+      // Transfer the running footprint before the new slot starts. Release its
+      // old projected height in this same commit so scrolling sees one owner.
+      const velocity = geometry ? -geometry.height * progress.getVelocity() : 0;
+      animationRef.current?.stop();
+      releaseLayoutRef.current?.();
+      for (const animation of visualAnimations.current) animation.stop();
       progress.jump(0);
-      offset.jump(0);
+      // A partially entered indicator still has an offset. Freeze it for the
+      // crossfade instead of snapping it to zero or adding an exit translation.
+      offset.jump(offset.get());
       setGeometry({ height: 0, gap: 0, replacement });
+      return { velocity };
     },
-    [progress, offset]
+    [geometry, progress, offset]
   );
 
   useLayoutEffect(() => {
@@ -88,7 +96,6 @@ export function useTypingExit(
     const paintOffset = (value: number) => {
       visual.style.transform = `translateY(${value}px)`;
     };
-    if (replacing && !visible) offset.jump(0);
     if (reducedMotion) {
       opacity.jump(visible ? 1 : 0);
       offset.jump(visible || replacing ? 0 : chatExitOffset);
@@ -108,11 +115,15 @@ export function useTypingExit(
         velocity: opacity.getVelocity() / speedRef.current,
         onUpdate: paintOpacity,
       }),
-      animate(offset, visible || replacing ? 0 : chatExitOffset, {
-        ...visualSpring,
-        velocity: offset.getVelocity() / speedRef.current,
-        onUpdate: paintOffset,
-      }),
+      ...(!visible && replacing
+        ? []
+        : [
+            animate(offset, visible ? 0 : chatExitOffset, {
+              ...visualSpring,
+              velocity: offset.getVelocity() / speedRef.current,
+              onUpdate: paintOffset,
+            }),
+          ]),
     ];
     for (const animation of animations) animation.speed = speedRef.current;
     visualAnimations.current = animations;
@@ -129,6 +140,7 @@ export function useTypingExit(
     const viewport = row.closest<HTMLElement>('[data-slot="chat-scroll-viewport"]')!;
     const layout: ChatLayoutEntry = { row, remaining: 0, gapRemaining: 0 };
     const unregister = geometry.entry ? registerChatTransition(viewport, layout) : () => {};
+    releaseLayoutRef.current = unregister;
 
     const paint = (value: number) => {
       const remaining = 1 - Math.max(0, Math.min(1, value));
@@ -172,6 +184,7 @@ export function useTypingExit(
       animation.stop();
       unregister();
       animationRef.current = null;
+      if (releaseLayoutRef.current === unregister) releaseLayoutRef.current = null;
     };
   }, [visible, geometry, reducedMotion, progress, onLayoutChange]);
 
