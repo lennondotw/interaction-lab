@@ -8,6 +8,8 @@ From the repository root:
 ```sh
 pnpm exec playwright install chromium
 pnpm test:chat
+# Focused CI gate (also useful for a quicker local check):
+pnpm test:chat:ci
 # Or reuse an existing development server:
 STORYBOOK_URL=http://localhost:6010 pnpm test:chat
 # Run a focused regression directly:
@@ -18,7 +20,13 @@ STORYBOOK_URL=http://localhost:6010 node scripts/test-chat-contracts.mjs
 `STORYBOOK_URL` is supplied. It runs the browser regressions serially, fails on the first failure,
 limits each script to three minutes, and stops only processes it owns. Logs and artifacts produced
 in that run are collected under `artifacts/chat-tests/`. No failed attempt is silently retried.
-The CI **Chat interaction contracts** job runs this command in Chromium and gates deployment.
+
+The CI **Chat interaction contracts** job runs `test:chat:ci` in Chromium and gates deployment. That
+focused suite covers the shared state contracts, debug geometry, scroll policy, send flight, and typing
+handoff. The default `test:chat` command remains the complete local suite, including slow playback
+matrices, composer/typing overlap, catch-up, history insertion, bottom-line sampling, 10,000-row layout
+transactions, and generic insertion variants. CI selection changes execution cost only; every script
+remains directly runnable and part of the documented behavior contracts.
 
 The [behavior contracts](./behavior-contracts.md) identify the intended outcomes these regressions
 protect. Synthetic events exercise controller branches; real browser interactions and frame samples
