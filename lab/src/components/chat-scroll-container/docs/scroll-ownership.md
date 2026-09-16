@@ -10,7 +10,7 @@ Classify upward movement as a layout clamp only when the scroll range shrank and
 
 Reconcile observations before updating target caches or taking early returns, including during catch-up. Otherwise a layout callback can erase the evidence of shrinkage before its queued scroll event arrives. That can detach following and leave a flight waiting for handoff indefinitely.
 
-Layout changes do not excuse all simultaneous scrolling: movement away from the new boundary remains user-controlled. Explicit wheel, pointer, and keyboard interruption still takes priority. No suppression timer or per-message exemption is needed.
+Layout changes do not excuse all simultaneous scrolling: movement away from the new boundary remains user-controlled. Explicit wheel, opt-in pointer, and keyboard interruption still takes priority. No suppression timer or per-message exemption is needed.
 
 Repeated observer notifications for already-applied geometry should not start a second scroll animation. Explicit layout ticks must still reconcile fractional movement even when integer height has not changed.
 

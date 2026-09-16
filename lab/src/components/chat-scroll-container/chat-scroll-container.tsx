@@ -31,6 +31,8 @@ export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'sect
   /** Show the remote typing indicator after the last message. */
   incomingTyping?: boolean;
   bottomThreshold?: number;
+  /** Opt into interrupting follow and send flight on viewport pointerdown. Upward scrolling always interrupts. */
+  interruptOnPointerDown?: boolean;
   /** Playback rate for programmatic scrolling. Native gestures remain immediate. */
   animationSpeed?: number;
   contentClassName?: string;
@@ -47,6 +49,7 @@ export function ChatScrollContainer({
   items: suppliedItems,
   incomingTyping = false,
   bottomThreshold = 2,
+  interruptOnPointerDown = false,
   animationSpeed = 1,
   contentClassName,
   bottomSpace,
@@ -121,11 +124,12 @@ export function ChatScrollContainer({
     }
     controllerRef.current?.updateOptions({
       threshold: Math.max(0, bottomThreshold),
+      interruptOnPointerDown,
       reducedMotion: reducedMotion === true,
       animationSpeed: Math.max(0.01, animationSpeed),
       onStateChange: onScrollStateChange,
     });
-  }, [bottomThreshold, animationSpeed, reducedMotion, onScrollStateChange]);
+  }, [bottomThreshold, interruptOnPointerDown, animationSpeed, reducedMotion, onScrollStateChange]);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;

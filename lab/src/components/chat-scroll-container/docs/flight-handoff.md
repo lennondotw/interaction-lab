@@ -18,10 +18,11 @@ Then stop the flight, remove its layer, and restore the original visibility. The
 Explicit interaction with the scrolling viewport stops all active flights and reveals their real rows immediately:
 
 - Upward `wheel` input (`deltaY < 0`, excluding `ctrlKey` zoom gestures).
-- `pointerdown` in the viewport, even before scrolling starts.
+- `pointerdown` in the viewport when `interruptOnPointerDown` is enabled. It defaults to `false`.
+- Actual unowned upward scrolling, including a drag after a non-blocking pointer press.
 - `ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`, `Home`, `End`, or Space received by the viewport.
 
-This is not a generic `scroll` listener. Programmatic catch-up, browser clamping after layout changes,
+The scroll controller owns these decisions and emits a shared interruption event consumed by flight. This is not a generic `scroll` listener. Programmatic catch-up, browser clamping after layout changes,
 and downward wheel input alone do not cancel flight. Cancellation removes the visual copies, restores
 real-bubble visibility, and clears pending departures; it does not delete messages or prevent native input.
 

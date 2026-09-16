@@ -106,10 +106,12 @@ function ChatDemo({
   withMessageInput = false,
   withHistoryInsertion = false,
   automaticReplies = false,
+  interruptOnPointerDown = false,
 }: {
   withMessageInput?: boolean;
   withHistoryInsertion?: boolean;
   automaticReplies?: boolean;
+  interruptOnPointerDown?: boolean;
 }) {
   const [chatItems, setChatItems] = useState<ChatListItem[]>(messages);
   const [threshold, setThreshold] = useState(20);
@@ -236,6 +238,7 @@ function ChatDemo({
           incomingTyping={withMessageInput && incomingTyping}
           bottomThreshold={automaticReplies ? 2 : threshold}
           animationSpeed={animationSpeed}
+          interruptOnPointerDown={interruptOnPointerDown}
           onScrollStateChange={automaticReplies ? undefined : setScrollState}
           className="col-start-1 row-start-1"
           bottomSpace={withMessageInput ? bottomSpace : undefined}
@@ -377,6 +380,13 @@ export const SendMessages: Story = {
 export const WithMessageInput: Story = {
   parameters: { controls: { disable: true } },
   render: () => <ChatDemo withMessageInput />,
+};
+
+/** Opt-in policy: pressing the message viewport immediately yields follow and flight. */
+export const InterruptOnPointerDown: Story = {
+  name: 'Detach Following State On Pointer Down',
+  parameters: { controls: { disable: true } },
+  render: () => <ChatDemo withMessageInput interruptOnPointerDown />,
 };
 
 export const InsertInHistory: Story = {

@@ -4,6 +4,8 @@ import { animate, motionValue } from 'motion/react';
 import type { ReadingAnchor } from './chat-insertions.js';
 import { finalChatBottom } from './chat-layout.js';
 
+export const chatScrollInterrupted = 'chat-scroll-interrupted';
+
 export type ChatScrollMode = 'following' | 'animating' | 'detached';
 
 export interface ChatScrollState {
@@ -19,6 +21,7 @@ export interface ChatScrollState {
 
 interface Options {
   threshold: number;
+  interruptOnPointerDown?: boolean;
   reducedMotion: boolean;
   animationSpeed: number;
   onStateChange?: (state: ChatScrollState) => void;
@@ -85,11 +88,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       anchorRemainder = 0;
       if (pointerHeld) pointerMovedDown = delta > 0;
       if (delta < 0) detach('User scrolled up');
-      else if (mode === 'detached' && !pointerHeld && distance() <= options.threshold) {
-        mode = 'following';
-        reason = 'User returned to bottom zone';
-        // Restore eligibility without pulling the remaining threshold pixels into place.
-      }
+      else if (delta > 0) resumeFollowing('User returned to bottom zone');
     }
     return Math.abs(previous.bottom - previous.top) <= positionTolerance;
   }
@@ -126,6 +125,17 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     position.jump(viewport.scrollTop);
     observedScroll = readScrollPosition();
     reason = cause;
+    // Flight and scroll share interruption ownership, including real upward movement
+    // after a non-blocking pointer press. Layout clamps never reach this branch.
+    viewport.dispatchEvent(new Event(chatScrollInterrupted));
+    report();
+  }
+
+  function resumeFollowing(cause: string) {
+    if (mode !== 'detached' || pointerHeld || distance() > options.threshold) return;
+    mode = 'following';
+    reason = cause;
+    // Intent only: leave the remaining threshold pixels and native input alone.
     report();
   }
 
@@ -236,22 +246,20 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function onWheel(event: WheelEvent) {
-    if (!event.ctrlKey && event.deltaY < 0) detach('Upward wheel');
+    if (event.ctrlKey) return;
+    if (event.deltaY < 0) detach('Upward wheel');
+    else if (event.deltaY > 0) resumeFollowing('Downward wheel in bottom zone');
   }
 
   function onPointerDown() {
     pointerHeld = true;
     pointerMovedDown = false;
-    detach('Pointer interaction');
+    if (options.interruptOnPointerDown) detach('Pointer interaction');
   }
 
   function onPointerUp() {
     pointerHeld = false;
-    if (pointerMovedDown && distance() <= options.threshold) {
-      mode = 'following';
-      reason = 'User returned to bottom zone';
-      report();
-    }
+    if (pointerMovedDown) resumeFollowing('Pointer returned to bottom zone');
     pointerMovedDown = false;
   }
 
