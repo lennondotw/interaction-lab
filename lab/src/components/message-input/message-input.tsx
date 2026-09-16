@@ -11,7 +11,7 @@ function resizeToContent(field: HTMLTextAreaElement | null) {
   field.style.height = `${field.scrollHeight}px`;
 }
 
-/** The host owns width; typography and padding match a single-line message bubble. */
+/** The host owns width; the 35px single-line composer is sized independently of message bubbles. */
 export function MessageInput({ className, value, defaultValue, onInput, ...props }: MessageInputProps) {
   const fieldRef = useRef<HTMLTextAreaElement>(null);
 
