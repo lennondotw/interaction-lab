@@ -2,7 +2,8 @@
 
 @layer components {
   [data-slot='message-input-field'] {
-    /* 17px line + 9px on each side = the bubble's 35px single-line body. */
+    /* 17px line + 9px on each side = a 35px single-line composer by design.
+       Independent of the message bubble's 33px body; sending measures both boxes. */
     position: relative;
     box-sizing: border-box;
     width: 100%;
