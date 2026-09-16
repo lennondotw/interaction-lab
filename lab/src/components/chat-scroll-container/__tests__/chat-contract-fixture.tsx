@@ -12,6 +12,8 @@ interface Model {
   typing: boolean;
   speed: number;
   draft: string;
+  interruptOnPointerDown: boolean;
+  threshold: number;
 }
 
 /** Browser-only fixture: commit arbitrary item/typing changes atomically, using the real components. */
@@ -35,6 +37,8 @@ export function mountChatContractFixture() {
       typing: false,
       speed: 0.25,
       draft: '1',
+      interruptOnPointerDown: false,
+      threshold: 20,
     });
     const host = useRef<HTMLDivElement>(null);
     const depart = useChatSendFlight(host, value.items, value.speed);
@@ -52,7 +56,8 @@ export function mountChatContractFixture() {
           items={value.items}
           incomingTyping={value.typing}
           animationSpeed={value.speed}
-          bottomThreshold={20}
+          bottomThreshold={value.threshold}
+          interruptOnPointerDown={value.interruptOnPointerDown}
           onScrollStateChange={(state) => states.push(state)}
           className="min-h-0 flex-1"
         />

@@ -3,6 +3,7 @@ import { animate, calcGeneratorDuration, motionValue, spring } from 'motion/reac
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 
 import { hasChatLayoutAnimation, projectedChatY } from '../chat-scroll-container/chat-layout.js';
+import { chatScrollInterrupted } from '../chat-scroll-container/chat-scroll-controller.js';
 
 import './chat-send-flight.css';
 
@@ -233,25 +234,14 @@ export function useChatSendFlight(
       for (const flight of active.current) flight.stop();
       departures.current.clear();
     };
-    const wheel = (event: Event) => {
-      if ((event as WheelEvent).deltaY < 0 && !(event as WheelEvent).ctrlKey) cancel();
-    };
-    const key = (event: Event) => {
-      if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes((event as KeyboardEvent).key))
-        cancel();
-    };
     const preferenceChanged = () => {
       if (preference.matches) cancel();
     };
-    viewport?.addEventListener('wheel', wheel, { passive: true });
-    viewport?.addEventListener('pointerdown', cancel, { passive: true });
-    viewport?.addEventListener('keydown', key);
+    viewport?.addEventListener(chatScrollInterrupted, cancel);
     preference.addEventListener('change', preferenceChanged);
     return () => {
       cancel();
-      viewport?.removeEventListener('wheel', wheel);
-      viewport?.removeEventListener('pointerdown', cancel);
-      viewport?.removeEventListener('keydown', key);
+      viewport?.removeEventListener(chatScrollInterrupted, cancel);
       preference.removeEventListener('change', preferenceChanged);
     };
   }, [hostRef]);

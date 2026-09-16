@@ -42,9 +42,20 @@ try {
     };
 
     // Positive and negative input matrix: "any scroll cancels flight" is not the policy.
-    for (const signal of ['up-wheel', 'pointer', 'key', 'down-wheel', 'zoom-wheel', 'scroll', 'layout-clamp']) {
+    for (const signal of [
+      'up-wheel',
+      'pointer',
+      'pointer-opt-in',
+      'native-up',
+      'key',
+      'down-wheel',
+      'zoom-wheel',
+      'scroll',
+      'layout-clamp',
+    ]) {
       const fixture = await mount();
       try {
+        if (signal === 'pointer-opt-in') fixture.update({ interruptOnPointerDown: true });
         fixture.send('first');
         fixture.send('second');
         await flush(2);
@@ -53,16 +64,22 @@ try {
         if (signal === 'up-wheel') fire(v, new WheelEvent('wheel', { deltaY: -1, cancelable: true }));
         if (signal === 'down-wheel') fire(v, new WheelEvent('wheel', { deltaY: 1, cancelable: true }));
         if (signal === 'zoom-wheel') fire(v, new WheelEvent('wheel', { deltaY: -1, ctrlKey: true, cancelable: true }));
-        if (signal === 'pointer') fire(v, new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        if (signal === 'pointer' || signal === 'pointer-opt-in')
+          fire(v, new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
         if (signal === 'key')
           fire(v, new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true }));
         if (signal === 'scroll') v.dispatchEvent(new Event('scroll'));
+        if (signal === 'native-up') {
+          fire(v, new PointerEvent('pointerdown', { bubbles: true }));
+          v.scrollTop -= 8;
+          v.dispatchEvent(new Event('scroll'));
+        }
         if (signal === 'layout-clamp') {
           // Resize the viewport to shrink the native range without any user input.
           fixture.element.firstElementChild.style.height = '440px';
           await flush(2);
         }
-        const cancelled = ['up-wheel', 'pointer', 'key'].includes(signal);
+        const cancelled = ['up-wheel', 'pointer-opt-in', 'native-up', 'key'].includes(signal);
         check(flights(fixture).length === (cancelled ? 0 : 2), `${signal}: explicit cancellation policy`);
         for (const id of ['first', 'second']) {
           const body = v.querySelector(`[data-message-id="${id}"]`);
@@ -92,6 +109,7 @@ try {
     for (const end of ['pointerup', 'pointercancel']) {
       const fixture = await mount();
       try {
+        fixture.update({ interruptOnPointerDown: true });
         const v = viewport(fixture);
         v.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
         v.scrollTop -= 8;
@@ -122,6 +140,82 @@ try {
         await flush();
         check(mode(fixture) === 'detached', 'A release without downward movement does not restore following');
         results.push(`pointer lifecycle: ${end}`);
+      } finally {
+        fixture.unmount();
+      }
+    }
+
+    // Reattachment is an intent event, not a side effect of proximity. Reuse the
+    // same gate for a boundary wheel and native movement at both threshold sizes.
+    for (const threshold of [2, 20]) {
+      const fixture = await mount();
+      try {
+        fixture.update({ threshold });
+        const v = viewport(fixture);
+        const wheel = (deltaY, ctrlKey = false) =>
+          fire(v, new WheelEvent('wheel', { deltaY, ctrlKey, cancelable: true }));
+        const bottom = () => v.scrollHeight - v.clientHeight;
+        for (const interruptOnPointerDown of [false, true]) {
+          fixture.update({ interruptOnPointerDown });
+          fire(v, new PointerEvent('pointerdown', { bubbles: true }));
+          await flush();
+          check(
+            mode(fixture) === (interruptOnPointerDown ? 'detached' : 'following'),
+            'Pointer policy is live and defaults to non-blocking'
+          );
+          if (interruptOnPointerDown) {
+            wheel(1);
+            await flush();
+            check(mode(fixture) === 'detached', 'Downward boundary wheel cannot steal an active pointer');
+          }
+          window.dispatchEvent(new PointerEvent('pointerup'));
+          await flush();
+          check(
+            mode(fixture) === (interruptOnPointerDown ? 'detached' : 'following'),
+            'Click release alone never reacquires follow'
+          );
+          const top = v.scrollTop;
+          wheel(1);
+          await flush();
+          check(
+            mode(fixture) === 'following' && v.scrollTop === top,
+            'Boundary wheel restores eligibility without movement'
+          );
+        }
+        wheel(-1);
+        await flush();
+        check(mode(fixture) === 'detached', 'Upward input always escapes at the boundary');
+        v.dispatchEvent(new Event('scroll'));
+        wheel(1, true);
+        await flush();
+        check(mode(fixture) === 'detached', 'A scroll notification or zoom is not downward intent');
+        for (const distance of [threshold + 1, 1]) {
+          v.scrollTop = bottom() - distance;
+          v.dispatchEvent(new Event('scroll'));
+          wheel(-1);
+          const top = v.scrollTop;
+          wheel(1);
+          await flush();
+          check(
+            mode(fixture) === (distance > threshold ? 'detached' : 'following'),
+            'Wheel restoration respects configured threshold'
+          );
+          check(v.scrollTop === top, 'Restoration never snaps the remaining threshold pixels');
+        }
+        // Do not remember a downward wheel outside the zone for later layout changes.
+        v.scrollTop = bottom() - 40;
+        v.dispatchEvent(new Event('scroll'));
+        wheel(1);
+        fixture.update({ items: fixture.model.items.slice(0, -1) });
+        await flush();
+        check(mode(fixture) === 'detached', 'Layout proximity does not consume stale downward intent');
+        fixture.send('catch-up');
+        await flush(2);
+        check(mode(fixture) === 'animating', 'Explicit local send starts catch-up');
+        wheel(1);
+        await flush();
+        check(mode(fixture) === 'animating', 'Downward wheel never promotes an active spring to following');
+        results.push(`pointer policy and boundary restoration: ${threshold}px`);
       } finally {
         fixture.unmount();
       }
@@ -257,6 +351,35 @@ try {
     return results;
   });
   for (const result of results) console.log(`PASS: ${result}`);
+  // Real pointer input verifies that both composed stories wire the shared policy
+  // to follow and flight, rather than only exercising synthetic controller branches.
+  for (const interrupt of [false, true]) {
+    const story = interrupt ? 'interrupt-on-pointer-down' : 'with-message-input';
+    await page.goto(`${base}/iframe.html?id=components-chat-scroll-container--${story}&viewMode=story`);
+    await page.getByText('0.1×', { exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#storybook-root strong')?.textContent === 'following');
+    await page.locator('textarea').fill('A quiet afternoon.');
+    await page.evaluate(() => document.querySelector('form').requestSubmit());
+    await page.waitForSelector('[data-chat-send-flight]');
+    const view = page.locator('[data-slot="chat-scroll-viewport"]');
+    const rect = await view.boundingBox();
+    await page.mouse.move(rect.x + 4, rect.y + 4);
+    await page.mouse.down();
+    await page.waitForFunction(
+      (mode) => document.querySelector('#storybook-root strong')?.textContent === mode,
+      interrupt ? 'detached' : 'following'
+    );
+    assert.equal(await page.locator('[data-chat-send-flight]').count(), interrupt ? 0 : 1);
+    await page.mouse.up();
+    if (interrupt) {
+      await page.mouse.wheel(0, 1);
+      await page.waitForFunction(() => document.querySelector('#storybook-root strong')?.textContent === 'following');
+    }
+    await page.mouse.wheel(0, -8);
+    await page.waitForFunction(() => document.querySelector('#storybook-root strong')?.textContent === 'detached');
+    assert.equal(await page.locator('[data-chat-send-flight]').count(), 0);
+    console.log(`PASS: real story pointer policy ${interrupt}`);
+  }
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();
