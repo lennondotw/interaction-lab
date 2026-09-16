@@ -40,6 +40,15 @@
     // Kept because it costs nothing and may catch cases elsewhere.
     "react/exhaustive-deps": "error",
 
+    // oxlint 1.83 added the React compiler diagnostics that were previously
+    // missing here. Enabling its recommended set immediately reports 24
+    // existing ref/effect patterns across stateful demos. Keep the upgrade
+    // behavior-neutral and audit those findings separately before making them
+    // part of the zero-warning contract.
+    "react/immutability": "off",
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+
     "@typescript-eslint/restrict-template-expressions": ["error", { "allowNumber": true }],
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
     "@typescript-eslint/no-confusing-void-expression": "off",
