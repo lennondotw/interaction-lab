@@ -62,11 +62,19 @@ try {
       );
       check(b.textContent.includes('idle · layout: idle'), 'Settled body reports idle');
       check(getComputedStyle(v.firstElementChild).overflowX === 'clip', 'Content clips horizontally');
-      const layer = b.parentElement;
+      check(b.inert && b.getAttribute('aria-hidden') === 'true', 'Debug is inert and hidden from accessibility');
+      check(b.parentElement === incoming, 'Settled debug belongs to the actual body');
+      const beforeScroll = { body: incoming.getBoundingClientRect().top, badge: b.getBoundingClientRect().top };
+      v.scrollTop -= 40;
       check(
-        layer.inert && layer.getAttribute('aria-hidden') === 'true' && getComputedStyle(layer).overflowX === 'clip',
-        'Debug is inert, hidden from accessibility and clipped'
+        Math.abs(
+          b.getBoundingClientRect().top -
+            beforeScroll.badge -
+            (incoming.getBoundingClientRect().top - beforeScroll.body)
+        ) < 0.01,
+        'Native scroll moves body and debug together before any animation frame'
       );
+      v.scrollTop = before.top;
       results.push('toggle preserves layout, right alignment and clipping');
 
       fixture.send('flight');
@@ -78,7 +86,8 @@ try {
           Math.abs(debug.getBoundingClientRect().right - carrier.getBoundingClientRect().left + 6) < 1,
           'Flight badge tracks the carrier left edge'
         );
-        check(getComputedStyle(debug).fontSize === '9px', 'Flight does not scale debug typography');
+        check(debug.parentElement === carrier, 'Flight debug belongs to the actual carrier');
+        check(Math.abs(debug.getBoundingClientRect().height - 24) < 0.1, 'Flight counter-scales debug typography');
       });
       // Interrupting the flight keeps the real row's independently running layout visible in debug.
       v.dispatchEvent(new WheelEvent('wheel', { deltaY: -1 }));
@@ -116,17 +125,55 @@ try {
       v.scrollTop = v.scrollHeight;
       await until(() => badge('date')?.textContent.includes('entering'));
       await until(() => badge('date')?.textContent.includes('idle · layout: idle'));
+      check(getComputedStyle(badge('date')).textAlign === 'left', 'Right-side label debug text is left-aligned');
       const date = v.querySelector('[data-chat-item-id="date"]');
       const range = document.createRange();
-      range.selectNodeContents(date);
+      range.selectNodeContents(date.querySelector('[data-slot="chat-label-content"]').firstChild);
       check(
         Math.abs(badge('date').getBoundingClientRect().left - range.getBoundingClientRect().right - 6) < 1,
         'Label debug aligns to painted text, not the full-width row'
       );
+      fixture.update({
+        items: [...fixture.model.items, { id: 'notice', kind: 'content', content: 'All caught up.' }],
+      });
+      await until(() => badge('notice')?.textContent.includes('entering'));
+      await commitChatFrame(() => {
+        const debug = badge('notice');
+        check(debug.parentElement.hasAttribute('data-chat-entrance'), 'Content debug belongs to entrance copy');
+        check(
+          Math.abs(debug.getBoundingClientRect().right - debug.parentElement.getBoundingClientRect().right) < 0.1,
+          'Entering content debug overlaps inside its right edge'
+        );
+      });
+      await until(() => badge('notice')?.textContent.includes('idle · layout: idle'));
+      const notice = v.querySelector('[data-chat-item-id="notice"]');
+      check(badge('notice').parentElement === notice, 'Content debug hands off to the real body');
+      check(
+        Math.abs(badge('notice').getBoundingClientRect().right - notice.getBoundingClientRect().right) < 0.1,
+        'Settled content debug is right-aligned with the content edge'
+      );
+      const contentBeforeScroll = {
+        body: notice.getBoundingClientRect().top,
+        badge: badge('notice').getBoundingClientRect().top,
+      };
+      v.scrollTop -= 40;
+      check(
+        Math.abs(
+          badge('notice').getBoundingClientRect().top -
+            contentBeforeScroll.badge -
+            (notice.getBoundingClientRect().top - contentBeforeScroll.body)
+        ) < 0.01,
+        'Content debug follows native scroll synchronously'
+      );
+      await flush();
+      results.push('content inset alignment and synchronous native scrolling');
       const withDebug = geometry();
       fixture.update({ debugBubbles: false });
       await flush();
-      check(!fixture.element.querySelector('[data-slot="chat-item-debug-layer"]'), 'Disabled debug cleans up');
+      check(
+        !fixture.element.querySelector('[data-slot="chat-item-debug"], [data-chat-debug-anchor]'),
+        'Disabled debug cleans up'
+      );
       check(JSON.stringify(withDebug) === JSON.stringify(geometry()), 'Disabling debug preserves geometry');
       results.push('label entrance and text alignment; cleanup');
       return results;

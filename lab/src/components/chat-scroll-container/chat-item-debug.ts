@@ -8,6 +8,17 @@ interface Visual {
 // Visual owners publish their actual carrier, never an inferred animation timer.
 // Weak viewport keys keep this optional instrumentation out of component state.
 const visuals = new WeakMap<HTMLElement, Map<HTMLElement, Visual>>();
+const listeners = new WeakMap<HTMLElement, () => void>();
+
+/** Clones inherit content, never instrumentation belonging to the source visual. */
+export function cloneWithoutChatDebug(source: HTMLElement) {
+  const clone = source.cloneNode(true) as HTMLElement;
+  for (const badge of clone.querySelectorAll('[data-slot="chat-item-debug"]')) badge.remove();
+  clone.removeAttribute('data-chat-debug-anchor');
+  for (const anchor of clone.querySelectorAll('[data-chat-debug-anchor]'))
+    anchor.removeAttribute('data-chat-debug-anchor');
+  return clone;
+}
 
 export function registerChatDebugVisual(viewport: HTMLElement, source: HTMLElement, visual: Visual) {
   let entries = visuals.get(viewport);
@@ -16,19 +27,17 @@ export function registerChatDebugVisual(viewport: HTMLElement, source: HTMLEleme
     visuals.set(viewport, entries);
   }
   entries.set(source, visual);
+  listeners.get(viewport)?.();
   return () => {
-    if (entries.get(source) === visual) entries.delete(source);
+    if (entries.get(source) === visual) {
+      entries.delete(source);
+      listeners.get(viewport)?.();
+    }
   };
 }
 
-/** Read-only annotations live outside the scroller, so they cannot extend its range. */
+/** Annotations belong to their visual carrier, so native scrolling needs no JS position sync. */
 export function createChatItemDebug(viewport: HTMLElement, content: HTMLElement) {
-  const host = viewport.parentElement!;
-  const layer = document.createElement('div');
-  layer.dataset.slot = 'chat-item-debug-layer';
-  layer.setAttribute('aria-hidden', 'true');
-  layer.inert = true;
-  host.append(layer);
   const visible = new Set<HTMLElement>();
   const bodies = new Map<Element, HTMLElement>();
   const badges = new Map<HTMLElement, HTMLSpanElement>();
@@ -71,78 +80,64 @@ export function createChatItemDebug(viewport: HTMLElement, content: HTMLElement)
   });
   mutations.observe(content, { childList: true, subtree: true });
 
+  function removeBadge(source: HTMLElement) {
+    const badge = badges.get(source);
+    if (!badge) return;
+    badge.parentElement?.removeAttribute('data-chat-debug-anchor');
+    badge.remove();
+    badges.delete(source);
+  }
+
   const paint = () => {
     const active = visuals.get(viewport);
-    // Only visible bodies and live visual carriers need geometry reads, even in
-    // long histories. No per-frame scan or React update of the message array.
+    // Read states only for visible bodies and live carriers. CSS owns position,
+    // clipping, and inherited opacity; no per-frame geometry reads or React updates.
     const sources = new Set([...visible, ...(active?.keys() ?? [])]);
-    const hostRect = host.getBoundingClientRect();
-    const viewportRect = viewport.getBoundingClientRect();
-    const samples = [];
+    for (const source of badges.keys()) {
+      if (!source.isConnected || !sources.has(source)) removeBadge(source);
+    }
     for (const source of sources) {
       if (!source.isConnected) continue;
       const visual = active?.get(source);
       const element = visual?.element ?? source;
-      const style = getComputedStyle(element);
-      if (style.visibility === 'hidden') continue;
-      let rect = element.getBoundingClientRect();
       const row = source.parentElement!;
       const slot = row.dataset.slot;
       const typing = source.dataset.slot === 'typing-bubble';
       const label = source.matches('[data-slot="chat-date-label"], [data-slot="chat-status-label"]');
-      if (label) {
-        // Label boxes span the row; the annotation belongs beside the painted text.
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        rect = range.getBoundingClientRect();
-      }
-      if (rect.bottom < viewportRect.top || rect.top > viewportRect.bottom) continue;
+      const anchor = label
+        ? (element.querySelector<HTMLElement>(':scope > [data-slot="chat-label-content"]') ?? element)
+        : element;
       const phase = visual?.phase() ?? 'idle';
       const layout =
         row.hasAttribute('data-chat-inserting') ||
         slot === 'typing-entry-placeholder' ||
         slot === 'typing-exit-placeholder';
-      const outgoing = source.dataset.variant === 'outgoing';
       const kind = typing ? 'typing' : (source.dataset.variant ?? (label ? 'label' : 'content'));
-      samples.push({
-        source,
-        text: `${source.dataset.chatItemId ?? 'typing'} · ${kind}\n${phase} · layout: ${layout ? 'animating' : 'idle'}`,
-        x: (outgoing ? rect.left - 6 : rect.right + 6) - hostRect.left - host.clientLeft,
-        y: rect.top + rect.height / 2 - hostRect.top - host.clientTop,
-        outgoing,
-        opacity: style.opacity,
-      });
-    }
-    // Batch writes after reads; annotation geometry is never an input to motion.
-    const painted = new Set(samples.map((sample) => sample.source));
-    for (const [source, badge] of badges) {
-      if (!painted.has(source)) {
-        badge.remove();
-        badges.delete(source);
-      }
-    }
-    for (const sample of samples) {
-      let badge = badges.get(sample.source);
+      let badge = badges.get(source);
       if (!badge) {
         badge = document.createElement('span');
         badge.dataset.slot = 'chat-item-debug';
-        layer.append(badge);
-        badges.set(sample.source, badge);
+        badge.setAttribute('aria-hidden', 'true');
+        badge.inert = true;
+        badges.set(source, badge);
       }
-      if (badge.textContent !== sample.text) badge.textContent = sample.text;
-      badge.dataset.side = sample.outgoing ? 'left' : 'right';
-      Object.assign(badge.style, {
-        left: `${sample.x}px`,
-        top: `${sample.y}px`,
-        opacity: sample.opacity,
-      });
+      if (badge.parentElement !== anchor) {
+        badge.parentElement?.removeAttribute('data-chat-debug-anchor');
+        anchor.setAttribute('data-chat-debug-anchor', '');
+        anchor.append(badge);
+      }
+      const text = `${source.dataset.chatItemId ?? 'typing'} · ${kind}\n${phase} · layout: ${layout ? 'animating' : 'idle'}`;
+      if (badge.textContent !== text) badge.textContent = text;
+      badge.dataset.side = kind === 'content' ? 'inside-right' : kind === 'outgoing' ? 'left' : 'right';
     }
   };
+  listeners.set(viewport, paint);
   frame.postRender(paint, true);
   return () => {
     cancelFrame(paint);
+    listeners.delete(viewport);
     mutations.disconnect();
     observer.disconnect();
-    layer.remove();
+    for (const source of badges.keys()) removeBadge(source);
   };
 }

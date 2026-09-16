@@ -1,31 +1,37 @@
 @layer components {
-  /* Separate paint-only content layer: annotations never add scrollable overflow. */
-  [data-slot='chat-item-debug-layer'] {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    overflow-x: clip;
-    overflow-y: clip;
-    border-radius: inherit;
-    pointer-events: none;
+  /* Low specificity preserves positioned carriers, including absolute flight copies. */
+  :where([data-chat-debug-anchor]) {
+    position: relative;
   }
 
   [data-slot='chat-item-debug'] {
     position: absolute;
+    top: 50%;
+    left: calc(100% + 6px * var(--chat-debug-scale-x, 1));
     width: max-content;
-    transform: translateY(-50%);
+    transform: translateY(-50%) scale(var(--chat-debug-scale-x, 1), var(--chat-debug-scale-y, 1));
+    transform-origin: left center;
     color: light-dark(rgb(0 0 0 / 45%), rgb(255 255 255 / 45%));
     font-family: ui-monospace, monospace;
     font-size: 9px;
     line-height: 12px;
     font-weight: 400;
     white-space: pre;
+    text-align: left;
     user-select: none;
+    pointer-events: none;
   }
 
-  [data-slot='chat-item-debug'][data-side='left'] {
-    transform: translate(-100%, -50%);
+  [data-slot='chat-item-debug'][data-side='left'],
+  [data-slot='chat-item-debug'][data-side='inside-right'] {
+    left: auto;
+    right: calc(100% + 6px * var(--chat-debug-scale-x, 1));
+    transform-origin: right center;
     text-align: right;
+  }
+
+  [data-slot='chat-item-debug'][data-side='inside-right'] {
+    right: 0;
   }
 
   [data-slot='chat-entrance-layer'] {

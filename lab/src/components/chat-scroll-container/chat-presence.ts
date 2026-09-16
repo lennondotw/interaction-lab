@@ -1,7 +1,7 @@
 import { toSpringPhysics } from '@monorepo/utils';
 import { animate, cancelFrame, frame } from 'motion/react';
 
-import { registerChatDebugVisual } from './chat-item-debug.js';
+import { cloneWithoutChatDebug, registerChatDebugVisual } from './chat-item-debug.js';
 
 export const chatPresenceSpring = {
   type: 'spring',
@@ -35,7 +35,7 @@ export function animateChatEntrance(
   layer.dataset.slot = 'chat-entrance-layer';
   layer.setAttribute('aria-hidden', 'true');
   layer.inert = true;
-  const visual = element.cloneNode(true) as HTMLElement;
+  const visual = cloneWithoutChatDebug(element);
   visual.removeAttribute('data-message-id');
   visual.removeAttribute('data-chat-item-id');
   visual.removeAttribute('id');
