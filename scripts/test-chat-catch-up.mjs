@@ -31,7 +31,7 @@ try {
           const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
           return Math.abs(v.scrollHeight - v.clientHeight - v.scrollTop - distance) <= 1;
         }, distance);
-        await page.evaluate(async () => {
+        await page.evaluate(async (count) => {
           const { finalChatBottom } = await import('/src/components/chat-scroll-container/chat-layout.ts');
           const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
           const content = viewport.firstElementChild;
@@ -118,18 +118,28 @@ try {
             window.catchUp.frames.push(read());
             return window.catchUp;
           };
-        });
+          if (count === 2) {
+            const { commitChatFrame } =
+              await import('/src/components/chat-scroll-container/__tests__/chat-contract-fixture.tsx');
+            // Arm before the first send. Host-side fill/press round trips can outlast
+            // a 1x catch-up, turning this into two unrelated settled sends.
+            const sendWhenAnimating = () => {
+              if (read().mode !== 'animating') {
+                requestAnimationFrame(sendWhenAnimating);
+                return;
+              }
+              void commitChatFrame(() => {
+                const field = document.querySelector('textarea');
+                Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, '1');
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+              }).then(() => document.querySelector('form').requestSubmit());
+            };
+            requestAnimationFrame(sendWhenAnimating);
+          }
+        }, count);
         const input = page.getByRole('textbox', { name: 'Message', exact: true });
         await input.fill('1');
         await input.press('Enter');
-        if (count === 2) {
-          await page.waitForFunction(
-            () => document.querySelector('#storybook-root strong')?.textContent === 'animating'
-          );
-          await page.waitForTimeout(60);
-          await input.fill('1');
-          await input.press('Enter');
-        }
         await page.waitForFunction((count) => {
           const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
           return (

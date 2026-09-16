@@ -24,6 +24,9 @@ try {
     });
     const toggle = page.getByRole('button', { name: /^Typing (on|off)$/ });
     await toggle.click();
+    // The natural row briefly exists before the entrance takes ownership. Wait
+    // for the entrance and its completion so the timed exit starts at full height.
+    await page.waitForSelector('[data-slot="typing-entry-placeholder"]', { state: 'attached' });
     await page.waitForFunction(() => document.querySelector('[data-slot="chat-typing-row"]'));
     await page.evaluate((button) => {
       const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
