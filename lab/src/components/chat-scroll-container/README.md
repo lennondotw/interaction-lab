@@ -276,7 +276,7 @@ Messages fade in from 20px below their positions by default, including sends wit
 Their visual copies live outside the slots,
 so expansion never clips or scales the text. Outgoing composer flights use the shared final-layout
 projection above. Multiple active slots contribute their remaining heights to the same projection.
-Resizing the viewport remeasures active slots at the new available width.
+Resizing the viewport invalidates mounted targets at the new available width.
 
 At a settled bottom, the scroll controller directly tracks each layout update. Expansion already
 supplies smooth motion, so adding another scroll spring would make it lag. From earlier history, a
@@ -284,6 +284,39 @@ local send still uses the catch-up spring, aimed at the fully expanded bottom. W
 append leaves scrollTop alone; insertion above the reader compensates for the displacement of the
 visible reading anchor. Fractional scroll rounding is carried into the next update to avoid drift.
 Native input always takes priority over following.
+
+### Layout transactions and long histories
+
+The list model resolves adjacency before animation. On an items update, it compares IDs,
+content inputs, and the declared leading gap, then passes only affected mounted rows to the
+layout manager. An insertion normally dirties the new row and its next neighbor. Tail changes
+are presentation-only. Rows farther down move through normal document flow; they do not need
+individual animation entries or geometry measurements.
+
+The manager reads intrinsic targets in a batch, writes **all** starting footprints in a batch,
+and only then measures the remaining height and notifies scrolling. This ordering is essential:
+a new zero-height slot alongside a neighbor whose gap has already changed from 8px to 3px
+can temporarily shorten the scroll range. Reading geometry before restoring that neighbor's
+old footprint lets the browser clamp `scrollTop`, even though both rows will subsequently animate.
+Active rows retain their current height while their natural width is measured. Unaffected
+animations keep running; a changed target continues from its current size and velocity.
+
+A shared `ResizeObserver` watches intrinsic bodies, not animated slots. Its first delivery
+establishes cached heights; later body-height changes, such as image loading, re-enter the same
+layout transaction. Width changes invalidate all mounted targets because wrapping is a global
+dependency. Immutable item updates identify content changes before paint; there is no general
+CSS dependency graph to maintain.
+
+Reading-anchor lookup uses binary search over ordered, non-overlapping row boxes and skips
+entering rows. It saves one visible anchor rather than remeasuring every body on every tick.
+The model comparison remains O(n) JavaScript work per changed items array. Target measurement
+is O(k) for k affected rows, and anchor lookup is O(log n), plus any entering rows skipped.
+Initial observation and a width change can touch all mounted items.
+
+This is not virtualization: rendering and native layout of 10,000 mounted rows still have a cost.
+A future virtual list must retain stable item identities, size caches, and a reading-anchor
+adapter for its mounted range. The bounded-measurement regression exercises the production
+layout manager with both 100 and 10,000 rows; it is not a claim of constant-time whole-app rendering.
 
 ## Typing indicator exit
 
@@ -308,10 +341,16 @@ When already settled at the bottom, scrolling follows each height update immedia
 spring supplies the smooth motion, so no second scroll spring needs to chase it. An active catch-up
 scroll retains its spring, and detached history browsing retains its position within the remaining
 scroll range. Upward input can still detach at any time. Receive inserts the new message and requests
-typing replacement in the same update: the new slot starts at the typing row's existing height and
-gap, then transitions to the message's measured size. Typing remains as a zero-height visual overlay
-aligned to that message. Both visuals crossfade without an additional vertical entrance or exit offset;
-there is no separate shrinking spacer. Ordinary receives without typing retain the 20px
+typing replacement in the same update: the new slot inherits the typing row's current animated
+footprint (including its gap) and height velocity, then transitions to the message's measured size.
+The old height animation stops and releases its projected height before the new slot starts, so
+scrolling sees one layout owner. The snapshot records the actual row height, not the full intrinsic
+body height: those differ when a reply interrupts typing entry or exit.
+
+Typing remains as a zero-height visual overlay aligned to that message. An unfinished entrance's
+current visual offset is held during its fade; it must not jump to zero simply because the mode
+changes to replacement. Both visuals crossfade without an additional vertical entrance or exit
+translation, and there is no separate shrinking spacer. Ordinary receives without typing retain the 20px
 entrance. Reduced motion skips these transitions.
 
 If typing turns on again during replacement, the same commit starts a fresh entry slot with a measured
@@ -357,6 +396,10 @@ skips the flight entirely.
 - [Typing exit checks](../../../../scripts/test-chat-typing-exit.mjs): bottom alignment during collapse,
   reopening, receive, native interruption, and reduced motion.
 
+- [Typing handoff checks](../../../../scripts/test-chat-typing-handoff.mjs): immediate, partial,
+  settled, and reopened replacements at 0.1x, including footprint and velocity continuity.
+- [Layout transaction checks](../../../../scripts/test-chat-layout-transactions.mjs): atomic neighbor
+  gap changes, intrinsic body growth and shrinkage, and geometry-read budgets with 10,000 rows.
 - [Insertion checks](../../../../scripts/test-chat-insertion.mjs): typing stability during send,
   replacement expansion, middle insertion, reading anchors, and interruption. The `Insert In History`
   story inserts incoming or outgoing messages immediately before the final message for manual inspection.

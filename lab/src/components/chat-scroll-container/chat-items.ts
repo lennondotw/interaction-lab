@@ -53,3 +53,17 @@ export function chatItemStyle(gap: number): CSSProperties {
 export function readChatItemGap(row: HTMLElement) {
   return Number.parseFloat(getComputedStyle(row).getPropertyValue('--chat-item-gap')) || 0;
 }
+
+/** Compare intrinsic-layout inputs, not presentation state such as tail visibility. */
+export function sameChatItemContent(previous: ChatListItem, next: ChatListItem) {
+  if (previous === next) return true;
+  if (previous.kind !== next.kind) return false;
+  if (previous.kind === 'date' && next.kind === 'date') return previous.label === next.label;
+  if (previous.kind === 'content' && next.kind === 'content') {
+    return previous.content === next.content && previous.align === next.align;
+  }
+  if (isChatMessage(previous) && isChatMessage(next)) {
+    return previous.content === next.content && previous.variant === next.variant;
+  }
+  return previous.kind === 'status' && next.kind === 'status' && previous.content === next.content;
+}

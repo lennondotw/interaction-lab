@@ -27,6 +27,9 @@ interface Insertion extends ChatLayoutEntry {
   newItem: boolean;
 }
 
+// ResizeObserver and DOMRect can differ slightly in subpixel reporting.
+const intrinsicSizeTolerance = 0.02;
+
 /** Layout alone owns expansion. Bubble visuals and flight clocks remain independent. */
 export function createChatInsertions(
   viewport: HTMLElement,
@@ -35,56 +38,52 @@ export function createChatInsertions(
 ) {
   const entries = new Set<Insertion>();
   const unregister = registerChatLayout(viewport, entries);
-  const snapshots = new Map<HTMLElement, { top: number; height: number; gap: number }>();
+  const measurements = new Map<HTMLElement, { body: HTMLElement; height?: number; gap: number }>();
+  const active = new Map<HTMLElement, Insertion>();
+  let savedAnchor: (ReadingAnchor & { scrollTop: number }) | undefined;
+  let typingSnapshot: { row: Element; height: number } | undefined;
   let speed = 1;
   let reduced = false;
-
-  function rows() {
-    return [...content.children].filter((row): row is HTMLElement => row instanceof HTMLElement);
-  }
 
   function readingElement(row: HTMLElement) {
     return row.querySelector<HTMLElement>(':scope > [data-chat-item-id], :scope > [data-chat-item-body]') ?? row;
   }
 
-  function isEntering(row: HTMLElement) {
-    return [...entries].some((entry) => entry.row === row && entry.newItem);
-  }
-
-  function remember() {
-    const origin = viewport.getBoundingClientRect().top;
-    snapshots.clear();
-    for (const row of rows()) {
-      const rect = readingElement(row).getBoundingClientRect();
-      snapshots.set(row, {
-        top: rect.top - origin + viewport.scrollTop,
-        height: rect.height,
-        gap: [...entries].find((entry) => entry.row === row)?.currentGap ?? readChatItemGap(row),
-      });
+  function captureAnchor(): ReadingAnchor | undefined {
+    const top = viewport.getBoundingClientRect().top;
+    const rows = content.children;
+    // Row boxes are ordered and never overlap, even when their visuals overflow.
+    // Binary search avoids measuring an entire history on every animation tick.
+    let low = 0;
+    let high = rows.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (rows[mid]!.getBoundingClientRect().bottom <= top) low = mid + 1;
+      else high = mid;
     }
-  }
-
-  function anchorFromSnapshot(): ReadingAnchor | undefined {
-    for (const [element, snapshot] of snapshots) {
-      if (element.isConnected && !isEntering(element) && snapshot.top + snapshot.height > viewport.scrollTop) {
-        return {
-          element: readingElement(element),
-          top: snapshot.top - viewport.scrollTop + viewport.getBoundingClientRect().top,
-        };
-      }
+    for (let index = low; index < rows.length; index++) {
+      const row = rows[index] as HTMLElement;
+      if (active.get(row)?.newItem) continue;
+      const element = readingElement(row);
+      return { element, top: element.getBoundingClientRect().top };
     }
     return undefined;
   }
 
-  function captureAnchor(): ReadingAnchor | undefined {
-    const top = viewport.getBoundingClientRect().top;
-    // Follow the existing body, not its temporary slot: moving a gap inside
-    // that slot must not move the reading anchor. New hidden bodies cannot own it.
-    const row = rows().find(
-      (row) => snapshots.has(row) && !isEntering(row) && readingElement(row).getBoundingClientRect().bottom > top
-    );
-    const element = row && readingElement(row);
-    return element ? { element, top: element.getBoundingClientRect().top } : undefined;
+  function remember() {
+    const anchor = captureAnchor();
+    savedAnchor = anchor && { ...anchor, scrollTop: viewport.scrollTop };
+    const last = content.lastElementChild;
+    const typing = last?.querySelector<HTMLElement>(':scope > [data-chat-item-body]');
+    // Replacement inherits the painted footprint, including partial entry/exit,
+    // rather than the body's full intrinsic height or a newly committed gap.
+    typingSnapshot = typing && last ? { row: last, height: last.getBoundingClientRect().height } : undefined;
+  }
+
+  function anchorFromSnapshot(): ReadingAnchor | undefined {
+    return savedAnchor?.element.isConnected
+      ? { element: savedAnchor.element, top: savedAnchor.top + savedAnchor.scrollTop - viewport.scrollTop }
+      : captureAnchor();
   }
 
   function restore(entry: Insertion) {
@@ -112,26 +111,30 @@ export function createChatInsertions(
     body.style.marginTop = `${entry.currentGap}px`;
     body.style.flexShrink = '0';
     row.dataset.chatInserting = '';
-    entry.remaining = entry.measurement.height + gap - row.getBoundingClientRect().height;
+  }
+
+  function measureRemaining(entry: Insertion) {
+    entry.remaining = entry.measurement.height + entry.measurement.gap - entry.row.getBoundingClientRect().height;
   }
 
   function finish(entry: Insertion) {
     const anchor = captureAnchor();
     entry.animation?.stop();
     entries.delete(entry);
+    active.delete(entry.row);
     restore(entry);
     entry.size.destroy();
     changed(false, anchor);
     remember();
   }
 
-  function start(entry: Insertion) {
+  function start(entry: Insertion, velocity = entry.size.getVelocity()) {
     const target = entry.measurement.height + entry.measurement.gap;
     entry.animation = animate(entry.size, target, {
       ...chatLayoutSpring,
       restDelta: 0.1,
       restSpeed: 1,
-      velocity: entry.size.getVelocity() / speed,
+      velocity: velocity / speed,
       onUpdate: (height) => {
         if (!entry.row.isConnected) {
           finish(entry);
@@ -139,6 +142,7 @@ export function createChatInsertions(
         }
         const anchor = captureAnchor();
         apply(entry, height);
+        measureRemaining(entry);
         changed(false, anchor);
         remember();
       },
@@ -147,55 +151,118 @@ export function createChatInsertions(
     entry.animation.speed = speed;
   }
 
+  // Observe intrinsic bodies, never the animated slots. A slot tick must not
+  // invalidate its own target. Initial observer delivery only establishes a baseline.
+  let width = viewport.clientWidth;
+  const bodyObserver = new ResizeObserver((records) => {
+    const affected = new Set<HTMLElement>();
+    // Width is a global dependency: invalidate mounted targets once in this same
+    // observer batch, including active rows whose temporary width is still fixed.
+    if (viewport.clientWidth !== width) {
+      width = viewport.clientWidth;
+      for (const row of measurements.keys()) affected.add(row);
+    }
+    for (const record of records) {
+      const row = record.target.parentElement;
+      const previous = row && measurements.get(row);
+      if (!row || !previous) continue;
+      const height = record.borderBoxSize[0]?.blockSize ?? record.contentRect.height;
+      if (previous.height === undefined) previous.height = height;
+      else if (Math.abs(previous.height - height) > intrinsicSizeTolerance) affected.add(row);
+    }
+    if (affected.size) api.insert(new Set(), false, undefined, affected);
+  });
+
+  function register(row: HTMLElement) {
+    if (measurements.has(row)) return;
+    const body = row.querySelector<HTMLElement>(':scope > [data-chat-item-id]');
+    if (!body) return;
+    measurements.set(row, {
+      body,
+      // The model declares this value directly. Registration requires no layout read.
+      gap: Number.parseFloat(row.style.getPropertyValue('--chat-item-gap')) || 0,
+    });
+    bodyObserver.observe(body, { box: 'border-box' });
+  }
+
+  for (const row of content.children) register(row as HTMLElement);
   remember();
+  viewport.addEventListener('scroll', remember, { passive: true });
   const api = {
-    /** Call after React commits, before paint and before starting visual entrances. */
-    insert(ids: Set<string>, localSend: boolean, replacement?: { body: HTMLElement; row: HTMLElement }) {
+    register,
+    unregister(row: HTMLElement) {
+      const previous = measurements.get(row);
+      if (previous) bodyObserver.unobserve(previous.body);
+      measurements.delete(row);
+      const entry = active.get(row);
+      if (entry) {
+        entry.animation?.stop();
+        entry.size.destroy();
+        entries.delete(entry);
+        active.delete(row);
+      }
+    },
+    /** The model supplies dirty rows; unchanged history does not need DOM measurement. */
+    insert(
+      ids: Set<string>,
+      localSend: boolean,
+      replacement?: { body: HTMLElement; row: HTMLElement; velocity: number },
+      affected: ReadonlySet<HTMLElement> = new Set()
+    ) {
       const anchor = anchorFromSnapshot();
-      const previousTyping = replacement && snapshots.get(replacement.row);
       const replacementHeight = replacement
-        ? previousTyping
-          ? previousTyping.height + previousTyping.gap
+        ? typingSnapshot?.row === replacement.row
+          ? typingSnapshot.height
           : replacement.row.getBoundingClientRect().height
         : 0;
-      // Read the final intrinsic layout in one batch, then restore active slots.
-      for (const entry of entries) restore(entry);
-      const measurements = rows().flatMap((row): Measurement[] => {
-        const body = row.querySelector<HTMLElement>(':scope > [data-chat-item-id]');
-        if (!body) return [];
-        return [
-          {
-            row,
-            body,
-            height: body.getBoundingClientRect().height,
-            gap: readChatItemGap(row),
-            width: row.getBoundingClientRect().width,
-          },
-        ];
+      const targets = [...affected].filter((row) => row.isConnected && measurements.has(row));
+      // Release only width to measure intrinsic wrapping. Keep active footprints
+      // in place during measurement; exposing their final heights could clamp the
+      // scroll range before the transaction restores its starting layout.
+      // Unrelated animations retain their clock and velocity.
+      for (const row of targets) {
+        if (active.has(row)) row.style.removeProperty('width');
+      }
+      const nextMeasurements = targets.map((row): Measurement => {
+        const body = readingElement(row);
+        return {
+          row,
+          body,
+          height: body.getBoundingClientRect().height,
+          gap: readChatItemGap(row),
+          width: row.getBoundingClientRect().width,
+        };
       });
       if (replacement) {
         replacement.row.style.height = '0px';
         replacement.row.style.paddingTop = '0px';
         const visual = replacement.row.firstElementChild as HTMLElement;
-        // Match the declared replacement style. React clears it when typing
-        // reopens, returning the indicator to normal flow in the same commit.
         visual.style.position = 'absolute';
       }
-      for (const measurement of measurements) {
-        let entry = [...entries].find((item) => item.row === measurement.row);
+      const updated: Insertion[] = [];
+      for (const measurement of nextMeasurements) {
+        const { row } = measurement;
+        let entry = active.get(row);
         const isNew = ids.has(measurement.body.dataset.chatItemId!);
-        const previous = snapshots.get(measurement.row);
-        const gapChanged = previous && !entry && previous.gap !== measurement.gap;
-        if (!entry && !isNew && !gapChanged) continue;
+        const previous = measurements.get(row)!;
+        const heightChanged =
+          previous.height !== undefined && Math.abs(previous.height - measurement.height) > intrinsicSizeTolerance;
+        const gapChanged = previous.gap !== measurement.gap;
+        if (previous.body !== measurement.body) {
+          bodyObserver.unobserve(previous.body);
+          bodyObserver.observe(measurement.body, { box: 'border-box' });
+        }
+        measurements.set(row, measurement);
+        if (!entry && !isNew && !heightChanged && !gapChanged) continue;
         if (!entry) {
           const initial = isNew
             ? measurement.body === replacement?.body
               ? replacementHeight
               : 0
-            : measurement.height + previous!.gap;
-          const fromGap = isNew ? measurement.gap : previous!.gap;
+            : (previous.height ?? measurement.height) + previous.gap;
+          const fromGap = isNew ? measurement.gap : previous.gap;
           entry = {
-            row: measurement.row,
+            row,
             measurement,
             remaining: 0,
             gapRemaining: 0,
@@ -206,18 +273,24 @@ export function createChatInsertions(
             newItem: isNew,
           };
           entries.add(entry);
+          active.set(row, entry);
         }
         entry.animation?.stop();
         entry.fromSize = entry.size.get();
         entry.fromGap = entry.currentGap;
         entry.measurement = measurement;
         apply(entry, reduced ? measurement.height + measurement.gap : entry.size.get());
+        updated.push(entry);
       }
-      // Publish the complete final target once, before any animation ticks.
+      // Atomic starting layout: absolutely no geometry reads inside the write loop.
+      // Otherwise a new zero-height slot plus its neighbor's already-reduced gap
+      // temporarily shortens the list, and a forced layout clamps scrollTop before
+      // the neighbor can restore its previous footprint (e.g. 8px -> 3px).
+      for (const entry of updated) measureRemaining(entry);
       changed(localSend, anchor);
-      for (const entry of entries) {
+      for (const entry of updated) {
         if (reduced) finish(entry);
-        else start(entry);
+        else start(entry, entry.measurement.body === replacement?.body ? replacement.velocity : undefined);
       }
       remember();
     },
@@ -231,22 +304,19 @@ export function createChatInsertions(
     },
     remember,
     dispose() {
-      resizeObserver.disconnect();
+      bodyObserver.disconnect();
+      viewport.removeEventListener('scroll', remember);
       for (const entry of entries) {
         entry.animation?.stop();
         entry.size.destroy();
         restore(entry);
       }
       entries.clear();
+      active.clear();
+      measurements.clear();
       unregister();
     },
   };
-  let width = viewport.clientWidth;
-  const resizeObserver = new ResizeObserver(() => {
-    if (viewport.clientWidth === width) return;
-    width = viewport.clientWidth;
-    api.insert(new Set(), false);
-  });
-  resizeObserver.observe(viewport);
+  bodyObserver.observe(viewport);
   return api;
 }

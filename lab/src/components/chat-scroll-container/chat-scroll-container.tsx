@@ -4,7 +4,14 @@ import { useCallback, useLayoutEffect, useRef, type ComponentPropsWithoutRef } f
 
 import { MessageBubble, TypingBubble } from '../message-bubble/index.js';
 import { createChatInsertions } from './chat-insertions.js';
-import { chatItemGap, chatItemStyle, isChatMessage, type ChatListItem, type ChatMessage } from './chat-items.js';
+import {
+  chatItemGap,
+  chatItemStyle,
+  isChatMessage,
+  sameChatItemContent,
+  type ChatListItem,
+  type ChatMessage,
+} from './chat-items.js';
 import { ChatDateLabel, ChatStatusLabel } from './chat-list-labels.js';
 import { animateChatEntrance } from './chat-presence.js';
 import { createChatScrollController, type ChatScrollState } from './chat-scroll-controller.js';
@@ -47,9 +54,19 @@ export function ChatScrollContainer({
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLOListElement>(null);
   const controllerRef = useRef<ReturnType<typeof createChatScrollController> | null>(null);
-  const previousIds = useRef(new Set(items.map(({ id }) => id)));
-  const previousItems = useRef(items);
   const insertionsRef = useRef<ReturnType<typeof createChatInsertions> | null>(null);
+  const previousItems = useRef(items);
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
+  const registerRow = useCallback((row: HTMLLIElement | null) => {
+    if (!row) return;
+    const id = row.dataset.chatRowId!;
+    rowRefs.current.set(id, row);
+    insertionsRef.current?.register(row);
+    return () => {
+      rowRefs.current.delete(id);
+      insertionsRef.current?.unregister(row);
+    };
+  }, []);
   const entranceAnimations = useRef(new Set<ReturnType<typeof animateChatEntrance>>());
   const reducedMotion = useReducedMotion();
   const typingLayoutChanged = useCallback(() => {
@@ -103,11 +120,36 @@ export function ChatScrollContainer({
   }, [bottomThreshold, animationSpeed, reducedMotion, onScrollStateChange]);
 
   useLayoutEffect(() => {
-    const inserted = items.filter(({ id }) => !previousIds.current.has(id));
+    const inserted: ChatListItem[] = [];
     const itemsChanged = previousItems.current !== items;
+    const affected = new Set<HTMLElement>();
+    if (itemsChanged) {
+      // Data comparison is linear in the supplied array; geometry work is local.
+      // Adjacency rules are resolved here, so the animation layer needs no graph
+      // of CSS dependencies and no scan of unchanged DOM bodies.
+      const previous = new Map(
+        previousItems.current.map((item, index) => [
+          item.id,
+          {
+            item,
+            gap: chatItemGap(item, previousItems.current[index - 1]),
+          },
+        ])
+      );
+      items.forEach((item, index) => {
+        const old = previous.get(item.id);
+        if (!old) inserted.push(item);
+        if (!old || old.gap !== chatItemGap(item, items[index - 1]) || !sameChatItemContent(old.item, item)) {
+          const row = rowRefs.current.get(item.id);
+          if (row) affected.add(row);
+        }
+      });
+    }
     previousItems.current = items;
-    previousIds.current = new Set(items.map(({ id }) => id));
-    const bodies = [...(contentRef.current?.querySelectorAll<HTMLElement>('[data-chat-item-id]') ?? [])];
+    const bodies = inserted.flatMap(({ id }) => {
+      const body = rowRefs.current.get(id)?.firstElementChild;
+      return body instanceof HTMLElement ? [body] : [];
+    });
     const incomingIds = new Set(
       inserted.filter((item) => isChatMessage(item) && item.variant === 'incoming').map(({ id }) => id)
     );
@@ -118,18 +160,22 @@ export function ChatScrollContainer({
       typingMounted && !incomingTyping && !typingReplacing
         ? bodies.find((body) => incomingIds.has(body.dataset.chatItemId!))
         : undefined;
+    // Stop and snapshot the old animation before the replacement slot takes over.
+    const handoff = replacement ? replaceTypingWith(replacement) : undefined;
     if (itemsChanged) {
       insertionsRef.current?.insert(
         new Set(inserted.map(({ id }) => id)),
         inserted.some((item) => isChatMessage(item) && item.variant === 'outgoing'),
-        replacement && typing.rowRef.current ? { body: replacement, row: typing.rowRef.current } : undefined
+        replacement && typing.rowRef.current && handoff
+          ? { body: replacement, row: typing.rowRef.current, velocity: handoff.velocity }
+          : undefined,
+        affected
       );
     }
     if (!reducedMotion) {
       for (const body of bodies) {
         if (!entranceIds.has(body.dataset.chatItemId!)) continue;
         const fadeOnly = body === replacement;
-        if (fadeOnly) replaceTypingWith(body);
         const animation = animateChatEntrance(
           body,
           Math.max(0.01, animationSpeed),
@@ -190,6 +236,8 @@ export function ChatScrollContainer({
             return (
               <li
                 key={item.id}
+                ref={registerRow}
+                data-chat-row-id={item.id}
                 data-chat-item=""
                 className={cn(
                   'min-w-0',
