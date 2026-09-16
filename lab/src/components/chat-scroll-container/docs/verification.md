@@ -59,8 +59,14 @@ to composer clearance. Frame samples are saved to `/tmp/chat-bottom-line.json`; 
 the amber line in the test browser. The test does not add a permanent marker to the component.
 
 At 20px debug threshold, scroll upward slightly while still inside the zone: following must remain
-cancelled. A later downward return can restore eligibility. At a settled bottom, grow/shrink/grow the
-composer; while detached, repeat without being pulled down. The single-line composer is 35px by design.
+cancelled. A later downward return can restore eligibility. The scroll policy regression types and deletes lines through 1 → 2 → 3 → 2 → 1 at 1x/0.1x, starting settled or detached 8px/220px above bottom. It samples every animation frame and observes reported state changes: settled following remains pinned within 1 CSS px, detached scroll position stays within 1 CSS px, and neither state changes during resizing. Each step also verifies the composer height and matching bottom clearance. The single-line composer is 35px by design.
+
+The [composer release checks](../../../../../scripts/test-chat-composer-release.mjs) sample the reset
+commit and subsequent frames at 1x/0.1x: a three-line composer clears without the former 34px backward
+clamp, including consecutive sends, typing, catch-up from 100px above bottom, and upward interruption.
+The spacer retains outstanding compensation after flight cancellation, then returns to measured
+clearance. A focused layout fixture checks batch-independent projection, duplicate delivery, overlapping
+releases, reduced motion, and disposal. Samples are saved to `/tmp/chat-composer-release.json`.
 
 In **Automatic Replies**, use 0.25x, send `Hey!`, scroll upward about 100px, then send the multiline
 [bullet preset](./demo-conversation.md). The flight must settle without a rescue scroll.
