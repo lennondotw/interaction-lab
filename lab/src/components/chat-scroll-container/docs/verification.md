@@ -35,6 +35,25 @@ messages. Send again from earlier history. The shape should finish once; later p
 must not restart it. The copy should disappear when the real row aligns. Compare outline on/off using
 measured body bounds; debug decoration is not evidence of a changed layout box by itself.
 
+## Per-item debugging
+
+Enable **Bubble debug** in the composed stories, or pass `debugBubbles` to the container.
+Annotations show item identity, visual phase (`idle`, `entering`, `exiting`, `crossfading`,
+`replacing`, `flying`, or `handoff`), and whether the item's layout slot is animating.
+`handoff` means the visible entrance/flight clock finished but its real layout anchor is not yet ready.
+The typing dots keep cycling even when the typing item's entrance/layout reports idle.
+
+Outgoing annotations follow the visual's left edge; incoming/typing annotations follow its right edge.
+Date/status annotations follow the painted text's right edge, rather than the full-width label box.
+The small, translucent monospace text is inert and excluded from accessibility. It lives in an absolute,
+clipped layer outside the scroller: it cannot change body measurement, hit targets, or scroll extent.
+Flight/entrance owners register their actual carriers and phase; the debugger does not guess from elapsed time.
+Only visible bodies and active visual carriers are sampled. Disabling debug removes the layer, observers,
+and frame callback. This diagnostic sampling has a cost while enabled; it is not a performance profiler.
+
+[Debug checks](../../../../../scripts/test-chat-item-debug.mjs) cover toggle geometry invariance,
+side placement, unscaled flight text, interruption cleanup, typing reversal/replacement, and label alignment.
+
 ## Scrolling and composer
 
 - [Interaction contracts](../../../../../scripts/test-chat-contracts.mjs): explicit flight cancellation and non-cancellation signals, pending departures, both pointer policies in fixtures and real stories, zero-displacement downward wheel restoration at 2px/20px, pointer-held restoration, atomic typing replacement boundaries, geometry, and disposal.
