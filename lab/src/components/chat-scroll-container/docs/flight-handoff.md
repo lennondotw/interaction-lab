@@ -13,7 +13,25 @@ After the flight's original shape clock ends, an arrival loop keeps painting its
 
 Then stop the flight, remove its layer, and restore the original visibility. The 1px tolerance accommodates geometry rounding; it is not the bottom-follow threshold. Checking all layout entries is conservative: an unrelated active slot can delay handoff.
 
-User interruption is a separate path. Upward wheel input, a pointer press in the scrolling viewport, or a scroll key stops the flight and reveals the real row immediately. Reduced motion, target removal, and disposal also release the copy. These paths prioritize control and cleanup over a seamless arrival.
+## User interruption is an intentional immediate handoff
+
+Explicit interaction with the scrolling viewport stops all active flights and reveals their real rows immediately:
+
+- Upward `wheel` input (`deltaY < 0`, excluding `ctrlKey` zoom gestures).
+- `pointerdown` in the viewport, even before scrolling starts.
+- `ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`, `Home`, `End`, or Space received by the viewport.
+
+This is not a generic `scroll` listener. Programmatic catch-up, browser clamping after layout changes,
+and downward wheel input alone do not cancel flight. Cancellation removes the visual copies, restores
+real-bubble visibility, and clears pending departures; it does not delete messages or prevent native input.
+
+The flight predicts a destination at the final bottom, and normal handoff assumes the real row will
+reach it. Once the user interrupts catch-up, that assumption is no longer reliable. Immediate handoff
+keeps interaction attached to the real list instead of leaving an overlay on an obsolete route or waiting
+indefinitely for bottom alignment. This is the intended interaction policy, not an animation failure:
+user control takes priority over completing the morph or achieving an aligned animated arrival.
+
+Reduced motion, target removal, and disposal also release the copy as separate cleanup paths.
 
 A stuck flight may therefore indicate a scroll-ownership or layout-projection problem rather than a slow spring. Verify the handoff predicates instead of adding a timeout that conceals misalignment.
 

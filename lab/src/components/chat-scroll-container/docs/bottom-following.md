@@ -12,7 +12,7 @@ Following is explicit intent, not a boolean recalculated from proximity on every
 
 The default bottom zone is 2px; stories expose 20px for debugging. A separate 0.5px geometry tolerance identifies a settled bottom and equivalent catch-up targets. Being inside it does not automatically reattach, and leaving it during a programmatic animation does not detach.
 
-Upward wheel input detaches immediately, before native movement. Pointer-down in the viewport and scroll keys also detach. The controller closes its write gate, invalidates old completion callbacks with a generation counter, and resets its MotionValue to the actual position. It never prevents native scrolling.
+Upward wheel input detaches immediately, before native movement. Pointer-down in the viewport and scroll keys also detach. The controller closes its write gate, invalidates old completion callbacks with a generation counter, and resets its MotionValue to the actual position. It never prevents native scrolling. The same explicit viewport input also triggers the [intentional immediate flight handoff](./flight-handoff.md#user-interruption-is-an-intentional-immediate-handoff), so the user interacts with real message rows rather than a flight still targeting the bottom.
 
 An unowned downward scroll can restore following upon entering the zone. A held pointer must first release or cancel, with the last nonzero movement downward and the viewport still in the zone. Restoration enables future following without immediately snapping the remaining pixels. There is no reattachment timeout or reliance on `scrollend` or inferred trackpad contact.
 

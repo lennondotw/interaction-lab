@@ -53,28 +53,29 @@ between independent animation ticks.
 
 ## Design notes
 
-| Topic                                                                                   | Scope                                                              |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [Bubble geometry contracts](./docs/bubble-geometry.md)                                  | Body, text, tail, and independent composer dimensions.             |
-| [Composer measurement and bottom clearance](./docs/composer-measurement.md)             | Autosizing, initial positioning, and source capture timing.        |
-| [Visual layers and clipping boundaries](./docs/visual-layers.md)                        | Real rows, entrance copies, flight, glass, and scroll extent.      |
-| [Composer-to-bubble FLIP](./docs/composer-flip.md)                                      | Measured departure and destination, manual inverse transforms.     |
-| [Inverse scale compensation](./docs/inverse-scale.md)                                   | Natural text dimensions inside a scaled carrier.                   |
-| [Shared spring and offset decay](./docs/offset-decay.md)                                | Departure inset and cohesive arrival without a second text spring. |
-| [Final layout projection](./docs/final-layout-projection.md)                            | One expanded destination shared by scrolling and flights.          |
-| [Destination compensation during consecutive sends](./docs/destination-compensation.md) | Retarget placement without restarting the original shape clock.    |
-| [Flight-to-message handoff](./docs/flight-handoff.md)                                   | Arrival predicates, interruption, and copy cleanup.                |
-| [Timeline items and gap ownership](./docs/items-and-gaps.md)                            | Heterogeneous items, leading space, and immediate grouping.        |
-| [Layout dependencies and local invalidation](./docs/local-invalidation.md)              | Affected rows, intrinsic observation, and long-history limits.     |
-| [Atomic layout transactions](./docs/layout-transactions.md)                             | Read/write ordering that prevents temporary scroll clamps.         |
-| [Animated layout slots](./docs/layout-slots.md)                                         | Top-aligned full-size bodies and temporary animated footprints.    |
-| [Default visual entrance](./docs/default-presence.md)                                   | Shared upward fade and explicit special cases.                     |
-| [Bottom following as user intent](./docs/bottom-following.md)                           | Following, catch-up, detachment, and user escape.                  |
-| [Scroll ownership and browser clamping](./docs/scroll-ownership.md)                     | One observation cursor for layout and native scroll events.        |
-| [Preserving the reading anchor](./docs/reading-anchor.md)                               | Detached insertion compensation and fractional rounding.           |
-| [Reversible typing presence](./docs/typing-presence.md)                                 | Entry, exit, and reversal with independent visual lifetime.        |
-| [Typing-to-message replacement](./docs/typing-replacement.md)                           | Footprint and velocity transfer with a simultaneous crossfade.     |
-| [Spring parameters and playback scaling](./docs/spring-parameters.md)                   | Frequency, damping, velocity units, and motion preferences.        |
+| Topic                                                                                   | Scope                                                                   |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [Bubble geometry contracts](./docs/bubble-geometry.md)                                  | Body, text, tail, and independent composer dimensions.                  |
+| [Composer measurement and bottom clearance](./docs/composer-measurement.md)             | Autosizing, initial positioning, and source capture timing.             |
+| [Visual layers and clipping boundaries](./docs/visual-layers.md)                        | Real rows, entrance copies, flight, glass, and scroll extent.           |
+| [Composer-to-bubble FLIP](./docs/composer-flip.md)                                      | Measured departure and destination, manual inverse transforms.          |
+| [Inverse scale compensation](./docs/inverse-scale.md)                                   | Natural text dimensions inside a scaled carrier.                        |
+| [Shared spring and offset decay](./docs/offset-decay.md)                                | Departure inset and cohesive arrival without a second text spring.      |
+| [Final layout projection](./docs/final-layout-projection.md)                            | One expanded destination shared by scrolling and flights.               |
+| [Destination compensation during consecutive sends](./docs/destination-compensation.md) | Retarget placement without restarting the original shape clock.         |
+| [Flight-to-message handoff](./docs/flight-handoff.md)                                   | Arrival predicates, interruption, and copy cleanup.                     |
+| [Timeline items and gap ownership](./docs/items-and-gaps.md)                            | Heterogeneous items, leading space, and immediate grouping.             |
+| [Layout dependencies and local invalidation](./docs/local-invalidation.md)              | Affected rows, intrinsic observation, and long-history limits.          |
+| [Atomic layout transactions](./docs/layout-transactions.md)                             | Read/write ordering that prevents temporary scroll clamps.              |
+| [Animated layout slots](./docs/layout-slots.md)                                         | Top-aligned full-size bodies and temporary animated footprints.         |
+| [Default visual entrance](./docs/default-presence.md)                                   | Shared upward fade and explicit special cases.                          |
+| [Bottom following as user intent](./docs/bottom-following.md)                           | Following, catch-up, detachment, and user escape.                       |
+| [Catch-up continuity](./docs/catch-up-continuity.md)                                    | Coordinate height expansion, retargeting, and a moving scroll boundary. |
+| [Scroll ownership and browser clamping](./docs/scroll-ownership.md)                     | One observation cursor for layout and native scroll events.             |
+| [Preserving the reading anchor](./docs/reading-anchor.md)                               | Detached insertion compensation and fractional rounding.                |
+| [Reversible typing presence](./docs/typing-presence.md)                                 | Entry, exit, and reversal with independent visual lifetime.             |
+| [Typing-to-message replacement](./docs/typing-replacement.md)                           | Footprint and velocity transfer with a simultaneous crossfade.          |
+| [Spring parameters and playback scaling](./docs/spring-parameters.md)                   | Frequency, damping, velocity units, and motion preferences.             |
 
 ## Integration
 
@@ -94,7 +95,8 @@ Use stable, unique IDs across every item type. Update items immutably. `items` t
 
 Ordinary insertion uses layout expansion and an upward fade. Composer flight and typing replacement
 are explicit special paths. There is no general arbitrary-item removal animation or virtualized list.
-The current outgoing-insertion policy requests bottom scrolling even for outgoing history insertion.
+Outgoing messages request bottom scrolling by default. History insertion supplies `scrollToBottom: false`
+to preserve the current follow/reading intent; this is independent of the visual entrance style.
 
 ## Text placement during flight
 
@@ -106,5 +108,6 @@ coordinate conversion, and arrival continuity used by the flight implementation.
 
 - [Automatic reply demonstration](./docs/demo-conversation.md): preset inputs, deterministic fallback,
   labels, reply timing, and the shared guided story.
+- [Behavior contracts](./docs/behavior-contracts.md): intended outcomes and the regressions that protect them.
 - [Verification guide](./docs/verification.md): regression entry points and manual scenarios.
 - [Story composition](./chat-scroll-container.stories.tsx): explicit composer, receive, typing, and flight wiring.
