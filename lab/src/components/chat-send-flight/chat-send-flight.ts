@@ -2,7 +2,7 @@ import { toSpringPhysics } from '@monorepo/utils';
 import { animate, calcGeneratorDuration, motionValue, spring } from 'motion/react';
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 
-import { registerChatDebugVisual } from '../chat-scroll-container/chat-item-debug.js';
+import { cloneWithoutChatDebug, registerChatDebugVisual } from '../chat-scroll-container/chat-item-debug.js';
 import { hasChatLayoutAnimation, projectedChatY } from '../chat-scroll-container/chat-layout.js';
 import { chatScrollInterrupted } from '../chat-scroll-container/chat-scroll-controller.js';
 
@@ -66,7 +66,7 @@ function startFlight(
   layer.dataset.slot = 'chat-send-flight-layer';
   layer.setAttribute('aria-hidden', 'true');
   layer.inert = true;
-  const carrier = target.cloneNode(true) as HTMLElement;
+  const carrier = cloneWithoutChatDebug(target);
   carrier.removeAttribute('id');
   carrier.style.margin = '0';
   carrier.dataset.chatSendFlight = '';
@@ -164,6 +164,9 @@ function startFlight(
       transform: `translate(${x}px, ${y}px) scale(${scaleX}, ${scaleY})`,
       borderRadius: `${corners.map((radius) => `${radius / scaleX}px`).join(' ')} / ${corners.map((radius) => `${radius / scaleY}px`).join(' ')}`,
     });
+    // Debug children share the carrier's transform but retain their natural text size.
+    carrier.style.setProperty('--chat-debug-scale-x', String(1 / scaleX));
+    carrier.style.setProperty('--chat-debug-scale-y', String(1 / scaleY));
     carrier.toggleAttribute('data-tail', target.hasAttribute('data-tail'));
     carrier.style.setProperty(
       '--message-bubble-tail-opacity',

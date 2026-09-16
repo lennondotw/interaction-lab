@@ -43,16 +43,24 @@ Annotations show item identity, visual phase (`idle`, `entering`, `exiting`, `cr
 `handoff` means the visible entrance/flight clock finished but its real layout anchor is not yet ready.
 The typing dots keep cycling even when the typing item's entrance/layout reports idle.
 
-Outgoing annotations follow the visual's left edge; incoming/typing annotations follow its right edge.
-Date/status annotations follow the painted text's right edge, rather than the full-width label box.
-The small, translucent monospace text is inert and excluded from accessibility. It lives in an absolute,
-clipped layer outside the scroller: it cannot change body measurement, hit targets, or scroll extent.
-Flight/entrance owners register their actual carriers and phase; the debugger does not guess from elapsed time.
-Only visible bodies and active visual carriers are sampled. Disabling debug removes the layer, observers,
-and frame callback. This diagnostic sampling has a cost while enabled; it is not a performance profiler.
+Outgoing annotations sit outside the visual's left edge; incoming/typing annotations sit outside its
+right edge. Date/status labels provide an intrinsic text anchor. Generic content keeps its full body
+as the anchor: the annotation's right edge coincides with the content's right edge and may overlap it.
+Right-side annotations use left-aligned text; left-side and inset-right annotations use right-aligned text.
 
-[Debug checks](../../../../../scripts/test-chat-item-debug.mjs) cover toggle geometry invariance,
-side placement, unscaled flight text, interruption cleanup, typing reversal/replacement, and label alignment.
+The small, translucent monospace text is an inert, accessibility-hidden absolute child of the actual
+visual. Native scrolling therefore moves it together with that visual without JS coordinate tracking.
+The list's content clipping bounds scrollable overflow. Flight/entrance owners register their actual
+carriers and phase; the badge transfers with ownership, and flight supplies inverse scale so debug
+text stays readable. Visual clones discard copied annotations before taking ownership.
+
+Only visible bodies and active carriers have their debug state refreshed. This loop reads no geometry;
+CSS owns placement and inherited opacity. Disabling debug removes annotations, observers, and the frame
+callback. This instrumentation still has a cost while enabled; it is not a performance profiler.
+
+[Debug checks](../../../../../scripts/test-chat-item-debug.mjs) cover layout and scroll extent invariance,
+synchronous native scrolling, content overlap alignment, unscaled flight text, interruption cleanup,
+typing reversal/replacement, and label alignment.
 
 ## Scrolling and composer
 
