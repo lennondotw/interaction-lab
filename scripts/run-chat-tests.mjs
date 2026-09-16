@@ -15,6 +15,7 @@ const names = [
   'contracts',
   'scroll-velocity',
   'scroll',
+  'composer-release',
   'scroll-ownership',
   'send-flight',
   'items',
