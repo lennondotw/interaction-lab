@@ -12,6 +12,9 @@ export interface ChatMessage extends ChatItemBase {
   variant: 'incoming' | 'outgoing';
   /** Fade upward by default; composer sends explicitly opt into flight. */
   entrance?: 'fade' | 'flight';
+  /** Request catch-up on insertion; defaults to true for outgoing messages.
+   * False preserves existing follow/reading intent, including history insertion. */
+  scrollToBottom?: boolean;
 }
 
 /** Custom content shares the built-in item insertion layout. */
