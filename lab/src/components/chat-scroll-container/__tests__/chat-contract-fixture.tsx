@@ -1,4 +1,4 @@
-import { frame } from 'motion/react';
+import { cancelFrame, frame } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
@@ -103,4 +103,11 @@ export function commitChatFrame(action: () => void) {
       resolve();
     });
   });
+}
+
+/** Sample painted geometry with the timestamp that produced it, not observer delivery time. */
+export function observeChatFrames(sample: (timestamp: number) => void) {
+  const read = ({ timestamp }: { timestamp: number }) => sample(timestamp);
+  frame.postRender(read, true);
+  return () => cancelFrame(read);
 }
