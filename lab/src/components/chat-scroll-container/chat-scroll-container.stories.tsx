@@ -230,6 +230,7 @@ function ChatDemo({
       id,
       variant,
       entrance: 'fade',
+      scrollToBottom: false,
       content: 'A note inserted before the last message.\nThe surrounding conversation keeps its place.',
     };
     setChatItems((previous) => {

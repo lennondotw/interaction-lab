@@ -184,7 +184,7 @@ export function ChatScrollContainer({
     if (itemsChanged) {
       insertionsRef.current?.insert(
         new Set(inserted.map(({ id }) => id)),
-        inserted.some((item) => isChatMessage(item) && item.variant === 'outgoing'),
+        inserted.some((item) => isChatMessage(item) && (item.scrollToBottom ?? item.variant === 'outgoing')),
         replacement && typing.rowRef.current && handoff
           ? { body: replacement, row: typing.rowRef.current, velocity: handoff.velocity }
           : undefined,

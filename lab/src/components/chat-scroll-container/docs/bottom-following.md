@@ -16,7 +16,7 @@ Upward wheel input detaches immediately, before native movement. Pointer-down in
 
 An unowned downward scroll can restore following upon entering the zone. A held pointer must first release or cancel, with the last nonzero movement downward and the viewport still in the zone. Restoration enables future following without immediately snapping the remaining pixels. There is no reattachment timeout or reliance on `scrollend` or inferred trackpad contact.
 
-The current container treats newly inserted outgoing items as a local-send request, including outgoing history insertion. Such a request starts bottom scrolling even when detached; incoming insertion only follows existing intent. Every catch-up remains interruptible. Settled layout ticks track directly; active catch-up retargets only when its projected destination changes beyond tolerance.
+Newly inserted outgoing messages request bottom catch-up by default; incoming messages do not. The optional `scrollToBottom` field overrides that request independently of message side and entrance style. History insertion sets it to `false`: detached readers keep their reading anchor, while an already following viewport continues to follow layout. A normal local send still requests bottom scrolling even when detached. Every catch-up remains interruptible. Settled layout ticks track directly; active catch-up retargets only when its projected destination changes beyond tolerance.
 
 ## Evidence
 
