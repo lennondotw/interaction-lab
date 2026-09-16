@@ -68,6 +68,14 @@ The spacer retains outstanding compensation after flight cancellation, then retu
 clearance. A focused layout fixture checks batch-independent projection, duplicate delivery, overlapping
 releases, reduced motion, and disposal. Samples are saved to `/tmp/chat-composer-release.json`.
 
+The [flight/composer checks](../../../../../scripts/test-chat-flight-composer.mjs) exercise ordinary
+1 → 2 → 3 → 2 → 1 line edits during a live flight at 0.1x, starting pinned or 100px above bottom,
+and after upward cancellation. They assert immediate clearance, projected-target changes, intermediate
+follow state, pinned or detached position, and aligned normal handoff. A separate boundary case shrinks
+a detached three-line composer 8px above bottom, then grows it again: native clamping must not reacquire
+following. Samples are saved to `/tmp/chat-flight-composer.json`. Exact frame trajectories and strict
+velocity continuity are deliberately not asserted; velocity retargeting has separate coverage.
+
 In **Automatic Replies**, use 0.25x, send `Hey!`, scroll upward about 100px, then send the multiline
 [bullet preset](./demo-conversation.md). The flight must settle without a rescue scroll.
 
