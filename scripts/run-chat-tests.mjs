@@ -13,6 +13,7 @@ const started = Date.now();
 const base = process.env.STORYBOOK_URL ?? `http://127.0.0.1:${process.env.CHAT_TEST_PORT ?? '6199'}`;
 const names = [
   'contracts',
+  'item-debug',
   'scroll-velocity',
   'scroll',
   'composer-release',

@@ -14,6 +14,7 @@ interface Model {
   draft: string;
   interruptOnPointerDown: boolean;
   threshold: number;
+  debugBubbles: boolean;
 }
 
 /** Browser-only fixture: commit arbitrary item/typing changes atomically, using the real components. */
@@ -39,6 +40,7 @@ export function mountChatContractFixture() {
       draft: '1',
       interruptOnPointerDown: false,
       threshold: 20,
+      debugBubbles: false,
     });
     const host = useRef<HTMLDivElement>(null);
     const depart = useChatSendFlight(host, value.items, value.speed);
@@ -54,6 +56,7 @@ export function mountChatContractFixture() {
       >
         <ChatScrollContainer
           items={value.items}
+          debugBubbles={value.debugBubbles}
           incomingTyping={value.typing}
           animationSpeed={value.speed}
           bottomThreshold={value.threshold}
