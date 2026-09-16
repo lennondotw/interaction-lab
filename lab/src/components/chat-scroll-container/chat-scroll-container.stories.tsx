@@ -102,6 +102,15 @@ export const LongList: Story = {
   args: { className: 'size-full' },
 };
 
+function BubbleDebugToggle({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+      <input type="checkbox" checked={value} onChange={(event) => onChange(event.target.checked)} />
+      Bubble debug
+    </label>
+  );
+}
+
 function ChatDemo({
   withMessageInput = false,
   withHistoryInsertion = false,
@@ -116,6 +125,7 @@ function ChatDemo({
   const [chatItems, setChatItems] = useState<ChatListItem[]>(messages);
   const [threshold, setThreshold] = useState(20);
   const [animationSpeed, setAnimationSpeed] = useState(1);
+  const [debugBubbles, setDebugBubbles] = useState(false);
   const [scrollState, setScrollState] = useState<ChatScrollState>();
   const [draft, setDraft] = useState('');
   const [sendAfterLayout, setSendAfterLayout] = useState(false);
@@ -235,6 +245,7 @@ function ChatDemo({
       <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
         <ChatScrollContainer
           items={chatItems}
+          debugBubbles={debugBubbles}
           incomingTyping={withMessageInput && incomingTyping}
           bottomThreshold={automaticReplies ? 2 : threshold}
           animationSpeed={animationSpeed}
@@ -279,13 +290,16 @@ function ChatDemo({
         )}
       </div>
       {automaticReplies ? (
-        <fieldset aria-label="Animation speed" className="m-0 flex shrink-0 justify-center border-0 p-0">
-          <Segmented
-            options={[0.25, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
-            value={animationSpeed}
-            onChange={setAnimationSpeed}
-          />
-        </fieldset>
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
+          <fieldset aria-label="Animation speed" className="m-0 flex shrink-0 justify-center border-0 p-0">
+            <Segmented
+              options={[0.25, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
+              value={animationSpeed}
+              onChange={setAnimationSpeed}
+            />
+          </fieldset>
+          <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
+        </div>
       ) : (
         <>
           <div className="flex shrink-0 flex-wrap justify-center gap-2">
@@ -356,6 +370,7 @@ function ChatDemo({
                 onChange={setAnimationSpeed}
               />
             </fieldset>
+            <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
             <div className="grid grid-cols-2 gap-x-4">
               <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
               <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
@@ -457,6 +472,7 @@ function MixedItemsDemo() {
     { ...messages.at(-1)!, variant: 'incoming' },
   ]);
   const [animationSpeed, setAnimationSpeed] = useState(0.25);
+  const [debugBubbles, setDebugBubbles] = useState(false);
   const sequence = useRef(0);
 
   function insertDate() {
@@ -489,10 +505,16 @@ function MixedItemsDemo() {
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <ChatScrollContainer items={items} animationSpeed={animationSpeed} className="min-h-0 flex-1" />
+      <ChatScrollContainer
+        items={items}
+        debugBubbles={debugBubbles}
+        animationSpeed={animationSpeed}
+        className="min-h-0 flex-1"
+      />
       <div className="flex flex-wrap justify-center gap-2">
         <Button onClick={insertDate}>Insert date before last item</Button>
         <Button onClick={appendContent}>Append notice</Button>
+        <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
       </div>
       <fieldset aria-label="Animation speed" className="m-0 flex justify-center border-0 p-0">
         <Segmented

@@ -1,6 +1,8 @@
 import { toSpringPhysics } from '@monorepo/utils';
 import { animate, cancelFrame, frame } from 'motion/react';
 
+import { registerChatDebugVisual } from './chat-item-debug.js';
+
 export const chatPresenceSpring = {
   type: 'spring',
   ...toSpringPhysics({ angularFrequency: 22, dampingRatio: 1 }),
@@ -45,6 +47,11 @@ export function animateChatEntrance(
   element.style.visibility = 'hidden';
   let done = false;
   let stopped = false;
+  const unregisterDebug = registerChatDebugVisual(
+    element.closest<HTMLElement>('[data-slot="chat-scroll-viewport"]')!,
+    element,
+    { element: visual, phase: () => (done ? 'handoff' : fadeOnly ? 'crossfading' : 'entering') }
+  );
   const position = () => {
     if (!element.isConnected || (done && !element.parentElement?.hasAttribute('data-chat-inserting'))) {
       stop();
@@ -81,6 +88,7 @@ export function animateChatEntrance(
     animation.stop();
     cancelFrame(position);
     element.style.visibility = visibility;
+    unregisterDebug();
     layer.remove();
     onComplete();
   }
