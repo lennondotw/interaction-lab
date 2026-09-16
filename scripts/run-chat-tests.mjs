@@ -11,7 +11,7 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 const started = Date.now();
 const base = process.env.STORYBOOK_URL ?? `http://127.0.0.1:${process.env.CHAT_TEST_PORT ?? '6199'}`;
-const names = [
+const fullSuite = [
   'contracts',
   'item-debug',
   'scroll-velocity',
@@ -30,6 +30,13 @@ const names = [
   'layout-transactions',
   'insertion',
 ];
+const ciSuite = ['contracts', 'item-debug', 'scroll', 'send-flight', 'typing-handoff'];
+const suiteName = process.argv[2] ?? 'full';
+const suites = { full: fullSuite, ci: ciSuite };
+const names = suites[suiteName];
+if (!names) {
+  throw new Error(`Unknown chat test suite "${suiteName}". Expected one of: ${Object.keys(suites).join(', ')}`);
+}
 const children = new Set();
 function stop(child) {
   if (!child.pid) return;
@@ -72,6 +79,7 @@ for (const signal of ['SIGINT', 'SIGTERM'])
     process.exit(1);
   });
 try {
+  console.log(`Chat test suite: ${suiteName} (${names.length}/${fullSuite.length} scripts)`);
   if (!process.env.STORYBOOK_URL) {
     const server = launch(
       'pnpm',
