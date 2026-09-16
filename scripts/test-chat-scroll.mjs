@@ -239,53 +239,113 @@ try {
     );
   });
   const composerViewport = composerPage.locator('[data-slot="chat-scroll-viewport"]');
-  const composerGeometry = () =>
-    composerViewport.evaluate((element) => ({
-      top: element.scrollTop,
-      padding: Number.parseFloat(getComputedStyle(element.firstElementChild).paddingBottom),
-      distance: element.scrollHeight - element.clientHeight - element.scrollTop,
-    }));
-  const beforeGrowth = await composerGeometry();
-  await composer.fill('First line');
-  await composer.press('Shift+Enter');
-  await composer.pressSequentially('Second line');
-  await composerPage.waitForFunction(() => {
-    const element = document.querySelector('[data-slot="chat-scroll-viewport"]');
-    return (
-      !element.querySelector('[data-chat-inserting]') &&
-      element.scrollHeight - element.clientHeight - element.scrollTop < 1
-    );
-  });
-  const followingGrowth = await composerGeometry();
-  assert.equal(followingGrowth.padding - beforeGrowth.padding, 17, 'Composer growth increases bottom clearance');
-  assert.ok(
-    Math.abs(followingGrowth.top - beforeGrowth.top - 17) < 1,
-    'Following moves with the growing composer clearance'
-  );
-  // The browser clamps scrollTop when clearance shrinks. That must not be
-  // mistaken for an upward user scroll, including when the input grows again.
-  for (const draft of ['First line', 'First line\nSecond line\nThird line', 'First line', 'First line\nSecond line']) {
-    await composer.fill(draft);
-    await composerPage.evaluate(
-      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-    );
-    assert.ok((await composerGeometry()).distance < 1, 'Repeated composer growth/shrink remains immediately pinned');
+  // Exercise every adjacent size transition, including the native range clamp on shrink.
+  // Distance alone cannot prove follow intent: sample both geometry and reported states.
+  const lines = ['First line', 'Second line', 'Third line'];
+  for (const speed of [1, 0.1]) {
+    await composerPage.getByText(`${speed}×`, { exact: true }).click();
+    for (const distance of [0, 8, 220]) {
+      await composer.fill(lines[0]);
+      await composerViewport.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+        element.dispatchEvent(new Event('scroll'));
+      });
+      await composerPage.waitForFunction(() => {
+        const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
+        return (
+          document.querySelector('#storybook-root strong')?.textContent === 'following' &&
+          v.scrollHeight - v.clientHeight - v.scrollTop <= 1 &&
+          !document.querySelector('[data-chat-inserting], [data-chat-send-flight]')
+        );
+      });
+      if (distance) {
+        await composerViewport.hover();
+        await composerPage.mouse.wheel(0, -distance);
+        await composerPage.waitForFunction((distance) => {
+          const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
+          return (
+            document.querySelector('#storybook-root strong')?.textContent === 'detached' &&
+            Math.abs(v.scrollHeight - v.clientHeight - v.scrollTop - distance) <= 1
+          );
+        }, distance);
+      }
+      await composer.click();
+      await composerPage.evaluate(() => {
+        const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
+        const mode = document.querySelector('#storybook-root strong');
+        const input = document.querySelector('[data-slot="message-input"]');
+        const read = () => ({
+          top: v.scrollTop,
+          distance: v.scrollHeight - v.clientHeight - v.scrollTop,
+          padding: v.querySelector('[data-slot="chat-bottom-space"]').getBoundingClientRect().height,
+          height: input.getBoundingClientRect().height,
+          mode: mode.textContent,
+        });
+        const probe = { baseline: read(), frames: [], states: [mode.textContent] };
+        let frame;
+        const tick = () => {
+          probe.frames.push(read());
+          frame = requestAnimationFrame(tick);
+        };
+        const observer = new MutationObserver(() => probe.states.push(mode.textContent));
+        observer.observe(mode, { subtree: true, childList: true, characterData: true });
+        tick();
+        window.readComposerProbe = read;
+        window.stopComposerProbe = () => {
+          cancelAnimationFrame(frame);
+          observer.disconnect();
+          probe.frames.push(read());
+          return probe;
+        };
+      });
+      const baseline = await composerPage.evaluate(() => window.readComposerProbe());
+      const expectedMode = distance ? 'detached' : 'following';
+      assert.equal(baseline.mode, expectedMode);
+      assert.equal(baseline.height, 35, 'Each sequence starts with a one-line composer');
+      let previous = 1;
+      for (const count of [2, 3, 2, 1]) {
+        if (count > previous) {
+          await composer.press('Shift+Enter');
+          await composer.pressSequentially(lines[count - 1]);
+        } else {
+          // Delete the last line and its newline through actual keyboard input.
+          for (let i = 0; i < lines[previous - 1].length + 1; i++) await composer.press('Backspace');
+        }
+        await composerPage.evaluate(async () => {
+          for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+        });
+        const current = await composerPage.evaluate(() => window.readComposerProbe());
+        assert.equal(await composer.inputValue(), lines.slice(0, count).join('\n'));
+        assert.equal(current.height, 35 + 17 * (count - 1), 'Composer reaches the requested line count');
+        assert.equal(current.padding - baseline.padding, 17 * (count - 1), 'Clearance follows composer height');
+        assert.equal(current.mode, expectedMode, `${speed}x/${distance}px/${count} lines: intent is unchanged`);
+        assert.ok(
+          Math.abs(current.top - baseline.top - (distance ? 0 : 17 * (count - 1))) <= 1,
+          'Only settled following compensates composer clearance'
+        );
+        previous = count;
+      }
+      const probe = await composerPage.evaluate(() => window.stopComposerProbe());
+      assert.ok(probe.frames.length > 16, 'Sample intermediate frames across the full resize cycle');
+      assert.ok(
+        probe.states.every((mode) => mode === expectedMode),
+        'No transient follow-state change'
+      );
+      assert.ok(
+        probe.frames.every((frame) => frame.mode === expectedMode),
+        'Every painted frame keeps intent'
+      );
+      assert.ok(
+        probe.frames.every((frame) =>
+          distance ? Math.abs(frame.top - baseline.top) <= 1 : Math.abs(frame.distance) <= 1
+        ),
+        'Every painted frame preserves the bottom or detached reading position'
+      );
+      console.log(
+        `PASS: composer 1→2→3→2→1 at ${speed}x, ${expectedMode}, ${distance}px from bottom (${probe.frames.length} frames).`
+      );
+    }
   }
-  await composerViewport.hover();
-  await composerPage.mouse.wheel(0, -220);
-  await composerPage.waitForFunction(
-    (top) => document.querySelector('[data-slot="chat-scroll-viewport"]').scrollTop < top - 100,
-    followingGrowth.top
-  );
-  const beforeDetachedGrowth = await composerGeometry();
-  await composer.click();
-  await composer.press('End');
-  await composer.press('Shift+Enter');
-  await composer.pressSequentially('Third line');
-  await composerPage.waitForTimeout(800);
-  const detachedGrowth = await composerGeometry();
-  assert.equal(detachedGrowth.padding - beforeDetachedGrowth.padding, 17);
-  assert.equal(detachedGrowth.top, beforeDetachedGrowth.top, 'Detached composer growth preserves the reading position');
   await composerPage.close();
   assert.deepEqual(errors, []);
   console.log(

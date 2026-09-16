@@ -41,7 +41,8 @@ try {
           time: performance.now(),
           end:
             content.getBoundingClientRect().bottom -
-            Number.parseFloat(getComputedStyle(content).paddingBottom) -
+            (Number.parseFloat(getComputedStyle(content).paddingBottom) +
+              (content.querySelector('[data-slot="chat-bottom-space"]')?.getBoundingClientRect().height ?? 0)) -
             viewport.getBoundingClientRect().top,
           oldTop: oldLast.getBoundingClientRect().top,
           mode: document.querySelector('#storybook-root strong').textContent,

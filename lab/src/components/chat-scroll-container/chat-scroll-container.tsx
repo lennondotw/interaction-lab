@@ -3,6 +3,7 @@ import { useReducedMotion } from 'motion/react';
 import { useCallback, useLayoutEffect, useRef, type ComponentPropsWithoutRef } from 'react';
 
 import { MessageBubble, TypingBubble } from '../message-bubble/index.js';
+import { createChatBottomSpace, type ChatBottomSpace } from './chat-bottom-space.js';
 import { createChatInsertions } from './chat-insertions.js';
 import {
   chatItemGap,
@@ -33,6 +34,8 @@ export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'sect
   /** Playback rate for programmatic scrolling. Native gestures remain immediate. */
   animationSpeed?: number;
   contentClassName?: string;
+  /** Optional independent trailing clearance. Reset releases animate without owning a message. */
+  bottomSpace?: ChatBottomSpace;
   onScrollStateChange?: (state: ChatScrollState) => void;
 }
 
@@ -46,13 +49,17 @@ export function ChatScrollContainer({
   bottomThreshold = 2,
   animationSpeed = 1,
   contentClassName,
+  bottomSpace,
   onScrollStateChange,
   className,
   ...props
 }: ChatScrollContainerProps) {
+  const hasBottomSpace = bottomSpace !== undefined;
   const items = suppliedItems ?? messages ?? emptyItems;
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLOListElement>(null);
+  const bottomSpaceRef = useRef<HTMLLIElement>(null);
+  const bottomSpaceController = useRef<ReturnType<typeof createChatBottomSpace> | null>(null);
   const controllerRef = useRef<ReturnType<typeof createChatScrollController> | null>(null);
   const insertionsRef = useRef<ReturnType<typeof createChatInsertions> | null>(null);
   const previousItems = useRef(items);
@@ -119,6 +126,26 @@ export function ChatScrollContainer({
       onStateChange: onScrollStateChange,
     });
   }, [bottomThreshold, animationSpeed, reducedMotion, onScrollStateChange]);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const element = bottomSpaceRef.current;
+    if (!viewport || !element) return;
+    const space = createChatBottomSpace(viewport, element, (composerResize) => {
+      controllerRef.current?.contentChanged(false, { animatedLayout: true, composerResize });
+      insertionsRef.current?.remember();
+    });
+    bottomSpaceController.current = space;
+    return () => {
+      space.dispose();
+      bottomSpaceController.current = null;
+    };
+  }, [hasBottomSpace]);
+
+  useLayoutEffect(() => {
+    bottomSpaceController.current?.updateOptions(Math.max(0.01, animationSpeed), reducedMotion === true);
+    if (bottomSpace) bottomSpaceController.current?.update(bottomSpace);
+  }, [bottomSpace, animationSpeed, reducedMotion]);
 
   useLayoutEffect(() => {
     const typingTurnedOff = previousTypingIntent.current && !incomingTyping;
@@ -240,7 +267,10 @@ export function ChatScrollContainer({
       >
         {/* Bound the scroll extent to layout height. Entrance visuals render outside
             this surface; their hidden measurement anchors must not extend it. */}
-        <ol ref={contentRef} className={cn('m-0 flex list-none flex-col overflow-clip p-5', contentClassName)}>
+        <ol
+          ref={contentRef}
+          className={cn('m-0 flex list-none flex-col overflow-clip p-5', bottomSpace && 'pb-0', contentClassName)}
+        >
           {items.map((item, index) => {
             const message = isChatMessage(item);
             const next = items[index + 1];
@@ -314,6 +344,15 @@ export function ChatScrollContainer({
                 style={typing.geometry ? { position: 'absolute', top: typing.geometry.gap } : undefined}
               />
             </li>
+          )}
+          {bottomSpace && (
+            <li
+              ref={bottomSpaceRef}
+              data-slot="chat-bottom-space"
+              role="presentation"
+              aria-hidden="true"
+              className="shrink-0"
+            />
           )}
         </ol>
       </div>

@@ -173,7 +173,11 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
 
   function contentChanged(
     localSend = false,
-    { animatedLayout = false, anchor }: { animatedLayout?: boolean; anchor?: ReadingAnchor } = {}
+    {
+      animatedLayout = false,
+      composerResize = false,
+      anchor,
+    }: { animatedLayout?: boolean; composerResize?: boolean; anchor?: ReadingAnchor } = {}
   ) {
     // Wait for the complete initial layout, including composer clearance.
     if (!initialLayoutMeasured) return;
@@ -182,6 +186,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     const wasAtBottom = observeScroll();
     const bottomPadding = Number.parseFloat(getComputedStyle(content).paddingBottom);
     const paddingDelta = bottomPadding - previousBottomPadding;
+    const clearanceChanged = composerResize || paddingDelta !== 0;
     // ResizeObserver can report a frame already applied by an insertion callback.
     // Do not turn that notification into a second scroll animation. A new natural
     // row (such as typing) is a separate change and must still animate into view.
@@ -214,12 +219,12 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     if (localSend || mode !== 'detached') {
       // Only a settled bottom follows composer resizing or animated layout directly.
       // An active message spring simply receives the new target, without a position jump.
-      if (paddingDelta !== 0 && !localSend && mode === 'following' && !wasAtBottom) {
+      if (clearanceChanged && !localSend && mode === 'following' && !wasAtBottom) {
         report();
         return;
       }
-      scrollToBottom(localSend ? 'Local message sent' : paddingDelta !== 0 ? 'Composer resized' : 'Content resized', {
-        instant: (paddingDelta !== 0 || animatedLayout) && mode === 'following' && wasAtBottom,
+      scrollToBottom(localSend ? 'Local message sent' : clearanceChanged ? 'Composer resized' : 'Content resized', {
+        instant: (clearanceChanged || animatedLayout) && mode === 'following' && wasAtBottom,
       });
     }
     report();
@@ -275,7 +280,8 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       contentChanged();
     }
   });
-  // Composer clearance is padding: content-box observation misses those changes.
+  // Observe both row/spacer geometry and legacy padding-based clearance.
+  // Content-box observation alone would miss padding-only changes.
   observer.observe(content, { box: 'border-box' });
   observer.observe(viewport);
 

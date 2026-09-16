@@ -13,6 +13,7 @@ import {
   type ChatMessage,
   type ChatScrollState,
 } from './chat-scroll-container.js';
+import { useChatComposerSpace } from './use-chat-composer-space.js';
 
 const conversation: Omit<ChatMessage, 'id'>[] = [
   { variant: 'incoming', content: 'A little room for a thought.' },
@@ -119,6 +120,7 @@ function ChatDemo({
   const [incomingTyping, setIncomingTyping] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
+  const { bottomSpace, preserveOnReset } = useChatComposerSpace(composerRef, 12);
   const nextMessageId = useRef(messages.length + 1);
   const hasSent = useRef(false);
   const replyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -132,18 +134,6 @@ function ChatDemo({
     },
     []
   );
-
-  useLayoutEffect(() => {
-    const composer = composerRef.current;
-    const host = hostRef.current;
-    if (!composer || !host) return;
-    const measure = () =>
-      host.style.setProperty('--chat-composer-height', `${composer.getBoundingClientRect().height}px`);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(composer);
-    return () => observer.disconnect();
-  }, []);
 
   useLayoutEffect(() => {
     if (!sendAfterLayout) return;
@@ -248,7 +238,7 @@ function ChatDemo({
           animationSpeed={animationSpeed}
           onScrollStateChange={automaticReplies ? undefined : setScrollState}
           className="col-start-1 row-start-1"
-          contentClassName={withMessageInput ? 'pb-[calc(var(--chat-composer-height,0px)+0.75rem)]' : undefined}
+          bottomSpace={withMessageInput ? bottomSpace : undefined}
         />
         {withMessageInput && (
           <form
@@ -259,6 +249,7 @@ function ChatDemo({
               event.preventDefault();
               setSendAfterLayout(false);
               if (!draft.trim()) return;
+              preserveOnReset();
               sendMessage('outgoing', draft);
               setDraft('');
               if (automaticReplies) {

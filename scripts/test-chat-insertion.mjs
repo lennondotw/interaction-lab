@@ -38,7 +38,9 @@ try {
           time: performance.now(),
           typing: t?.getBoundingClientRect().top,
           typingEdge: t
-            ? t.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(v.firstElementChild).paddingBottom)
+            ? t.getBoundingClientRect().top +
+              (Number.parseFloat(getComputedStyle(v.firstElementChild).paddingBottom) +
+                (v.querySelector('[data-slot="chat-bottom-space"]')?.getBoundingClientRect().height ?? 0))
             : undefined,
           top: v.scrollTop,
           distance: v.scrollHeight - v.clientHeight - v.scrollTop,
