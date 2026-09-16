@@ -4,7 +4,7 @@ Receiving a reply and turning typing off in the same update transfers space to t
 
 ## Decision and why
 
-When typing is still mounted and an incoming item arrives with typing off, the container selects a replacement. Before inserting its slot, the typing hook stops its old height animation, releases its projected-height registration, and returns current height velocity. The insertion manager starts from the cached actual typing row height, including its current gap, rather than the fully expanded intrinsic body height.
+The container selects a replacement only when typing changes from on to off in the same committed update and a new incoming message starts the appended suffix immediately after the previous last item. A later receive during an already committed exit, or an insertion into history, uses an independent zero-height entrance slot while typing continues its existing exit. Mounted presence alone is not replacement intent: transferring the trailing footprint into history would abruptly move the intervening rows even if total list height stayed unchanged. Before inserting its slot, the typing hook stops its old height animation, releases its projected-height registration, and returns current height velocity. The insertion manager starts from the cached actual typing row height, including its current gap, rather than the fully expanded intrinsic body height.
 
 The new slot continues toward the message's measured footprint with that velocity. Typing becomes a zero-height overlay following the replacement body. Both visuals crossfade without new entrance/exit translation. If typing was still entering, its residual visual offset is frozen during fade rather than snapped to zero. The message itself uses zero entrance offset.
 
