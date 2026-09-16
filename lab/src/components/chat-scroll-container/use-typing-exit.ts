@@ -1,6 +1,7 @@
 import { animate, useMotionValue } from 'motion/react';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
+import { registerChatDebugVisual } from './chat-item-debug.js';
 import { readChatItemGap } from './chat-items.js';
 import { registerChatTransition, type ChatLayoutEntry } from './chat-layout.js';
 import {
@@ -90,6 +91,21 @@ export function useTypingExit(
   useLayoutEffect(() => {
     const visual = rowRef.current?.querySelector<HTMLElement>('[data-slot="typing-bubble"]');
     if (!present || !visual) return;
+    const unregisterDebug = registerChatDebugVisual(
+      visual.closest<HTMLElement>('[data-slot="chat-scroll-viewport"]')!,
+      visual,
+      {
+        element: visual,
+        phase: () =>
+          replacing
+            ? 'replacing'
+            : opacity.isAnimating() || offset.isAnimating()
+              ? visible
+                ? 'entering'
+                : 'exiting'
+              : 'idle',
+      }
+    );
     const paintOpacity = (value: number) => {
       visual.style.opacity = String(Math.max(0, Math.min(1, value)));
     };
@@ -101,7 +117,7 @@ export function useTypingExit(
       offset.jump(visible || replacing ? 0 : chatExitOffset);
       paintOpacity(opacity.get());
       paintOffset(offset.get());
-      return;
+      return unregisterDebug;
     }
 
     // Separate visual values preserve their position and velocity if entry is
@@ -130,6 +146,7 @@ export function useTypingExit(
     return () => {
       for (const animation of animations) animation.stop();
       visualAnimations.current = [];
+      unregisterDebug();
     };
   }, [visible, present, replacing, reducedMotion, opacity, offset]);
 

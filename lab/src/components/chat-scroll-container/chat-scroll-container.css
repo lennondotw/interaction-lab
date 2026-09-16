@@ -1,4 +1,33 @@
 @layer components {
+  /* Separate paint-only content layer: annotations never add scrollable overflow. */
+  [data-slot='chat-item-debug-layer'] {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow-x: clip;
+    overflow-y: clip;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  [data-slot='chat-item-debug'] {
+    position: absolute;
+    width: max-content;
+    transform: translateY(-50%);
+    color: light-dark(rgb(0 0 0 / 45%), rgb(255 255 255 / 45%));
+    font-family: ui-monospace, monospace;
+    font-size: 9px;
+    line-height: 12px;
+    font-weight: 400;
+    white-space: pre;
+    user-select: none;
+  }
+
+  [data-slot='chat-item-debug'][data-side='left'] {
+    transform: translate(-100%, -50%);
+    text-align: right;
+  }
+
   [data-slot='chat-entrance-layer'] {
     position: absolute;
     inset: 0;

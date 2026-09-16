@@ -2,6 +2,7 @@ import { toSpringPhysics } from '@monorepo/utils';
 import { animate, calcGeneratorDuration, motionValue, spring } from 'motion/react';
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 
+import { registerChatDebugVisual } from '../chat-scroll-container/chat-item-debug.js';
 import { hasChatLayoutAnimation, projectedChatY } from '../chat-scroll-container/chat-layout.js';
 import { chatScrollInterrupted } from '../chat-scroll-container/chat-scroll-controller.js';
 
@@ -94,6 +95,11 @@ function startFlight(
   let offsetAnimation: ReturnType<typeof animate> | undefined;
   let stopped = false;
   let arrivalFrame = 0;
+  let arriving = false;
+  const unregisterDebug = registerChatDebugVisual(viewport, target, {
+    element: carrier,
+    phase: () => (arriving ? 'handoff' : 'flying'),
+  });
   let animation: ReturnType<typeof animate> | undefined;
   const flight: Flight = {
     stop,
@@ -111,6 +117,7 @@ function startFlight(
     destinationOffset.destroy();
     cancelAnimationFrame(arrivalFrame);
     target.style.visibility = originalVisibility;
+    unregisterDebug();
     layer.remove();
     finished(flight);
   }
@@ -186,6 +193,7 @@ function startFlight(
   }
 
   function arrive() {
+    arriving = true;
     if (!paint(chatSendFlightDuration)) return;
     // Shape finishes on its original clock. Keep only the placement compensation
     // alive until both it and the real row arrive, then hand off within one CSS pixel.
