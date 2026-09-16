@@ -288,9 +288,9 @@ try {
         frame.scrollHeight >= replacementFrames[index - 1].scrollHeight,
         'Replacement grows without a temporary overshoot and collapse'
       );
-    assert.equal(frame.typingY, 0);
+    assert.equal(frame.typingY, replacementFrames[0].typingY, 'Replacement holds the current typing offset');
     assert.equal(frame.messageY, 0);
-    assert.ok(Math.abs(frame.alignment) < 0.1, 'Typing overlays the replacement message');
+    assert.ok(Math.abs(frame.alignment - frame.typingY) < 0.1, 'Typing keeps its offset from the replacement message');
   }
   assert.ok(replacementFrames.at(-1).typingOpacity < replacementFrames[0].typingOpacity);
   assert.ok(replacementFrames.at(-1).messageOpacity > replacementFrames[0].messageOpacity);
