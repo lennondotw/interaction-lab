@@ -79,7 +79,7 @@ pnpm test:packages
 
 oxlint replaced eslint and oxfmt replaced prettier. The format side is a clean swap. The lint side is not, and this is the record of what stopped being checked, so it can be picked back up when oxlint's coverage catches up:
 
-- **`eslint-plugin-react-hooks` 7.x** — `refs`, `set-state-in-effect`, `use-memo`, `purity` have no oxlint equivalent. These were not idle: `refs` is what found a `useMemo` reading a ref it could not depend on, and a props snapshot written during render that an rAF loop was already painting.
+- **`eslint-plugin-react-hooks` 7.x** — oxlint 1.83 implements the React compiler rule names, but its recommended set reports 24 existing ref/effect patterns across the stateful demos. `immutability`, `refs`, and `set-state-in-effect` are explicitly off in `.oxlintrc.json` until that backlog can be audited without mixing behavior changes into a toolchain upgrade. These rules are not idle: `refs` previously found a `useMemo` reading a ref it could not depend on, and a props snapshot written during render that an rAF loop was already painting.
 - **`react-hooks/exhaustive-deps`** — oxlint ships a rule by that name and it is enabled here, but it is not equivalent. With the eleven suppressions in this repo removed, it reports nothing at any of them.
 - **`eslint-plugin-react-refresh`**, **`eslint-plugin-storybook`**, **`eslint-plugin-mdx`** — no equivalents. The two `.mdx` files are no longer linted.
 - **typescript-eslint's `strictTypeChecked` / `stylisticTypeChecked` tiers** — replaced by oxlint's default TypeScript set plus five explicitly enabled type-aware rules. tsgolint implements 59 of the 61 targeted rules, but oxlint enables few by default, so the effective set is narrower than the tiers were.
@@ -93,8 +93,8 @@ The `eslint-disable` comments for rules in that list are inert now. They are kep
 - `vitest/expect-expect` did not recognise a local `expectPoint()` helper. Configured via `assertFunctionNames` rather than suppressed.
 - Two clickable divs became keyboard-operable. Neither could become a `<button>` — one holds a `<style>` element and nested divs, which are not valid button content; the other is a demo _of_ box-model behaviour, so a button's own display and intrinsic sizing would be the thing under test.
 
-### Why TypeScript is on 6.x
+### TypeScript 7 compatibility
 
-TS 7 moved the compiler into platform binaries and stopped shipping `lib/typescript.js`, so anything doing `import ts from 'typescript'` breaks. Removing typescript-eslint cleared the original reason for the pin, but Storybook's docgen path — `@storybook/react-vite` → `react-docgen-typescript` and `@joshwooding/vite-plugin-react-docgen-typescript` — consumes the package too, so the constraint outlived eslint.
+TS 7 moved the compiler into platform binaries and stopped shipping `lib/typescript.js`. Storybook's docgen path originally depended on that JavaScript API, which kept this repository on TS 6 after typescript-eslint was removed. Storybook 10.6 builds successfully against TS 7.0.2, so that compatibility pin is gone.
 
-The typecheck itself runs on `tsgo` from `@typescript/native-preview`, a separate native binary, and is unaffected. webapp-factory, which has no Storybook, runs TS 7.0.2 with its own native `tsc` and no `native-preview` at all.
+The repository typecheck still runs on `tsgo` from `@typescript/native-preview`; the `typescript` package remains available to integrations that consume the compiler package directly.

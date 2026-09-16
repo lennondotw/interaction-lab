@@ -41,7 +41,7 @@ runs:
         echo "pnpm_store_path=${PNPM_STORE_PATH}" >> $GITHUB_OUTPUT
 
     - name: Setup build cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           ${{ steps.cache-info.outputs.pnpm_store_path }}
