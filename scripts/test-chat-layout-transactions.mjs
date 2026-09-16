@@ -17,7 +17,7 @@ try {
   await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
     const list = viewport.firstElementChild;
-    const last = list.lastElementChild;
+    const last = [...list.querySelectorAll('[data-chat-row-id]')].at(-1);
     const before = viewport.scrollTop;
     // oxlint-disable-next-line typescript/unbound-method -- The probe forwards the original receiver with apply/call.
     const original = Element.prototype.getBoundingClientRect;
@@ -50,7 +50,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('[data-chat-inserting], [data-chat-entrance]'));
   assert.equal(
     await page
-      .locator('[data-slot="chat-scroll-viewport"] > ol > li')
+      .locator('[data-slot="chat-scroll-viewport"] > ol > [data-chat-row-id]')
       .last()
       .evaluate((row) => getComputedStyle(row).paddingTop),
     '3px'

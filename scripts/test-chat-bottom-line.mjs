@@ -84,7 +84,9 @@ try {
       await page.evaluate(() => {
         const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
         const content = viewport.firstElementChild;
-        const padding = Number.parseFloat(getComputedStyle(content).paddingBottom);
+        const padding =
+          Number.parseFloat(getComputedStyle(content).paddingBottom) +
+          (content.querySelector('[data-slot="chat-bottom-space"]')?.getBoundingClientRect().height ?? 0);
         const beforeHeight = viewport.scrollHeight;
         // Instrumentation only. A zero-height sibling follows the ol in normal flow,
         // translated past its trailing clearance to the end of all rows, including typing.
@@ -104,7 +106,9 @@ try {
           scrollTop: viewport.scrollTop,
           distance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
           mode: state.textContent,
-          padding: Number.parseFloat(getComputedStyle(content).paddingBottom),
+          padding:
+            Number.parseFloat(getComputedStyle(content).paddingBottom) +
+            (content.querySelector('[data-slot="chat-bottom-space"]')?.getBoundingClientRect().height ?? 0),
         });
         const baseline = read();
         window.bottomLineProbe = {

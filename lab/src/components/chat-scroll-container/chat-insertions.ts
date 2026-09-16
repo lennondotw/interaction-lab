@@ -73,7 +73,8 @@ export function createChatInsertions(
   function remember() {
     const anchor = captureAnchor();
     savedAnchor = anchor && { ...anchor, scrollTop: viewport.scrollTop };
-    const last = content.lastElementChild;
+    const tail = content.lastElementChild;
+    const last = tail?.getAttribute('data-slot') === 'chat-bottom-space' ? tail.previousElementSibling : tail;
     const typing = last?.querySelector<HTMLElement>(':scope > [data-chat-item-body]');
     // Replacement inherits the painted footprint, including partial entry/exit,
     // rather than the body's full intrinsic height or a newly committed gap.
