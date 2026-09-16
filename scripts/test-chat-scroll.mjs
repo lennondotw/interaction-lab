@@ -108,7 +108,12 @@ try {
   assert.ok(sendVisual.slotHeight < sendVisual.bodyHeight);
   assert.equal(sendVisual.topGap, 3, 'Bubble stays at the top of its slot after the same-group gap');
   assert.ok(sendVisual.sourceHidden && sendVisual.visualOutsideScroller);
-  assert.equal(sendVisual.visualHeight, sendVisual.bodyHeight, 'Full bubble height is independent of slot height');
+  // A translated DOMRect can differ from the untransformed body by float rounding
+  // (observed 83.999969px vs 84px). Keep tolerance far below a layout subpixel.
+  assert.ok(
+    Math.abs(sendVisual.visualHeight - sendVisual.bodyHeight) < 0.001,
+    'Full bubble height is independent of slot height'
+  );
   await settle();
   await page.locator('[data-chat-entrance]').waitFor({ state: 'detached' });
   await page.getByText('1×', { exact: true }).click();
