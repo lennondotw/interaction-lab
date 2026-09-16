@@ -211,10 +211,9 @@ function ChatDemo({
   }
 
   function appendMessage(variant: ChatMessage['variant']) {
-    const options =
-      withMessageInput && !withHistoryInsertion && variant === 'outgoing'
-        ? composerMessageOptions
-        : messageOptions[variant];
+    // In every story with a composer, the Send a message button appends a short
+    // sentence of at most 10 words. Receive and history-insertion samples stay independent.
+    const options = withMessageInput && variant === 'outgoing' ? composerMessageOptions : messageOptions[variant];
     const content = options[Math.floor(Math.random() * options.length)]!;
     if (withMessageInput && variant === 'outgoing') {
       setDraft(content);
