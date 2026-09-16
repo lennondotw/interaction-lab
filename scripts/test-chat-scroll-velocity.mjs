@@ -9,12 +9,10 @@ try {
   await page.goto(
     `${process.env.STORYBOOK_URL ?? 'http://localhost:6010'}/iframe.html?id=components-chat-scroll-container--send-messages&viewMode=story`
   );
+  await page.locator('[data-slot="chat-scroll-viewport"]').waitFor();
   const results = await page.evaluate(async () => {
     const { createChatScrollController } =
       await import('/src/components/chat-scroll-container/chat-scroll-controller.ts');
-    const flush = async () => {
-      for (let i = 0; i < 3; i++) await new Promise(requestAnimationFrame);
-    };
     const results = [];
     for (const speed of [0.25, 1]) {
       const viewport = document.createElement('div');
@@ -34,14 +32,20 @@ try {
         },
       });
       try {
-        await flush();
+        // Initial positioning is ResizeObserver-driven. Three rAF callbacks do
+        // not guarantee that delivery on a cold Storybook load; wait for geometry.
+        const readyBy = performance.now() + 5000;
+        while (state?.mode !== 'following' || Math.abs(viewport.scrollTop - 3900) > 1) {
+          if (performance.now() > readyBy) throw new Error('Initial bottom was not measured');
+          await new Promise(requestAnimationFrame);
+        }
         viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -200 }));
         viewport.scrollTop -= 200;
         viewport.dispatchEvent(new Event('scroll'));
         const origin = viewport.scrollTop;
         controller.contentChanged(true);
         const timeout = performance.now() + 5000;
-        while (viewport.scrollTop < origin + 70 || !(state?.velocity > 0)) {
+        while (viewport.scrollTop < origin + 70 || !(state.velocity > 0)) {
           if (performance.now() > timeout) throw new Error('The first spring did not advance');
           await new Promise(requestAnimationFrame);
         }

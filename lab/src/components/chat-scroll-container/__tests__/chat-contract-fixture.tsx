@@ -1,3 +1,4 @@
+import { frame } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
@@ -84,4 +85,14 @@ export function mountChatContractFixture() {
       element.remove();
     },
   };
+}
+
+/** Compare a handoff at one animation timestamp, not a stale click-time paint. */
+export function commitChatFrame(action: () => void) {
+  return new Promise<void>((resolve) => {
+    frame.postRender(() => {
+      flushSync(action);
+      resolve();
+    });
+  });
 }

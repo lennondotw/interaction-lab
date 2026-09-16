@@ -26,7 +26,7 @@ try {
       const { chatLayoutSpring } = await import('/src/components/chat-scroll-container/chat-presence.ts');
       const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
       const list = v.firstElementChild;
-      const oldLast = list.lastElementChild;
+      const oldLast = [...list.querySelectorAll('[data-chat-row-id]')].at(-1);
       const read = () => {
         const typing = list.querySelector('[data-slot="typing-bubble"]');
         const last = [...list.querySelectorAll('[data-message-id]')].at(-1);
@@ -75,15 +75,27 @@ try {
       };
     }, Boolean(longReply));
     const toggle = page.getByRole('button', { name: /^Typing (on|off)$/ });
-    const receive = page.getByRole('button', { name: 'Receive a message and turn typing off', exact: true });
+    const receive = () =>
+      page.evaluate(async () => {
+        const { commitChatFrame } =
+          await import('/src/components/chat-scroll-container/__tests__/chat-contract-fixture.tsx');
+        // The old onClick sample can precede a deferred React commit by a whole
+        // animation frame. Compare the transfer after Motion has sampled this frame,
+        // with a synchronous commit, so normal elapsed motion is not a false jump.
+        await commitChatFrame(() =>
+          [...document.querySelectorAll('button')]
+            .find((button) => button.textContent === 'Receive a message and turn typing off')
+            .click()
+        );
+      });
     await toggle.click();
     if (delay) await page.waitForTimeout(delay);
-    await receive.click();
+    await receive();
     if (reopen) {
       await page.waitForTimeout(200);
       await toggle.click();
       await page.waitForTimeout(350);
-      await receive.click();
+      await receive();
     }
     await page.waitForFunction(
       () => !document.querySelector('[data-chat-inserting], [data-chat-entrance], [data-slot="typing-bubble"]')
@@ -103,7 +115,7 @@ try {
       assert.ok(Math.abs(after.oldTop - before.oldTop) <= 1.1, 'Existing messages do not jump');
       assert.ok(
         Math.abs(after.typing.offset - before.typing.offset) < 0.3,
-        'A partial entrance offset does not snap to zero'
+        `A partial entrance offset does not snap to zero: ${JSON.stringify({ delay, before, after })}`
       );
       // The first replacement remains pure fade until a fresh typing intent takes over.
       if (!reopen || index === 1) {
