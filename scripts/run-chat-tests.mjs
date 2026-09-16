@@ -16,6 +16,7 @@ const names = [
   'scroll-velocity',
   'scroll',
   'composer-release',
+  'flight-composer',
   'scroll-ownership',
   'send-flight',
   'items',
