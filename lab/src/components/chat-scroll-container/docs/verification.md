@@ -106,7 +106,10 @@ In **Automatic Replies**, use 0.25x, send `Hey!`, scroll upward about 100px, the
 - [Typing exit checks](../../../../../scripts/test-chat-typing-exit.mjs): collapse, reopening, crossfade,
   interruption, and reduced motion.
 - [Typing handoff checks](../../../../../scripts/test-chat-typing-handoff.mjs): immediate, partial, settled,
-  long-reply, and reopened replacements at 0.1x, including footprint and velocity continuity.
+  long-reply, and reopened replacements at 0.1x, including footprint and inherited velocity.
+  Geometry samples use Motion's frame timestamp rather than observer delivery time. A deliberate
+  60ms delay after handoff guards against false velocity failures on a busy main thread; the
+  trajectory tolerance remains 0.8px.
 - [Exit/insertion checks](../../../../../scripts/test-chat-typing-exit-insertion.mjs): receive and history insertion during an active typing exit; the new slot starts at zero, existing rows and typing retain their positions at commit, and the content end remains pinned.
 - [Layout transaction checks](../../../../../scripts/test-chat-layout-transactions.mjs): the 8px-to-3px
   neighbor gap, intrinsic growth/shrinkage, and geometry-read budgets with 100 and 10,000 mounted rows.

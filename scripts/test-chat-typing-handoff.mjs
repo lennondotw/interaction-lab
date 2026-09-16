@@ -23,6 +23,11 @@ try {
     await page.evaluate(async (longReply) => {
       // Short replies share typing's 41px target; a long reply also changes the target.
       Math.random = () => (longReply ? 0.8 : 0);
+      const { observeChatFrames } =
+        await import('/src/components/chat-scroll-container/__tests__/chat-contract-fixture.tsx');
+      // Motion samples all springs at its frame timestamp. Observer delivery can
+      // be much later on a busy main thread and must not advance the spring clock.
+      let frameTime = 0;
       const { chatLayoutSpring } = await import('/src/components/chat-scroll-container/chat-presence.ts');
       const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
       const list = v.firstElementChild;
@@ -31,7 +36,8 @@ try {
         const typing = list.querySelector('[data-slot="typing-bubble"]');
         const last = [...list.querySelectorAll('[data-message-id]')].at(-1);
         return {
-          time: performance.now(),
+          time: frameTime,
+          wallTime: performance.now(),
           top: v.scrollTop,
           total: list.getBoundingClientRect().height,
           distance: v.scrollHeight - v.clientHeight - v.scrollTop,
@@ -62,32 +68,45 @@ try {
       document.addEventListener('click', onClick, true);
       const observer = new MutationObserver(record);
       observer.observe(list, { attributes: true, childList: true, subtree: true });
-      let running = true;
-      const tick = () => {
+      const stopFrames = observeChatFrames((timestamp) => {
+        frameTime = timestamp;
         record();
-        if (running) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
+      });
       window.stopHandoffProbe = () => {
-        running = false;
+        stopFrames();
         observer.disconnect();
         document.removeEventListener('click', onClick, true);
       };
     }, Boolean(longReply));
     const toggle = page.getByRole('button', { name: /^Typing (on|off)$/ });
     const receive = () =>
-      page.evaluate(async () => {
-        const { commitChatFrame } =
-          await import('/src/components/chat-scroll-container/__tests__/chat-contract-fixture.tsx');
-        // The old onClick sample can precede a deferred React commit by a whole
-        // animation frame. Compare the transfer after Motion has sampled this frame,
-        // with a synchronous commit, so normal elapsed motion is not a false jump.
-        await commitChatFrame(() =>
-          [...document.querySelectorAll('button')]
-            .find((button) => button.textContent === 'Receive a message and turn typing off')
-            .click()
-        );
-      });
+      page.evaluate(
+        async (stallObserver) => {
+          const { commitChatFrame, observeChatFrames } =
+            await import('/src/components/chat-scroll-container/__tests__/chat-contract-fixture.tsx');
+          // The old onClick sample can precede a deferred React commit by a whole
+          // animation frame. Compare the transfer after Motion has sampled this frame,
+          // with a synchronous commit, so normal elapsed motion is not a false jump.
+          const committed = commitChatFrame(() =>
+            [...document.querySelectorAll('button')]
+              .find((button) => button.textContent === 'Receive a message and turn typing off')
+              .click()
+          );
+          if (stallObserver) {
+            // Exercise a delayed MutationObserver without advancing the painted frame.
+            // Using observer wall time here falsely reports lost handoff velocity.
+            const stop = observeChatFrames(() => {
+              stop();
+              const until = performance.now() + 60;
+              while (performance.now() < until) {
+                /* Delay observer delivery after the frame was painted. */
+              }
+            });
+          }
+          await committed;
+        },
+        delay === 250 && !longReply
+      );
     await toggle.click();
     if (delay) await page.waitForTimeout(delay);
     await receive();
@@ -144,7 +163,7 @@ try {
         const expected = target * (1 - (1 + phase) * Math.exp(-phase));
         assert.ok(
           Math.abs(sample.height - expected) < 0.8,
-          `Height velocity carries through: ${sample.height} vs ${expected}`
+          `Height velocity carries through: ${JSON.stringify({ delay, expected, after, sample })}`
         );
       }
     }
