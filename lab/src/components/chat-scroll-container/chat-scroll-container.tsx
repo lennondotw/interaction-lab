@@ -56,6 +56,7 @@ export function ChatScrollContainer({
   const controllerRef = useRef<ReturnType<typeof createChatScrollController> | null>(null);
   const insertionsRef = useRef<ReturnType<typeof createChatInsertions> | null>(null);
   const previousItems = useRef(items);
+  const previousTypingIntent = useRef(incomingTyping);
   const rowRefs = useRef(new Map<string, HTMLLIElement>());
   const registerRow = useCallback((row: HTMLLIElement | null) => {
     if (!row) return;
@@ -120,7 +121,10 @@ export function ChatScrollContainer({
   }, [bottomThreshold, animationSpeed, reducedMotion, onScrollStateChange]);
 
   useLayoutEffect(() => {
+    const typingTurnedOff = previousTypingIntent.current && !incomingTyping;
+    previousTypingIntent.current = incomingTyping;
     const inserted: ChatListItem[] = [];
+    let replacementId: string | undefined;
     const itemsChanged = previousItems.current !== items;
     const affected = new Set<HTMLElement>();
     if (itemsChanged) {
@@ -144,21 +148,36 @@ export function ChatScrollContainer({
           if (row) affected.add(row);
         }
       });
+      if (typingTurnedOff) {
+        const previousTail = previousItems.current.at(-1);
+        const tailIndex = previousTail ? items.findIndex((item) => item.id === previousTail.id) : -1;
+        const appended = items.slice(tailIndex + 1);
+        const first = appended[0];
+        // Replacement transfers space at the old typing position. It requires an
+        // on-to-off intent edge in this commit and a new suffix immediately after
+        // the old tail. A mounted exit is not permission to move its footprint to
+        // a later receive or a history insertion; those keep independent slots.
+        if (
+          (!previousTail || tailIndex >= 0) &&
+          isChatMessage(first) &&
+          first.variant === 'incoming' &&
+          appended.every((item) => !previous.has(item.id))
+        ) {
+          replacementId = first.id;
+        }
+      }
     }
     previousItems.current = items;
     const bodies = inserted.flatMap(({ id }) => {
       const body = rowRefs.current.get(id)?.firstElementChild;
       return body instanceof HTMLElement ? [body] : [];
     });
-    const incomingIds = new Set(
-      inserted.filter((item) => isChatMessage(item) && item.variant === 'incoming').map(({ id }) => id)
-    );
     const entranceIds = new Set(
       inserted.filter((item) => !isChatMessage(item) || item.entrance !== 'flight').map(({ id }) => id)
     );
     const replacement =
-      typingMounted && !incomingTyping && !typingReplacing
-        ? bodies.find((body) => incomingIds.has(body.dataset.chatItemId!))
+      typingMounted && replacementId && !typingReplacing
+        ? bodies.find((body) => body.dataset.chatItemId === replacementId)
         : undefined;
     // Stop and snapshot the old animation before the replacement slot takes over.
     const handoff = replacement ? replaceTypingWith(replacement) : undefined;
