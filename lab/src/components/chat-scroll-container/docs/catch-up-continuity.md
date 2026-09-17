@@ -15,7 +15,7 @@ Final spring target = current content height + pending layout height - viewport 
 ```
 
 Settled following directly compensates the slot's 28/1 height animation. There is no second scroll
-spring, and the content-end line stays fixed on screen. Catch-up uses a separate 22/1 spring. The end
+spring, and the content-end line stays fixed on screen. Catch-up uses a separate 15/1 spring. The end
 line may move while catching up; keeping it fixed is not the correct assertion for this state.
 
 Expansion increases current height while reducing pending height, leaving the final target unchanged.

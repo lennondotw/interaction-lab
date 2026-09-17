@@ -1,6 +1,7 @@
 export {
   ChatScrollContainer,
   type ChatScrollContainerProps,
+  type ChatScrollContainerHandle,
   type ChatMessage,
   type ChatListItem,
   type ChatContentItem,

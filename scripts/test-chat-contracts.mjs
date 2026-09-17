@@ -9,6 +9,43 @@ try {
   const page = await browser.newPage({ viewport: { width: 1000, height: 900 }, reducedMotion: 'no-preference' });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(`${base}/iframe.html?id=components-chat-scroll-container--with-message-input&viewMode=story`);
+  const storyViewport = page.locator('[data-slot="chat-scroll-viewport"]');
+  await storyViewport.waitFor();
+  await page.getByText('following', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: '2 px', exact: true }).getAttribute('aria-pressed'), 'true');
+  for (const startMode of ['detached', 'animating']) {
+    await storyViewport.evaluate((element) => {
+      element.dispatchEvent(new WheelEvent('wheel', { deltaY: -200 }));
+      element.scrollTop -= 200;
+      element.dispatchEvent(new Event('scroll'));
+    });
+    await page.getByText('detached', { exact: true }).waitFor();
+    if (startMode === 'animating') {
+      await page.getByRole('button', { name: '0.1×', exact: true }).click();
+      await page.getByRole('button', { name: 'Send a message', exact: true }).click();
+      await page.getByText('animating', { exact: true }).waitFor();
+    }
+    const distance = await page.getByRole('button', { name: 'Scroll to bottom', exact: true }).evaluate((button) => {
+      button.click();
+      const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+    });
+    assert.ok(distance > 1, 'Scroll command starts catch-up without teleporting to the bottom');
+    await page.getByText('animating', { exact: true }).waitFor();
+    await page.getByText('following', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Receive a message', exact: true }).click();
+    await page.evaluate(async () => {
+      const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
+      for (let i = 0; i < 90; i++) {
+        await new Promise(requestAnimationFrame);
+        if (Math.abs(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop) > 1)
+          throw new Error('Completed catch-up must keep following subsequent layout');
+      }
+    });
+    assert.equal(await page.getByText('following', { exact: true }).count(), 1);
+    console.log(`PASS: scroll-to-bottom from ${startMode} animates to bottom and preserves following during receive`);
+  }
   await page.goto(`${base}/iframe.html?id=components-chat-scroll-container--insert-in-history&viewMode=story`);
   const results = await page.evaluate(async () => {
     const { mountChatContractFixture } =

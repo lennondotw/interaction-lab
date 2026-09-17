@@ -335,7 +335,7 @@ try {
       (frame) => frame.mode === 'animating' && frame.remaining > 2 && Math.abs(frame.bottom - frame.top) <= 1
     );
     assert.equal(caughtBoundary, result.frequency === 10, 'Exercise both boundary-limited and unconstrained catch-up');
-    const bound = (2 * Math.max(22, result.frequency) * (8 + 36 * result.count)) / Math.E;
+    const bound = (2 * Math.max(15, result.frequency) * (8 + 36 * result.count)) / Math.E;
     for (let i = 1; i < result.frames.length; i++) {
       const a = result.frames[i - 1],
         b = result.frames[i];
@@ -345,7 +345,7 @@ try {
       );
     }
     console.log(
-      `PASS: layout ${result.frequency}/1 vs scroll 22/1, ${result.count} send(s), boundary-limited=${caughtBoundary}.`
+      `PASS: layout ${result.frequency}/1 vs scroll 15/1, ${result.count} send(s), boundary-limited=${caughtBoundary}.`
     );
   }
 

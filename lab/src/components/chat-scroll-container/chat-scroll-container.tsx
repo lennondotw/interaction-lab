@@ -1,6 +1,13 @@
 import { cn } from '@monorepo/utils';
 import { useReducedMotion } from 'motion/react';
-import { useCallback, useLayoutEffect, useRef, type ComponentPropsWithoutRef } from 'react';
+import {
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  type ComponentPropsWithoutRef,
+  type Ref,
+} from 'react';
 
 import { MessageBubble, TypingBubble } from '../message-bubble/index.js';
 import { createChatBottomSpace, type ChatBottomSpace } from './chat-bottom-space.js';
@@ -25,7 +32,13 @@ export type { ChatScrollState } from './chat-scroll-controller.js';
 
 export type { ChatMessage, ChatListItem, ChatContentItem, ChatDateItem, ChatStatusItem } from './chat-items.js';
 
+export interface ChatScrollContainerHandle {
+  /** Animate to the bottom and follow subsequent layout changes. */
+  scrollToBottom(): void;
+}
+
 export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'section'> {
+  ref?: Ref<ChatScrollContainerHandle>;
   /** Ordered messages and custom content. Takes precedence over the messages shorthand. */
   items?: readonly ChatListItem[];
   messages?: readonly ChatMessage[];
@@ -48,6 +61,7 @@ const emptyItems: readonly ChatListItem[] = [];
 
 /** The host supplies the container's width and height; only the message list scrolls. */
 export function ChatScrollContainer({
+  ref,
   messages,
   items: suppliedItems,
   incomingTyping = false,
@@ -69,6 +83,13 @@ export function ChatScrollContainer({
   const bottomSpaceController = useRef<ReturnType<typeof createChatBottomSpace> | null>(null);
   const controllerRef = useRef<ReturnType<typeof createChatScrollController> | null>(null);
   const insertionsRef = useRef<ReturnType<typeof createChatInsertions> | null>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToBottom: () => controllerRef.current?.scrollToBottom(),
+    }),
+    []
+  );
   const previousItems = useRef(items);
   const previousTypingIntent = useRef(incomingTyping);
   const rowRefs = useRef(new Map<string, HTMLLIElement>());

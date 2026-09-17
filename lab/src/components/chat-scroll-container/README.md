@@ -98,6 +98,9 @@ are explicit special paths. There is no general arbitrary-item removal animation
 Outgoing messages request bottom scrolling by default. History insertion supplies `scrollToBottom: false`
 to preserve the current follow/reading intent; this is independent of the visual entrance style.
 
+Use a `ref` typed as `ChatScrollContainerHandle` to call `scrollToBottom()`: it animates to the
+projected bottom and restores following, with the same interruption policy as local-send catch-up.
+
 ## Text placement during flight
 
 See [Shared spring and offset decay](./docs/offset-decay.md) and

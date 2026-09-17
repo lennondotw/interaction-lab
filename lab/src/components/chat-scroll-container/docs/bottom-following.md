@@ -35,6 +35,10 @@ The **Detach Following State On Pointer Down** story opts into immediate pointer
 
 A wheel event can precede native movement. Check the current position at input time and observe the actual position again when it changes; do not assume the wheel has already moved it. The 2px zone is a geometric eligibility condition, not a scheduling delay. Owned writes record their actual result immediately, so delayed or coalesced scroll notifications cannot reclaim ownership for a cancelled animation. Independent layout slots continue after interruption; stopping flight does not remove their space. If restoration leaves a few threshold pixels untouched, subsequent animated layout ticks in `following` still synchronize directly to the current bottom instead of starting another catch-up spring. Ordinary composer resizing retains its settled-bottom check.
 
+## Explicit bottom command
+
+The public `ChatScrollContainerHandle.scrollToBottom()` command requests animated catch-up to the projected final bottom using the same 15/1 spring as a local send. It preserves velocity when retargeting active catch-up and enters `following` on arrival. Native gestures can interrupt it under the same rules. With reduced motion, it reaches the current bottom immediately. The story's Scroll to bottom button invokes this command; bottom-zone controls default to 2px.
+
 ## Evidence
 
 - Implementation: [state transitions and input handlers](../chat-scroll-controller.ts).

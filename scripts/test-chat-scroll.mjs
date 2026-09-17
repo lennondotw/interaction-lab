@@ -124,6 +124,8 @@ try {
   assert.ok((await geometry()).distance <= 1, 'The current layout remains pinned throughout entry');
   await settle();
 
+  // Exercise escape within the wider debug zone independently of story defaults.
+  await page.getByRole('button', { name: '20 px · debug', exact: true }).click();
   await wheel(-5);
   await waitMode('detached');
   await page.waitForTimeout(120);
