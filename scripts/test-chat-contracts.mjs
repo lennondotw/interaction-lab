@@ -145,6 +145,53 @@ try {
       }
     }
 
+    // Native touch scrolling cancels the pointer before the fingers leave the screen.
+    // Exercise event ownership explicitly; this is not an iOS gesture simulation.
+    for (const end of ['touchend', 'touchcancel']) {
+      const fixture = await mount();
+      try {
+        fixture.update({ threshold: 2 });
+        const v = viewport(fixture);
+        const first = new Touch({ identifier: 1, target: v });
+        const second = new Touch({ identifier: 2, target: v });
+        const touch = (type, changedTouches, touches) =>
+          fire(v, new TouchEvent(type, { changedTouches, touches, bubbles: true, cancelable: true }));
+        fire(v, new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));
+        touch('touchstart', [first], [first]);
+        await flush();
+        check(mode(fixture) === 'following', 'Ordinary touch contact does not interrupt following');
+        window.dispatchEvent(new PointerEvent('pointercancel', { pointerType: 'touch' }));
+        v.scrollTop -= 8;
+        v.dispatchEvent(new Event('scroll'));
+        await flush();
+        check(mode(fixture) === 'detached', 'Actual upward touch scrolling still detaches');
+        v.scrollTop = v.scrollHeight - v.clientHeight - 1;
+        v.dispatchEvent(new Event('scroll'));
+        fire(v, new WheelEvent('wheel', { deltaY: 1, cancelable: true }));
+        await flush();
+        check(mode(fixture) === 'detached', 'Pointer cancellation cannot release an active touch restoration gate');
+        touch('touchstart', [second], [first, second]);
+        touch(end, [first], [second]);
+        await flush();
+        check(mode(fixture) === 'detached', 'Ending one contact leaves the other touch active');
+        const beforeRelease = v.scrollTop;
+        touch(end, [second], []);
+        await flush();
+        check(mode(fixture) === 'following', 'Final touch release restores after the last downward movement');
+        check(v.scrollTop === beforeRelease, 'Touch release does not snap the remaining pixel');
+
+        fire(v, new WheelEvent('wheel', { deltaY: -1 }));
+        // Touch-only input must also be tracked, and a tap must not invent downward intent.
+        touch('touchstart', [first], [first]);
+        touch(end, [first], []);
+        await flush();
+        check(mode(fixture) === 'detached', 'A touch-only tap cannot restore following');
+        results.push(`touch lifecycle after pointer cancellation: ${end}`);
+      } finally {
+        fixture.unmount();
+      }
+    }
+
     // Reattachment is an intent event, not a side effect of proximity. Reuse the
     // same gate for a boundary wheel and native movement at both threshold sizes.
     for (const threshold of [2, 20]) {

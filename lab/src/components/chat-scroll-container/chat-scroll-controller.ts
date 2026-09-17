@@ -48,7 +48,9 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   let animationTarget = 0;
   let animation: ReturnType<typeof animate> | undefined;
   let pointerHeld = false;
-  let pointerMovedDown = false;
+  const activeTouches = new Set<number>();
+  let interactionMovedDown = false;
+  const interactionHeld = () => pointerHeld || activeTouches.size > 0;
   let initialLayoutMeasured = false;
   let previousBottomPadding = Number.parseFloat(getComputedStyle(content).paddingBottom);
   const position = motionValue(viewport.scrollTop);
@@ -86,7 +88,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     observedScroll = current;
     if (!clamped && delta !== 0) {
       anchorRemainder = 0;
-      if (pointerHeld) pointerMovedDown = delta > 0;
+      if (interactionHeld()) interactionMovedDown = delta > 0;
       if (delta < 0) detach('User scrolled up');
       else if (delta > 0) resumeFollowing('User returned to bottom zone');
     }
@@ -132,7 +134,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function resumeFollowing(cause: string) {
-    if (mode !== 'detached' || pointerHeld || distance() > options.threshold) return;
+    if (mode !== 'detached' || interactionHeld() || distance() > options.threshold) return;
     mode = 'following';
     reason = cause;
     // Intent only: leave the remaining threshold pixels and native input alone.
@@ -252,15 +254,33 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function onPointerDown() {
+    if (!interactionHeld()) interactionMovedDown = false;
     pointerHeld = true;
-    pointerMovedDown = false;
     if (options.interruptOnPointerDown) detach('Pointer interaction');
+  }
+
+  function finishInteraction() {
+    if (interactionHeld()) return;
+    if (interactionMovedDown) resumeFollowing('Interaction returned to bottom zone');
+    interactionMovedDown = false;
   }
 
   function onPointerUp() {
     pointerHeld = false;
-    if (pointerMovedDown) resumeFollowing('Pointer returned to bottom zone');
-    pointerMovedDown = false;
+    finishInteraction();
+  }
+
+  function onTouchStart(event: TouchEvent) {
+    if (!interactionHeld()) interactionMovedDown = false;
+    // Native scrolling cancels the pointer while fingers can remain on screen.
+    // Track viewport contacts independently until their own end/cancel events.
+    for (const touch of event.changedTouches) activeTouches.add(touch.identifier);
+  }
+
+  function onTouchEnd(event: TouchEvent) {
+    if (activeTouches.size === 0) return;
+    for (const touch of event.changedTouches) activeTouches.delete(touch.identifier);
+    finishInteraction();
   }
 
   function onKeyDown(event: KeyboardEvent) {
@@ -272,9 +292,12 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   viewport.addEventListener('scroll', onScroll, { passive: true });
   viewport.addEventListener('wheel', onWheel, { passive: true });
   viewport.addEventListener('pointerdown', onPointerDown, { passive: true });
+  viewport.addEventListener('touchstart', onTouchStart, { passive: true });
   viewport.addEventListener('keydown', onKeyDown);
   window.addEventListener('pointerup', onPointerUp, { passive: true });
   window.addEventListener('pointercancel', onPointerUp, { passive: true });
+  window.addEventListener('touchend', onTouchEnd, { passive: true });
+  window.addEventListener('touchcancel', onTouchEnd, { passive: true });
   const observer = new ResizeObserver(() => {
     // The first delivery includes parent layout effects, such as measuring the composer.
     // Complete initial positioning before paint; only subsequent changes should animate.
@@ -312,9 +335,12 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       viewport.removeEventListener('scroll', onScroll);
       viewport.removeEventListener('wheel', onWheel);
       viewport.removeEventListener('pointerdown', onPointerDown);
+      viewport.removeEventListener('touchstart', onTouchStart);
       viewport.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
     },
   };
 }
