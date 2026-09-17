@@ -136,19 +136,24 @@ try {
           const targetError = Math.abs(viewport.scrollHeight - viewport.clientHeight - finalTarget);
 
           // A settled body can grow without a list insertion (e.g. an image loads).
-          // ResizeObserver must animate its owned slot without a whole-list rescan.
-          const oldHeight = original.call(last).height;
+          // Observation updates the baseline without creating animation intent.
           last.firstElementChild.style.height = '90px';
-          for (let i = 0; i < 5 && !last.hasAttribute('data-chat-inserting'); i++) await frame();
+          for (let i = 0; i < 5; i++) await frame();
           const resizeStarted = last.hasAttribute('data-chat-inserting');
-          const startHeight = original.call(last).height;
           await settle();
           const grownHeight = original.call(last).height;
           last.firstElementChild.style.height = '33px';
-          for (let i = 0; i < 5 && !last.hasAttribute('data-chat-inserting'); i++) await frame();
+          for (let i = 0; i < 5; i++) await frame();
           const shrinkStarted = last.hasAttribute('data-chat-inserting');
           await settle();
           const shrunkHeight = original.call(last).height;
+          // A declared content edit still animates from the refreshed baseline.
+          last.firstElementChild.style.height = '70px';
+          manager.insert(new Set(), false, undefined, new Set([last]));
+          const explicitStarted = last.hasAttribute('data-chat-inserting');
+          const explicitStartHeight = original.call(last).height;
+          await settle();
+          const explicitEndHeight = original.call(last).height;
           return {
             count,
             commitReads,
@@ -158,11 +163,12 @@ try {
             after,
             targetError,
             resizeStarted,
-            oldHeight,
-            startHeight,
             grownHeight,
             shrinkStarted,
             shrunkHeight,
+            explicitStarted,
+            explicitStartHeight,
+            explicitEndHeight,
           };
         } finally {
           Element.prototype.getBoundingClientRect = original;
@@ -179,15 +185,19 @@ try {
     assert.ok(result.maxFrameReads < 150, `No whole-history scan in animation ticks: ${JSON.stringify(result)}`);
     assert.ok(result.targetError <= 1, 'Projected final height survives the handoff to natural layout');
     assert.ok(
-      result.resizeStarted && result.shrinkStarted,
-      'Settled content growth and shrinkage re-enter layout animation'
+      !result.resizeStarted && !result.shrinkStarted,
+      'Observed growth and shrinkage do not create animation intent'
     );
-    assert.ok(Math.abs(result.startHeight - result.oldHeight) < 1, 'A body resize starts at its previous footprint');
+    assert.ok(result.explicitStarted, 'A declared content change creates a layout animation');
+    assert.equal(result.explicitStartHeight, result.shrunkHeight, 'Declared edits use the observed baseline');
+    assert.equal(result.explicitEndHeight, 73);
     assert.equal(result.grownHeight, 93);
     assert.equal(result.shrunkHeight, 36);
   }
   assert.deepEqual(errors, []);
-  console.log('PASS: atomic 8px-to-3px gap change, observed body growth/shrinkage, and bounded geometry work.');
+  console.log(
+    'PASS: atomic 8px-to-3px gap change, natural resizing, explicit content animation, and bounded geometry work.'
+  );
   console.table(results);
 } finally {
   await browser.close();

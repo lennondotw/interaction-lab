@@ -12,6 +12,7 @@ await mkdir(output, { recursive: true });
 const started = Date.now();
 const base = process.env.STORYBOOK_URL ?? `http://127.0.0.1:${process.env.CHAT_TEST_PORT ?? '6199'}`;
 const fullSuite = [
+  'resize-window',
   'contracts',
   'item-debug',
   'scroll-velocity',
