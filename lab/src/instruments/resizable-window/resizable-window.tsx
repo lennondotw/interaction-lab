@@ -13,7 +13,7 @@ interface Drag {
   axis: Axis;
 }
 
-// Bounds keep the chat and its diagnostics usable while allowing narrow reflow.
+// Bounds keep the chat usable while allowing narrow reflow.
 const initialSize = { width: 560, height: 800 };
 const minimumSize = { width: 320, height: 560 };
 // Absolute insets start at the inner border edge. Half the 1px stroke places

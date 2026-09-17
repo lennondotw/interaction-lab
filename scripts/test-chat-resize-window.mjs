@@ -15,6 +15,7 @@ try {
   const size = () => window.evaluate((element) => ({ width: element.offsetWidth, height: element.offsetHeight }));
   const handle = page.getByRole('button', { name: 'Resize window', exact: true });
   const begin = async (target = handle) => {
+    await target.scrollIntoViewIfNeeded();
     const box = await target.boundingBox();
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
@@ -40,6 +41,109 @@ try {
       },
       { type, options }
     );
+
+  // Geometry is sampled in ResizeObserver after the application's observers.
+  // rAF runs BEFORE layout observation and can expose an unpainted reflow; use it
+  // to sample reported state, without forcing a premature layout measurement.
+  for (const speed of [1, 0.1]) {
+    await page.getByRole('button', { name: `${speed}×`, exact: true }).click();
+    await page.getByText('State: following', { exact: false }).waitFor();
+    await page.evaluate(() => {
+      const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
+      const state = document.querySelector('#storybook-root strong');
+      const layouts = [];
+      const states = [];
+      const observer = new ResizeObserver(() => {
+        layouts.push({
+          distance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+          height: viewport.scrollHeight,
+        });
+      });
+      observer.observe(viewport);
+      observer.observe(viewport.firstElementChild);
+      let frame;
+      const tick = () => {
+        states.push(state.textContent);
+        frame = requestAnimationFrame(tick);
+      };
+      tick();
+      window.stopFollowResizeProbe = () => {
+        cancelAnimationFrame(frame);
+        observer.disconnect();
+        return { layouts, states };
+      };
+    });
+    for (const [label, dx, dy] of [
+      ['Resize width', -180, 0],
+      ['Resize width', 180, 0],
+      ['Resize height', 0, -100],
+      ['Resize height', 0, 100],
+    ]) {
+      const origin = await begin(page.getByRole('button', { name: label, exact: true }));
+      for (let step = 1; step <= 12; step++) {
+        await page.mouse.move(origin.x + (dx * step) / 12, origin.y + (dy * step) / 12);
+        await page.waitForTimeout(40);
+      }
+      await page.mouse.up();
+    }
+    await page.waitForTimeout(100);
+    const { layouts, states } = await page.evaluate(() => window.stopFollowResizeProbe());
+    assert.ok(layouts.length > 20 && states.length > 40, 'Sample throughout continuous resize');
+    assert.ok(
+      Math.max(...layouts.map((f) => f.height)) - Math.min(...layouts.map((f) => f.height)) > 100,
+      'Width changes really rewrap the history'
+    );
+    assert.ok(
+      states.every((mode) => mode === 'following'),
+      'Natural resize never enters catch-up or detaches'
+    );
+    const maxDistance = Math.max(...layouts.map((f) => Math.abs(f.distance)));
+    assert.ok(maxDistance <= 1, `Following stays pinned throughout resize: ${maxDistance}px`);
+    console.log(
+      `PASS: following resize at ${speed}x (${layouts.length} layouts, ${states.length} frames, max distance ${maxDistance}px)`
+    );
+  }
+
+  // Restoring intent inside 2px does not write immediately. The next genuine
+  // layout change follows directly, even when the old position was not exact.
+  const scrollViewport = page.locator('[data-slot="chat-scroll-viewport"]');
+  await scrollViewport.evaluate((element) => {
+    element.scrollTop -= 1;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await page.getByText('State: detached', { exact: false }).waitFor();
+  const gap = await scrollViewport.evaluate((element) => {
+    element.dispatchEvent(new WheelEvent('wheel', { deltaY: 1 }));
+    return element.scrollHeight - element.clientHeight - element.scrollTop;
+  });
+  assert.equal(gap, 1, 'Downward intent restores following without snapping');
+  await page.getByText('State: following', { exact: false }).waitFor();
+  await page.getByRole('textbox').fill('First line\nSecond line');
+  await page.waitForTimeout(100);
+  assert.equal(await scrollViewport.evaluate((v) => v.scrollHeight - v.clientHeight - v.scrollTop), 0);
+  await page.getByText('State: following', { exact: false }).waitFor();
+  await page.getByRole('textbox').fill('');
+  console.log('PASS: layout after bottom-zone restoration follows immediately');
+
+  // An existing catch-up still animates toward its updated final destination.
+  await scrollViewport.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await page.getByText('State: detached', { exact: false }).waitFor();
+  await page.getByRole('button', { name: 'Scroll to bottom', exact: true }).click();
+  await page.getByText('State: animating', { exact: false }).waitFor();
+  const catchUpOrigin = await begin(page.getByRole('button', { name: 'Resize width', exact: true }));
+  await moveBy(catchUpOrigin, -40, 0);
+  await page.mouse.up();
+  await page.getByText('State: animating', { exact: false }).waitFor();
+  assert.ok(
+    (await scrollViewport.evaluate((v) => v.scrollHeight - v.clientHeight - v.scrollTop)) > 100,
+    'Resize does not snap active catch-up to the bottom'
+  );
+  await page.getByText('State: following', { exact: false }).waitFor();
+  assert.equal(await scrollViewport.evaluate((v) => v.scrollHeight - v.clientHeight - v.scrollTop), 0);
+  console.log('PASS: resize retargets active catch-up and eventually reaches bottom');
 
   // Resize must preserve the existing demo instance, including the draft.
   await page.getByRole('textbox').fill('Keep this draft');
@@ -161,6 +265,8 @@ try {
   console.log('PASS: resize preserves an active insertion and hands off to its new natural dimensions');
 
   // A partially visible body's bottom must survive rewrap in both directions.
+  // Keep enough history below it for the taller chat viewport. This case isolates
+  // rewrap compensation from native scroll-range clamping during width changes.
   // Real handle moves also exercise delayed scroll events from prior compensation.
   await page.reload();
   await page.getByRole('checkbox', { name: 'Show anchor element' }).check();
@@ -178,7 +284,7 @@ try {
   const viewport = page.locator('[data-slot="chat-scroll-viewport"]');
   const readingPosition = () =>
     viewport.evaluate((element) => {
-      const body = element.querySelector('[data-message-id="message-93"]');
+      const body = element.querySelector('[data-message-id="message-77"]');
       const selected = element.querySelector('[data-chat-reading-anchor]');
       return {
         id: selected?.dataset.messageId,
@@ -188,12 +294,12 @@ try {
     });
   async function assertReadingAnchor() {
     const position = await readingPosition();
-    assert.equal(position.id, 'message-93', `Resize must retain the partial message: ${JSON.stringify(position)}`);
+    assert.equal(position.id, 'message-77', `Resize must retain the partial message: ${JSON.stringify(position)}`);
     assert.ok(Math.abs(position.bottom - 10) <= 1, `Reading bottom stays at 10px: ${JSON.stringify(position)}`);
   }
   await resizeTo(394);
   await viewport.evaluate((element) => {
-    const body = element.querySelector('[data-message-id="message-93"]');
+    const body = element.querySelector('[data-message-id="message-77"]');
     element.scrollTop += body.getBoundingClientRect().bottom - element.getBoundingClientRect().top - 10;
   });
   await page.waitForTimeout(100);
@@ -226,7 +332,7 @@ try {
   ]) {
     await page.evaluate((insertedId) => {
       const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
-      const anchor = viewport.querySelector('[data-message-id="message-93"]');
+      const anchor = viewport.querySelector('[data-message-id="message-77"]');
       const read = () => {
         const row = viewport.querySelector(`[data-chat-row-id="${insertedId}"]`);
         return {
@@ -254,10 +360,10 @@ try {
     }, insertedId);
     await page.getByRole('button', { name: `Insert incoming ${placement} first visible message`, exact: true }).click();
     const adjacent =
-      placement === 'before' ? `[data-chat-row-id="${insertedId}"] + li` : '[data-chat-row-id="message-93"] + li';
+      placement === 'before' ? `[data-chat-row-id="${insertedId}"] + li` : '[data-chat-row-id="message-77"] + li';
     assert.equal(
       await page.locator(adjacent).getAttribute('data-chat-row-id'),
-      placement === 'before' ? 'message-93' : insertedId
+      placement === 'before' ? 'message-77' : insertedId
     );
     await page.waitForFunction(() => !document.querySelector('[data-chat-inserting], [data-chat-entrance]'));
     // Include queued scroll delivery and the final natural-layout handoff.
@@ -300,7 +406,7 @@ try {
   await page.mouse.move(viewportBox.x + viewportBox.width / 2, viewportBox.y + viewportBox.height / 2);
   await page.mouse.wheel(0, -150);
   await page.waitForFunction(
-    () => document.querySelector('[data-chat-reading-anchor]')?.dataset.messageId !== 'message-93'
+    () => document.querySelector('[data-chat-reading-anchor]')?.dataset.messageId !== 'message-77'
   );
   console.log('PASS: user scrolling selects a new reading anchor');
   await page.screenshot({ path: '/tmp/chat-resizable-window.png', fullPage: true });
