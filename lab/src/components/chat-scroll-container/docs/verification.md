@@ -130,7 +130,10 @@ In **Automatic Replies**, use 0.25x, send `Hey!`, scroll upward about 100px, the
 - [Layout transaction checks](../../../../../scripts/test-chat-layout-transactions.mjs): the 8px-to-3px
   neighbor gap, immediate observed growth/shrinkage, explicit content animation from the updated baseline,
   and geometry-read budgets with 100 and 10,000 mounted rows.
-- [Resizable window checks](../../../../../scripts/test-chat-resize-window.mjs): repeated reflow leaves
+- [Resizable window checks](../../../../../scripts/test-chat-resize-window.mjs): continuous width/height
+  resizing at 1x and 0.1x keeps following pinned without entering catch-up. Bottom-zone restoration
+  leaves the remaining pixel untouched until the next layout change; active catch-up still retargets
+  and reaches the bottom. Repeated reflow leaves
   settled bubbles idle; an active insertion keeps its progress and finishes at its new natural size.
   A nearly clipped reading message keeps its bottom and identity through single-step and continuous
   width round trips, including container translation. Frame samples cover insertion before and after

@@ -6,7 +6,7 @@ The composer owns editing geometry; the story connects that geometry to list cle
 
 The textarea resets its height and reads `scrollHeight` on input, controlled-value updates, and width changes. The composition uses `useChatComposerSpace` to measure the complete composer form after textarea layout effects and on observed size changes. Its `bottomSpace` value supplies the form height plus the requested gap. `ChatScrollContainer` renders an independent trailing spacer after all items and typing, replacing its default bottom padding. This presentation-only row is not a message and does not affect grouping.
 
-Initial bottom positioning occurs on the scroll controller's first observer delivery, after layout effects and composer clearance are available. It writes the bottom before paint without a catch-up animation. Later composer resizing tracks the bottom immediately only if following was already settled; active catch-up receives a new target, while detached reading preserves its position within the available range.
+Initial bottom positioning occurs on the scroll controller's first observer delivery, after layout effects and composer clearance are available. It writes the bottom before paint without a catch-up animation. Later composer resizing tracks the current bottom immediately while following; active catch-up receives a new target, while detached reading preserves its position within the available range.
 
 Sending captures the source box before appending and clearing the draft. The demo's Send button first fills the textarea, then uses two animation-frame callbacks before submission so resizing and clearance can settle. This scheduling belongs to the demo button, not every manual send.
 

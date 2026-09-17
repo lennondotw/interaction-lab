@@ -92,7 +92,6 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       if (delta < 0) detach('User scrolled up');
       else if (delta > 0) resumeFollowing('User returned to bottom zone');
     }
-    return Math.abs(previous.bottom - previous.top) <= positionTolerance;
   }
 
   function report() {
@@ -195,13 +194,12 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     if (!initialLayoutMeasured) return;
     // Reconcile before any early return or layout-cache update, even while a spring
     // is animating. Native clamps are observations, not new user intent or writes.
-    const wasAtBottom = observeScroll();
+    observeScroll();
     const bottomPadding = Number.parseFloat(getComputedStyle(content).paddingBottom);
     const paddingDelta = bottomPadding - previousBottomPadding;
     const clearanceChanged = composerResize || paddingDelta !== 0;
     // ResizeObserver can report a frame already applied by an insertion callback.
-    // Do not turn that notification into a second scroll animation. A new natural
-    // row (such as typing) is a separate change and must still animate into view.
+    // Do not process that notification as a second layout change.
     // Explicit layout ticks must run even when integer scrollHeight is unchanged:
     // fractional shrinkage can still clamp scrollTop and needs to be recorded
     // as layout-owned scrolling before the native scroll event arrives.
@@ -229,16 +227,12 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       anchorRemainder = Math.max(-1, Math.min(1, requestedTop - viewport.scrollTop));
     }
     if (localSend || mode !== 'detached') {
-      // Following tracks animated layout directly; ordinary composer resizing
-      // requires a settled bottom. Active catch-up only receives a new target.
-      if (clearanceChanged && !localSend && mode === 'following' && !wasAtBottom) {
-        report();
-        return;
-      }
       scrollToBottom(localSend ? 'Local message sent' : clearanceChanged ? 'Composer resized' : 'Content resized', {
-        // A layout tick after bottom-zone restoration must not restart catch-up
-        // just because restoration left a few threshold pixels untouched.
-        instant: mode === 'following' && (animatedLayout || (clearanceChanged && wasAtBottom)),
+        // Follow intent owns the current bottom across ALL layout changes, including
+        // natural reflow. No resize-cause inference or second spring is needed.
+        // Reconcile user movement above first; detached readers keep their anchor,
+        // while existing catch-up retains its velocity and projected final target.
+        instant: mode === 'following',
       });
     }
     report();

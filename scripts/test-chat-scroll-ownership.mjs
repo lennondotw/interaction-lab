@@ -44,7 +44,9 @@ try {
           // A projected destination keeps the spring animating even while the
           // current DOM reaches its shorter boundary (typing replacement case).
           unregister = registerChatTransition(viewport, { row: content, remaining: 100, gapRemaining: 0 });
-          controller.contentChanged(true);
+          // A followed local send now tracks layout directly. Use the explicit
+          // bottom command to exercise clamping during an active catch-up spring.
+          controller.scrollToBottom();
           const before = { top: viewport.scrollTop, height: viewport.scrollHeight };
           content.style.height = fractional ? '499.5px' : '450px';
           const clamped = { top: viewport.scrollTop, height: viewport.scrollHeight };
@@ -166,6 +168,16 @@ try {
     },
     null,
     { timeout: 15000 }
+  );
+  // Visual/layout handoff can finish before the independent catch-up spring.
+  // Verify eventual arrival without using another gesture to rescue scrolling.
+  await page.waitForFunction(
+    () => {
+      const v = document.querySelector('[data-slot="chat-scroll-viewport"]');
+      return Math.abs(v.scrollHeight - v.clientHeight - v.scrollTop) <= 0.5;
+    },
+    null,
+    { timeout: 5000 }
   );
   assert.ok(await viewport.evaluate((v) => v.scrollHeight - v.clientHeight - v.scrollTop <= 1));
   const lastOutgoing = viewport.locator('[data-message-id][data-variant="outgoing"]').last();
