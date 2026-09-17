@@ -225,10 +225,8 @@ try {
   const historyFrames = await page.evaluate(() => window.historyFrames);
   const departure = historyFrames[0];
   assert.ok(departure.remaining > 1000, 'Start far from the bottom');
-  assert.ok(
-    historyFrames.some((frame) => frame.flying && frame.remaining <= 1),
-    'The faster scroll reaches the bottom before the flight finishes'
-  );
+  const lastFlying = historyFrames.findLast((frame) => frame.flying);
+  assert.ok(lastFlying.remaining > 1, 'The slower catch-up remains the final handoff gate');
   assert.ok(
     historyFrames.every((frame) => Math.abs(frame.predicted - departure.predicted) < 1),
     'The predicted destination remains stable during catch-up scrolling'

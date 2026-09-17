@@ -23,10 +23,11 @@ Differences within 0.5px do not retarget. A second send changes the target; reta
 actual scroll offset and carries the sampled spring velocity, adjusted for playback speed. The first
 flight keeps its original shape clock and uses destination compensation rather than restarting.
 
-A faster scroll can hit the still-expanding boundary. Clamping two continuous trajectories preserves
-position continuity but can change velocity at their intersection. If scrolling finishes before layout,
-settled following continues to compensate subsequent height updates. Velocity continuity is not required.
-Native rounding and completion tolerances mean the implementation is not an exact real-number model.
+Depending on distance and pending layout, catch-up can either hit the still-expanding boundary or be the
+last flight-handoff gate. Clamping two continuous trajectories preserves position continuity but can
+change velocity at their intersection. If scrolling finishes before layout, settled following continues
+to compensate subsequent height updates. Velocity continuity is not required. Native rounding and
+completion tolerances mean the implementation is not an exact real-number model.
 
 The current Motion implementation can advance the old spring to the current timestamp during `stop()`.
 Therefore, retarget need not leave `scrollTop` numerically unchanged within the commit. Distinguish that
