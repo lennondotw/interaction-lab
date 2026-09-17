@@ -72,7 +72,7 @@ typing reversal/replacement, and label alignment.
 
 ## Scrolling and composer
 
-- [Interaction contracts](../../../../../scripts/test-chat-contracts.mjs): explicit flight cancellation and non-cancellation signals, pending departures, both pointer policies in fixtures and real stories, zero-displacement downward wheel restoration at 2px/20px, pointer-held restoration, atomic typing replacement boundaries, geometry, and disposal.
+- [Interaction contracts](../../../../../scripts/test-chat-contracts.mjs): explicit flight cancellation and non-cancellation signals, pending departures, both pointer policies in fixtures and real stories, zero-displacement downward wheel restoration at 2px/20px, downward catch-up takeover inside/outside 2px with delayed scroll notification and real-wheel frame sampling, pointer-held restoration, atomic typing replacement boundaries, geometry, and disposal.
 - [Velocity checks](../../../../../scripts/test-chat-scroll-velocity.mjs): retarget carries measured velocity at 0.25x and 1x; the response must differ from a restart at rest. Tolerances allow animation-frame sampling and do not assert strict velocity continuity.
 
 - [Scroll policy checks](../../../../../scripts/test-chat-scroll.mjs): initial positioning, threshold

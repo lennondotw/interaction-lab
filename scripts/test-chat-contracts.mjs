@@ -261,8 +261,65 @@ try {
         check(mode(fixture) === 'animating', 'Explicit local send starts catch-up');
         wheel(1);
         await flush();
-        check(mode(fixture) === 'animating', 'Downward wheel never promotes an active spring to following');
+        check(
+          mode(fixture) !== 'animating',
+          `Downward wheel cancels catch-up before native movement: ${JSON.stringify({ threshold, states: fixture.states.slice(-6), top: v.scrollTop, bottom: bottom() })}`
+        );
+        check(flights(fixture).length === 0, 'Downward catch-up interruption releases flight');
         results.push(`pointer policy and boundary restoration: ${threshold}px`);
+      } finally {
+        fixture.unmount();
+      }
+    }
+
+    // Wheel is intent before native movement, not a scroll-position notification.
+    // Keep delayed scroll delivery separate from stopping the old spring.
+    for (const boundary of [false, true]) {
+      const fixture = await mount();
+      try {
+        fixture.update({ threshold: 2 });
+        const v = viewport(fixture);
+        v.scrollTop -= 250;
+        v.dispatchEvent(new Event('scroll'));
+        fixture.send('wheel-takeover');
+        await flush(2);
+        check(mode(fixture) === 'animating', 'Takeover starts with active catch-up');
+        fire(v, new WheelEvent('wheel', { deltaY: 20, ctrlKey: true, cancelable: true }));
+        fire(v, new WheelEvent('wheel', { deltaX: 20, deltaY: 0, cancelable: true }));
+        await flush(2);
+        check(
+          mode(fixture) === 'animating' && flights(fixture).length === 1,
+          'Zoom and horizontal wheel preserve catch-up'
+        );
+        if (boundary) v.scrollTop = v.scrollHeight - v.clientHeight - 1;
+        const beforeWheel = v.scrollTop;
+        fire(v, new WheelEvent('wheel', { deltaY: 20, cancelable: true }));
+        check(v.scrollTop === beforeWheel, 'Wheel takeover and restoration do not write position');
+        check(flights(fixture).length === 0, 'Takeover synchronously releases the visual copy');
+        check(hasChatLayoutAnimation(v), 'Takeover leaves the message layout animation running');
+        if (!boundary) v.scrollTop += 20;
+        const nativeTop = v.scrollTop;
+        // Let both the old catch-up clock and independent slot finish. Real native
+        // scroll events may be delivered before our explicit delayed notification.
+        for (let i = 0; i < 150; i++) {
+          await flush(1);
+          if (i === 2) v.dispatchEvent(new Event('scroll'));
+          check(
+            mode(fixture) === (boundary ? 'following' : 'detached'),
+            'Cancelled catch-up cannot regain state ownership'
+          );
+          if (!boundary) check(Math.abs(v.scrollTop - nativeTop) <= 1, 'Old spring cannot pull native movement back');
+        }
+        check(!hasChatLayoutAnimation(v), 'Message layout completes independently of wheel takeover');
+        if (!boundary) {
+          v.scrollTop = v.scrollHeight - v.clientHeight - 1;
+          const returnedTop = v.scrollTop;
+          v.dispatchEvent(new Event('scroll'));
+          await flush();
+          check(mode(fixture) === 'following', 'Later native downward return restores inside 2px');
+          check(v.scrollTop === returnedTop, 'Native return restoration does not snap');
+        }
+        results.push(`downward catch-up takeover: ${boundary ? 'inside' : 'outside'} 2px`);
       } finally {
         fixture.unmount();
       }
@@ -398,6 +455,42 @@ try {
     return results;
   });
   for (const result of results) console.log(`PASS: ${result}`);
+  // Real wheel input must advance the viewport without a subsequent spring rollback.
+  await page.evaluate(async () => {
+    const { mountChatContractFixture } =
+      await import('/src/components/chat-scroll-container/__tests__/chat-contract-fixture.tsx');
+    window.wheelFixture = mountChatContractFixture();
+  });
+  await page.waitForFunction(() => window.wheelFixture.states.at(-1)?.mode === 'following');
+  const wheelView = page.locator('[data-chat-contract-fixture] [data-slot="chat-scroll-viewport"]');
+  const wheelRect = await wheelView.boundingBox();
+  await page.mouse.move(wheelRect.x + 20, wheelRect.y + 20);
+  await page.mouse.wheel(0, -250);
+  await page.waitForFunction(() => window.wheelFixture.states.at(-1)?.mode === 'detached');
+  await page.evaluate(() => window.wheelFixture.send('native-wheel'));
+  await page.waitForFunction(() => window.wheelFixture.states.at(-1)?.mode === 'animating');
+  const beforeNativeWheel = await wheelView.evaluate((v) => v.scrollTop);
+  await page.mouse.wheel(0, 20);
+  await page.waitForFunction(() => window.wheelFixture.states.at(-1)?.mode === 'detached');
+  await page.waitForFunction((top) => {
+    return window.wheelFixture.element.querySelector('[data-slot="chat-scroll-viewport"]').scrollTop > top;
+  }, beforeNativeWheel);
+  await page.evaluate(async () => {
+    const fixture = window.wheelFixture;
+    const v = fixture.element.querySelector('[data-slot="chat-scroll-viewport"]');
+    let previous = v.scrollTop;
+    for (let i = 0; i < 150; i++) {
+      await new Promise(requestAnimationFrame);
+      if (v.scrollTop < previous - 1 || fixture.states.at(-1)?.mode !== 'detached') {
+        throw new Error('Native downward wheel was overwritten by catch-up');
+      }
+      previous = v.scrollTop;
+    }
+    if (fixture.element.querySelector('[data-chat-send-flight]')) throw new Error('Native wheel left a flight copy');
+    fixture.unmount();
+    delete window.wheelFixture;
+  });
+  console.log('PASS: real downward wheel takes over catch-up without rollback');
   // Real pointer input verifies that both composed stories wire the shared policy
   // to follow and flight, rather than only exercising synthetic controller branches.
   for (const interrupt of [false, true]) {

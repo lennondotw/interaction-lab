@@ -229,14 +229,16 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       anchorRemainder = Math.max(-1, Math.min(1, requestedTop - viewport.scrollTop));
     }
     if (localSend || mode !== 'detached') {
-      // Only a settled bottom follows composer resizing or animated layout directly.
-      // An active message spring simply receives the new target, without a position jump.
+      // Following tracks animated layout directly; ordinary composer resizing
+      // requires a settled bottom. Active catch-up only receives a new target.
       if (clearanceChanged && !localSend && mode === 'following' && !wasAtBottom) {
         report();
         return;
       }
       scrollToBottom(localSend ? 'Local message sent' : clearanceChanged ? 'Composer resized' : 'Content resized', {
-        instant: (clearanceChanged || animatedLayout) && mode === 'following' && wasAtBottom,
+        // A layout tick after bottom-zone restoration must not restart catch-up
+        // just because restoration left a few threshold pixels untouched.
+        instant: mode === 'following' && (animatedLayout || (clearanceChanged && wasAtBottom)),
       });
     }
     report();
@@ -250,7 +252,12 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   function onWheel(event: WheelEvent) {
     if (event.ctrlKey) return;
     if (event.deltaY < 0) detach('Upward wheel');
-    else if (event.deltaY > 0) resumeFollowing('Downward wheel in bottom zone');
+    else if (event.deltaY > 0) {
+      // Yield before native scrolling runs: a still-active spring would overwrite
+      // its movement on the next frame. Restoration only changes intent, not position.
+      if (mode === 'animating') detach('Downward wheel interrupted catch-up');
+      resumeFollowing('Downward wheel in bottom zone');
+    }
   }
 
   function onPointerDown() {
