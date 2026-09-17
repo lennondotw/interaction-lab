@@ -47,6 +47,8 @@ export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'sect
   bottomThreshold?: number;
   /** Read-only per-item motion annotations outside the item layout boxes. */
   debugBubbles?: boolean;
+  /** Highlight the reading anchor candidate; compensation uses it only while detached. */
+  debugReadingAnchor?: boolean;
   /** Opt into interrupting follow and send flight on viewport pointerdown. Upward scrolling always interrupts. */
   interruptOnPointerDown?: boolean;
   /** Playback rate for programmatic scrolling. Native gestures remain immediate. */
@@ -67,6 +69,7 @@ export function ChatScrollContainer({
   incomingTyping = false,
   bottomThreshold = 2,
   debugBubbles = false,
+  debugReadingAnchor = false,
   interruptOnPointerDown = false,
   animationSpeed = 1,
   contentClassName,
@@ -145,6 +148,11 @@ export function ChatScrollContainer({
     if (!debugBubbles || !viewportRef.current || !contentRef.current) return;
     return createChatItemDebug(viewportRef.current, contentRef.current);
   }, [debugBubbles]);
+
+  useLayoutEffect(() => {
+    insertionsRef.current?.setDebugAnchor(debugReadingAnchor);
+    return () => insertionsRef.current?.setDebugAnchor(false);
+  }, [debugReadingAnchor]);
 
   useLayoutEffect(() => {
     insertionsRef.current?.updateOptions(Math.max(0.01, animationSpeed), reducedMotion === true);

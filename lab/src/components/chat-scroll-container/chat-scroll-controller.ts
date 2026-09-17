@@ -221,8 +221,8 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     previousHeight = viewport.scrollHeight;
     previousViewportHeight = viewport.clientHeight;
     if (!localSend && mode === 'detached' && anchor?.element.isConnected) {
-      const requestedTop =
-        viewport.scrollTop + anchor.element.getBoundingClientRect().top - anchor.top + anchorRemainder;
+      const currentBottom = anchor.element.getBoundingClientRect().bottom - viewport.getBoundingClientRect().top;
+      const requestedTop = viewport.scrollTop + currentBottom - anchor.bottom + anchorRemainder;
       write(requestedTop);
       // Native scrollTop may round fractional CSS pixels. Carry that fraction
       // into the next layout tick instead of accumulating visible reading drift.

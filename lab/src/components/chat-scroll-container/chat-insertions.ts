@@ -6,7 +6,8 @@ import { chatLayoutSpring } from './chat-presence.js';
 
 export interface ReadingAnchor {
   element: HTMLElement;
-  top: number;
+  /** Body bottom relative to the viewport, independent of container translation. */
+  bottom: number;
 }
 
 interface Measurement {
@@ -44,6 +45,17 @@ export function createChatInsertions(
   let typingSnapshot: { row: Element; height: number } | undefined;
   let speed = 1;
   let reduced = false;
+  let anchorOverlay: HTMLSpanElement | undefined;
+
+  function showAnchor(element?: HTMLElement) {
+    if (!anchorOverlay || anchorOverlay.parentElement === element) return;
+    anchorOverlay.parentElement?.removeAttribute('data-chat-reading-anchor');
+    anchorOverlay.remove();
+    if (element) {
+      element.setAttribute('data-chat-reading-anchor', '');
+      element.append(anchorOverlay);
+    }
+  }
 
   function readingElement(row: HTMLElement) {
     return row.querySelector<HTMLElement>(':scope > [data-chat-item-id], :scope > [data-chat-item-body]') ?? row;
@@ -65,7 +77,9 @@ export function createChatInsertions(
       const row = rows[index] as HTMLElement;
       if (active.get(row)?.newItem) continue;
       const element = readingElement(row);
-      return { element, top: element.getBoundingClientRect().top };
+      // Preserve the edge that made this partially visible row eligible. Rewrap
+      // can shorten its body without moving that edge out of the reading viewport.
+      return { element, bottom: element.getBoundingClientRect().bottom - top };
     }
     return undefined;
   }
@@ -73,6 +87,7 @@ export function createChatInsertions(
   function remember() {
     const anchor = captureAnchor();
     savedAnchor = anchor && { ...anchor, scrollTop: viewport.scrollTop };
+    showAnchor(anchor?.element);
     const tail = content.lastElementChild;
     const last = tail?.getAttribute('data-slot') === 'chat-bottom-space' ? tail.previousElementSibling : tail;
     const typing = last?.querySelector<HTMLElement>(':scope > [data-chat-item-body]');
@@ -83,7 +98,7 @@ export function createChatInsertions(
 
   function anchorFromSnapshot(): ReadingAnchor | undefined {
     return savedAnchor?.element.isConnected
-      ? { element: savedAnchor.element, top: savedAnchor.top + savedAnchor.scrollTop - viewport.scrollTop }
+      ? { element: savedAnchor.element, bottom: savedAnchor.bottom + savedAnchor.scrollTop - viewport.scrollTop }
       : captureAnchor();
   }
 
@@ -199,7 +214,15 @@ export function createChatInsertions(
 
   for (const row of content.children) register(row as HTMLElement);
   remember();
-  viewport.addEventListener('scroll', remember, { passive: true });
+  function onScroll() {
+    // A queued event from our last compensation can arrive after the next reflow,
+    // before ResizeObserver. It must not replace the pre-layout reading snapshot.
+    // Real scrolling during a width change is accounted for by anchorFromSnapshot;
+    // the resize callback compensates first and only then selects the next anchor.
+    if (savedAnchor?.scrollTop === viewport.scrollTop || viewport.clientWidth !== width) return;
+    remember();
+  }
+  viewport.addEventListener('scroll', onScroll, { passive: true });
   const api = {
     register,
     unregister(row: HTMLElement) {
@@ -329,9 +352,23 @@ export function createChatInsertions(
       }
     },
     remember,
+    setDebugAnchor(enabled: boolean) {
+      if (enabled && !anchorOverlay) {
+        anchorOverlay = document.createElement('span');
+        anchorOverlay.dataset.slot = 'chat-reading-anchor-overlay';
+        anchorOverlay.setAttribute('aria-hidden', 'true');
+        // Show the manager's saved selection, without an independent geometry scan.
+        showAnchor(savedAnchor?.element);
+      } else if (!enabled) {
+        showAnchor();
+        anchorOverlay = undefined;
+      }
+    },
     dispose() {
+      showAnchor();
+      anchorOverlay = undefined;
       bodyObserver.disconnect();
-      viewport.removeEventListener('scroll', remember);
+      viewport.removeEventListener('scroll', onScroll);
       for (const entry of entries) {
         entry.animation?.stop();
         entry.size.destroy();

@@ -66,13 +66,14 @@ between independent animation ticks.
 | [Flight-to-message handoff](./docs/flight-handoff.md)                                   | Arrival predicates, interruption, and copy cleanup.                     |
 | [Timeline items and gap ownership](./docs/items-and-gaps.md)                            | Heterogeneous items, leading space, and immediate grouping.             |
 | [Layout dependencies and local invalidation](./docs/local-invalidation.md)              | Affected rows, intrinsic observation, and long-history limits.          |
+| [Animation intent and natural reflow](./docs/animation-intent.md)                       | Explicit animation work, immediate rewrap, and active-slot retargeting. |
 | [Atomic layout transactions](./docs/layout-transactions.md)                             | Read/write ordering that prevents temporary scroll clamps.              |
 | [Animated layout slots](./docs/layout-slots.md)                                         | Top-aligned full-size bodies and temporary animated footprints.         |
 | [Default visual entrance](./docs/default-presence.md)                                   | Shared upward fade and explicit special cases.                          |
 | [Bottom following as user intent](./docs/bottom-following.md)                           | Following, catch-up, detachment, and user escape.                       |
 | [Catch-up continuity](./docs/catch-up-continuity.md)                                    | Coordinate height expansion, retargeting, and a moving scroll boundary. |
 | [Scroll ownership and browser clamping](./docs/scroll-ownership.md)                     | One observation cursor for layout and native scroll events.             |
-| [Preserving the reading anchor](./docs/reading-anchor.md)                               | Detached insertion compensation and fractional rounding.                |
+| [Preserving the reading anchor](./docs/reading-anchor.md)                               | Bottom-edge anchoring, resize stability, scroll timing, and rounding.   |
 | [Reversible typing presence](./docs/typing-presence.md)                                 | Entry, exit, and reversal with independent visual lifetime.             |
 | [Typing-to-message replacement](./docs/typing-replacement.md)                           | Footprint and velocity transfer with a simultaneous crossfade.          |
 | [Spring parameters and playback scaling](./docs/spring-parameters.md)                   | Frequency, damping, velocity units, and motion preferences.             |

@@ -1,4 +1,17 @@
 @layer components {
+  :where([data-chat-reading-anchor]) {
+    position: relative;
+  }
+
+  [data-slot='chat-reading-anchor-overlay'] {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: 0;
+    background: rgb(168 85 247 / 30%);
+    pointer-events: none;
+  }
+
   /* Low specificity preserves positioned carriers, including absolute flight copies. */
   :where([data-chat-debug-anchor]) {
     position: relative;

@@ -159,6 +159,150 @@ try {
   assert.equal(final.width, '', 'Temporary width is released after completion');
   await page.evaluate(() => window.slotObserver.disconnect());
   console.log('PASS: resize preserves an active insertion and hands off to its new natural dimensions');
+
+  // A partially visible body's bottom must survive rewrap in both directions.
+  // Real handle moves also exercise delayed scroll events from prior compensation.
+  await page.reload();
+  await page.getByRole('checkbox', { name: 'Show anchor element' }).check();
+  async function resizeTo(width, steps = 1) {
+    const current = await size();
+    const origin = await begin(page.getByRole('button', { name: 'Resize width', exact: true }));
+    for (let index = 1; index <= steps; index++) {
+      await page.mouse.move(origin.x + ((width - current.width) * index) / steps, origin.y);
+      await page.waitForTimeout(40);
+      if (steps > 1) await assertReadingAnchor();
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+  }
+  const viewport = page.locator('[data-slot="chat-scroll-viewport"]');
+  const readingPosition = () =>
+    viewport.evaluate((element) => {
+      const body = element.querySelector('[data-message-id="message-93"]');
+      const selected = element.querySelector('[data-chat-reading-anchor]');
+      return {
+        id: selected?.dataset.messageId,
+        bottom: body.getBoundingClientRect().bottom - element.getBoundingClientRect().top,
+        scrollTop: element.scrollTop,
+      };
+    });
+  async function assertReadingAnchor() {
+    const position = await readingPosition();
+    assert.equal(position.id, 'message-93', `Resize must retain the partial message: ${JSON.stringify(position)}`);
+    assert.ok(Math.abs(position.bottom - 10) <= 1, `Reading bottom stays at 10px: ${JSON.stringify(position)}`);
+  }
+  await resizeTo(394);
+  await viewport.evaluate((element) => {
+    const body = element.querySelector('[data-message-id="message-93"]');
+    element.scrollTop += body.getBoundingClientRect().bottom - element.getBoundingClientRect().top - 10;
+  });
+  await page.waitForTimeout(100);
+  const original = await readingPosition();
+  await assertReadingAnchor();
+  for (const steps of [1, 24]) {
+    await resizeTo(624, steps);
+    await assertReadingAnchor();
+    await resizeTo(394, steps);
+    await assertReadingAnchor();
+    assert.ok(Math.abs((await readingPosition()).scrollTop - original.scrollTop) <= 1, 'Round trip restores scrollTop');
+  }
+  // Screen coordinates change, but the reading offset belongs to the viewport.
+  await window.evaluate((element) => {
+    element.style.marginTop = '100px';
+  });
+  await resizeTo(624);
+  await assertReadingAnchor();
+  await window.evaluate((element) => {
+    element.style.marginTop = '';
+  });
+  await resizeTo(394);
+  await assertReadingAnchor();
+  console.log('PASS: bottom anchor survives single and continuous resize, including container translation');
+
+  await page.getByRole('button', { name: '0.1×', exact: true }).click();
+  for (const [placement, insertedId] of [
+    ['before', 'message-121'],
+    ['after', 'message-122'],
+  ]) {
+    await page.evaluate((insertedId) => {
+      const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
+      const anchor = viewport.querySelector('[data-message-id="message-93"]');
+      const read = () => {
+        const row = viewport.querySelector(`[data-chat-row-id="${insertedId}"]`);
+        return {
+          id: viewport.querySelector('[data-chat-reading-anchor]')?.dataset.messageId,
+          bottom: anchor.getBoundingClientRect().bottom - viewport.getBoundingClientRect().top,
+          scrollTop: viewport.scrollTop,
+          mode: document.querySelector('#storybook-root strong')?.textContent,
+          animating: row?.hasAttribute('data-chat-inserting') ?? false,
+          height: row?.getBoundingClientRect().height ?? 0,
+        };
+      };
+      const baseline = read();
+      const frames = [];
+      let frame;
+      const tick = () => {
+        frames.push(read());
+        frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+      window.stopAnchorProbe = () => {
+        cancelAnimationFrame(frame);
+        frames.push(read());
+        return { baseline, frames };
+      };
+    }, insertedId);
+    await page.getByRole('button', { name: `Insert incoming ${placement} first visible message`, exact: true }).click();
+    const adjacent =
+      placement === 'before' ? `[data-chat-row-id="${insertedId}"] + li` : '[data-chat-row-id="message-93"] + li';
+    assert.equal(
+      await page.locator(adjacent).getAttribute('data-chat-row-id'),
+      placement === 'before' ? 'message-93' : insertedId
+    );
+    await page.waitForFunction(() => !document.querySelector('[data-chat-inserting], [data-chat-entrance]'));
+    // Include queued scroll delivery and the final natural-layout handoff.
+    await page.waitForTimeout(100);
+    const { baseline, frames } = await page.evaluate(() => window.stopAnchorProbe());
+    const final = frames.at(-1);
+    assert.ok(frames.length > 10, `${placement}: sample the full insertion animation`);
+    assert.ok(
+      frames.some((frame) => frame.animating && frame.height > 1 && frame.height < final.height - 1),
+      `${placement}: sample a genuinely intermediate slot height`
+    );
+    assert.ok(
+      frames.every((frame) => frame.id === baseline.id),
+      `${placement}: anchor identity stays stable`
+    );
+    const maxDrift = Math.max(...frames.map((frame) => Math.abs(frame.bottom - baseline.bottom)));
+    assert.ok(
+      maxDrift <= 1,
+      `${placement}: anchor bottom drift must stay within rounding tolerance, got ${maxDrift}px`
+    );
+    assert.ok(
+      frames.every((frame) => frame.mode === 'detached'),
+      `${placement}: insertion never requests catch-up`
+    );
+    if (placement === 'before') {
+      assert.ok(final.scrollTop > baseline.scrollTop + 10, 'Insertion above the anchor actually compensates scrolling');
+    } else {
+      assert.ok(
+        frames.every((frame) => Math.abs(frame.scrollTop - baseline.scrollTop) <= 1),
+        'Insertion below the anchor leaves scrollTop unchanged'
+      );
+    }
+    await assertReadingAnchor();
+    console.log(
+      `PASS: ${placement} insertion preserves anchor identity and bottom across ${frames.length} frames (max drift ${maxDrift}px)`
+    );
+  }
+  await page.getByText('State: detached', { exact: false }).waitFor();
+  const viewportBox = await viewport.boundingBox();
+  await page.mouse.move(viewportBox.x + viewportBox.width / 2, viewportBox.y + viewportBox.height / 2);
+  await page.mouse.wheel(0, -150);
+  await page.waitForFunction(
+    () => document.querySelector('[data-chat-reading-anchor]')?.dataset.messageId !== 'message-93'
+  );
+  console.log('PASS: user scrolling selects a new reading anchor');
   await page.screenshot({ path: '/tmp/chat-resizable-window.png', fullPage: true });
   assert.deepEqual(errors, []);
 } finally {
