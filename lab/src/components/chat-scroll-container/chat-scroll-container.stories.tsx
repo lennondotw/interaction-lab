@@ -121,12 +121,14 @@ function BubbleDebugToggle({ value, onChange }: { value: boolean; onChange: (val
 function ChatDemo({
   withMessageInput = false,
   withAnchorDebug = false,
+  resizable = false,
   withHistoryInsertion = false,
   automaticReplies = false,
   interruptOnPointerDown = false,
 }: {
   withMessageInput?: boolean;
   withAnchorDebug?: boolean;
+  resizable?: boolean;
   withHistoryInsertion?: boolean;
   automaticReplies?: boolean;
   interruptOnPointerDown?: boolean;
@@ -273,181 +275,202 @@ function ChatDemo({
     });
   }
 
-  return (
-    <div className="flex size-full flex-col gap-3">
-      <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
-        <ChatScrollContainer
-          ref={chatRef}
-          items={chatItems}
-          debugBubbles={debugBubbles}
-          debugReadingAnchor={debugReadingAnchor}
-          incomingTyping={withMessageInput && incomingTyping}
-          bottomThreshold={threshold}
-          animationSpeed={animationSpeed}
-          interruptOnPointerDown={interruptOnPointerDown}
-          onScrollStateChange={automaticReplies ? undefined : setScrollState}
-          className="col-start-1 row-start-1"
-          bottomSpace={withMessageInput ? bottomSpace : undefined}
-        />
-        {withMessageInput && (
-          <form
-            ref={composerRef}
-            aria-label="Compose message"
-            className="pointer-events-none z-10 col-start-1 row-start-1 flex min-w-0 self-end p-3"
-            onSubmit={(event) => {
-              event.preventDefault();
+  const chat = (
+    <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
+      <ChatScrollContainer
+        ref={chatRef}
+        items={chatItems}
+        debugBubbles={debugBubbles}
+        debugReadingAnchor={debugReadingAnchor}
+        incomingTyping={withMessageInput && incomingTyping}
+        bottomThreshold={threshold}
+        animationSpeed={animationSpeed}
+        interruptOnPointerDown={interruptOnPointerDown}
+        onScrollStateChange={automaticReplies ? undefined : setScrollState}
+        className="col-start-1 row-start-1"
+        bottomSpace={withMessageInput ? bottomSpace : undefined}
+      />
+      {withMessageInput && (
+        <form
+          ref={composerRef}
+          aria-label="Compose message"
+          className="pointer-events-none z-10 col-start-1 row-start-1 flex min-w-0 self-end p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSendAfterLayout(false);
+            if (!draft.trim()) return;
+            preserveOnReset();
+            sendMessage('outgoing', draft);
+            setDraft('');
+            if (automaticReplies) {
+              pendingReplies.current.push(createDemoReplyPlan(draft));
+              if (pendingReplies.current.length === 1) startReplyBatch();
+            }
+          }}
+        >
+          <MessageInput
+            className="pointer-events-auto flex-1"
+            value={draft}
+            onChange={(event) => {
               setSendAfterLayout(false);
-              if (!draft.trim()) return;
-              preserveOnReset();
-              sendMessage('outgoing', draft);
-              setDraft('');
-              if (automaticReplies) {
-                pendingReplies.current.push(createDemoReplyPlan(draft));
-                if (pendingReplies.current.length === 1) startReplyBatch();
+              setDraft(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
               }
             }}
-          >
-            <MessageInput
-              className="pointer-events-auto flex-1"
-              value={draft}
-              onChange={(event) => {
-                setSendAfterLayout(false);
-                setDraft(event.target.value);
+          />
+        </form>
+      )}
+    </div>
+  );
+  const controls = automaticReplies ? (
+    <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
+      <fieldset aria-label="Animation speed" className="m-0 flex shrink-0 justify-center border-0 p-0">
+        <Segmented
+          options={[0.25, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
+          value={animationSpeed}
+          onChange={setAnimationSpeed}
+        />
+      </fieldset>
+      <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
+    </div>
+  ) : (
+    <>
+      <div className="flex shrink-0 flex-col items-center gap-2">
+        {withAnchorDebug && (
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button type="button" onClick={() => insertNearFirstVisibleMessage('before')}>
+              Insert incoming before first visible message
+            </Button>
+            <Button type="button" onClick={() => insertNearFirstVisibleMessage('after')}>
+              Insert incoming after first visible message
+            </Button>
+          </div>
+        )}
+        {withMessageInput && (
+          <Button type="button" onClick={() => chatRef.current?.scrollToBottom()}>
+            Scroll to bottom
+          </Button>
+        )}
+        {withHistoryInsertion && (
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button type="button" onClick={() => insertInHistory('incoming')}>
+              Insert incoming in history
+            </Button>
+            <Button type="button" onClick={() => insertInHistory('outgoing')}>
+              Insert outgoing in history
+            </Button>
+          </div>
+        )}
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button type="button" onClick={() => appendMessage('incoming')}>
+            Receive a message
+          </Button>
+          <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
+            Send a message
+          </Button>
+        </div>
+        {withMessageInput && (
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button
+              type="button"
+              onClick={() => {
+                setIncomingTyping(false);
+                appendMessage('incoming');
               }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  event.currentTarget.form?.requestSubmit();
-                }
-              }}
-            />
-          </form>
+            >
+              Receive a message and turn typing off
+            </Button>
+            <Button
+              type="button"
+              aria-pressed={incomingTyping}
+              allPossibleContents={['Typing on', 'Typing off']}
+              onClick={() => setIncomingTyping((previous) => !previous)}
+            >
+              {incomingTyping ? 'Typing on' : 'Typing off'}
+            </Button>
+          </div>
         )}
       </div>
-      {automaticReplies ? (
-        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3">
-          <fieldset aria-label="Animation speed" className="m-0 flex shrink-0 justify-center border-0 p-0">
+      <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-neutral-500/20 p-3 text-xs leading-5 text-neutral-600 tabular-nums dark:text-neutral-400">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            State:{' '}
+            <strong className="text-neutral-900 dark:text-neutral-100">{scrollState?.mode ?? 'following'}</strong>
+          </span>
+          <fieldset aria-label="Bottom zone" className="m-0 flex min-w-0 items-center gap-2 border-0 p-0">
+            <span>Bottom zone</span>
             <Segmented
-              options={[0.25, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
-              value={animationSpeed}
-              onChange={setAnimationSpeed}
+              options={[
+                { value: 2, label: '2 px' },
+                { value: 20, label: '20 px · debug' },
+              ]}
+              value={threshold}
+              onChange={setThreshold}
             />
           </fieldset>
-          <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
         </div>
-      ) : (
-        <>
-          <div className="flex shrink-0 flex-col items-center gap-2">
-            {withAnchorDebug && (
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button type="button" onClick={() => insertNearFirstVisibleMessage('before')}>
-                  Insert incoming before first visible message
-                </Button>
-                <Button type="button" onClick={() => insertNearFirstVisibleMessage('after')}>
-                  Insert incoming after first visible message
-                </Button>
-              </div>
-            )}
-            {withMessageInput && (
-              <Button type="button" onClick={() => chatRef.current?.scrollToBottom()}>
-                Scroll to bottom
-              </Button>
-            )}
-            {withHistoryInsertion && (
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button type="button" onClick={() => insertInHistory('incoming')}>
-                  Insert incoming in history
-                </Button>
-                <Button type="button" onClick={() => insertInHistory('outgoing')}>
-                  Insert outgoing in history
-                </Button>
-              </div>
-            )}
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button type="button" onClick={() => appendMessage('incoming')}>
-                Receive a message
-              </Button>
-              <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
-                Send a message
-              </Button>
-            </div>
-            {withMessageInput && (
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setIncomingTyping(false);
-                    appendMessage('incoming');
-                  }}
-                >
-                  Receive a message and turn typing off
-                </Button>
-                <Button
-                  type="button"
-                  aria-pressed={incomingTyping}
-                  allPossibleContents={['Typing on', 'Typing off']}
-                  onClick={() => setIncomingTyping((previous) => !previous)}
-                >
-                  {incomingTyping ? 'Typing on' : 'Typing off'}
-                </Button>
-              </div>
-            )}
-          </div>
-          <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-neutral-500/20 p-3 text-xs leading-5 text-neutral-600 tabular-nums dark:text-neutral-400">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span>
-                State:{' '}
-                <strong className="text-neutral-900 dark:text-neutral-100">{scrollState?.mode ?? 'following'}</strong>
-              </span>
-              <fieldset aria-label="Bottom zone" className="m-0 flex min-w-0 items-center gap-2 border-0 p-0">
-                <span>Bottom zone</span>
-                <Segmented
-                  options={[
-                    { value: 2, label: '2 px' },
-                    { value: 20, label: '20 px · debug' },
-                  ]}
-                  value={threshold}
-                  onChange={setThreshold}
-                />
-              </fieldset>
-            </div>
-            <fieldset
-              aria-label="Animation speed"
-              className="m-0 flex min-w-0 flex-wrap items-center justify-between gap-2 border-0 p-0"
-            >
-              <span>Animation speed</span>
-              <Segmented
-                options={[0.1, 0.25, 0.5, 0.75, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
-                value={animationSpeed}
-                onChange={setAnimationSpeed}
-              />
-            </fieldset>
-            <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
-            {withAnchorDebug && (
-              <label
-                className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"
-                title="Reading anchor candidate; used for position compensation while detached."
-              >
-                <input
-                  type="checkbox"
-                  checked={debugReadingAnchor}
-                  onChange={(event) => setDebugReadingAnchor(event.target.checked)}
-                />
-                Show anchor element
-              </label>
-            )}
-            <div className="grid grid-cols-2 gap-x-4">
-              <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
-              <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
-              <span>Distance: {scrollState?.distance.toFixed(2) ?? '0.00'} px</span>
-              <span>Velocity: {scrollState?.velocity.toFixed(0) ?? '0'} px/s</span>
-              <span>Position: {scrollState?.scrollTop.toFixed(2) ?? '0.00'} px</span>
-              <span>Target: {scrollState?.target.toFixed(2) ?? '0.00'} px</span>
-            </div>
-            <span>Last transition: {scrollState?.reason ?? 'Initial position'}</span>
-          </div>
-        </>
-      )}
+        <fieldset
+          aria-label="Animation speed"
+          className="m-0 flex min-w-0 flex-wrap items-center justify-between gap-2 border-0 p-0"
+        >
+          <span>Animation speed</span>
+          <Segmented
+            options={[0.1, 0.25, 0.5, 0.75, 1].map((speed) => ({ value: speed, label: `${speed}×` }))}
+            value={animationSpeed}
+            onChange={setAnimationSpeed}
+          />
+        </fieldset>
+        <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
+        {withAnchorDebug && (
+          <label
+            className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"
+            title="Reading anchor candidate; used for position compensation while detached."
+          >
+            <input
+              type="checkbox"
+              checked={debugReadingAnchor}
+              onChange={(event) => setDebugReadingAnchor(event.target.checked)}
+            />
+            Show anchor element
+          </label>
+        )}
+        <div className="grid grid-cols-2 gap-x-4">
+          <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
+          <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
+          <span>Distance: {scrollState?.distance.toFixed(2) ?? '0.00'} px</span>
+          <span>Velocity: {scrollState?.velocity.toFixed(0) ?? '0'} px/s</span>
+          <span>Position: {scrollState?.scrollTop.toFixed(2) ?? '0.00'} px</span>
+          <span>Target: {scrollState?.target.toFixed(2) ?? '0.00'} px</span>
+        </div>
+        <span>Last transition: {scrollState?.reason ?? 'Initial position'}</span>
+      </div>
+    </>
+  );
+
+  if (resizable) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <ResizableWindow>
+          <div className="flex size-full flex-col">{chat}</div>
+        </ResizableWindow>
+        <section
+          aria-label="Chat controls"
+          className="flex w-[480px] shrink-0 flex-col gap-3 rounded-xl border border-neutral-500/30 p-3"
+        >
+          {controls}
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex size-full flex-col gap-3">
+      {chat}
+      {controls}
     </div>
   );
 }
@@ -465,11 +488,7 @@ export const WithMessageInput: Story = {
 /** Reuses the composer demo so resize can be inspected during any chat transition. */
 export const ResizableMessageInput: Story = {
   parameters: { controls: { disable: true }, resizableWindow: true },
-  render: () => (
-    <ResizableWindow>
-      <ChatDemo withMessageInput withAnchorDebug />
-    </ResizableWindow>
-  ),
+  render: () => <ChatDemo withMessageInput withAnchorDebug resizable />,
 };
 
 /** Opt-in policy: pressing the message viewport immediately yields follow and flight. */
