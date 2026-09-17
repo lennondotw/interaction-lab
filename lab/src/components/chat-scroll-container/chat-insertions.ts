@@ -152,16 +152,19 @@ export function createChatInsertions(
     entry.animation.speed = speed;
   }
 
-  // Observe intrinsic bodies, never the animated slots. A slot tick must not
-  // invalidate its own target. Initial observer delivery only establishes a baseline.
+  // Observation supplies geometry, not animation intent. Only an explicit model
+  // change can create a slot; reflow and loaded content update stable rows naturally.
+  // Observe bodies, never slots, so an animation cannot invalidate its own target.
   let width = viewport.clientWidth;
   const bodyObserver = new ResizeObserver((records) => {
     const affected = new Set<HTMLElement>();
-    // Width is a global dependency: invalidate mounted targets once in this same
-    // observer batch, including active rows whose temporary width is still fixed.
+    let geometryChanged = false;
+    // Stable bodies reflow naturally and report their new sizes. Active rows have
+    // a temporary fixed width, so explicitly release and remeasure only those rows.
     if (viewport.clientWidth !== width) {
       width = viewport.clientWidth;
-      for (const row of measurements.keys()) affected.add(row);
+      geometryChanged = true;
+      for (const row of active.keys()) affected.add(row);
     }
     for (const record of records) {
       const row = record.target.parentElement;
@@ -169,9 +172,17 @@ export function createChatInsertions(
       if (!row || !previous) continue;
       const height = record.borderBoxSize[0]?.blockSize ?? record.contentRect.height;
       if (previous.height === undefined) previous.height = height;
-      else if (Math.abs(previous.height - height) > intrinsicSizeTolerance) affected.add(row);
+      else if (Math.abs(previous.height - height) > intrinsicSizeTolerance) {
+        geometryChanged = true;
+        if (active.has(row)) affected.add(row);
+        else previous.height = height;
+      }
     }
     if (affected.size) api.insert(new Set(), false, undefined, affected);
+    else if (geometryChanged) {
+      changed(false, anchorFromSnapshot());
+      remember();
+    }
   });
 
   function register(row: HTMLElement) {
@@ -241,6 +252,7 @@ export function createChatInsertions(
         visual.style.position = 'absolute';
       }
       const updated: Insertion[] = [];
+      const remeasured: Insertion[] = [];
       for (const measurement of nextMeasurements) {
         const { row } = measurement;
         let entry = active.get(row);
@@ -255,6 +267,18 @@ export function createChatInsertions(
         }
         measurements.set(row, measurement);
         if (!entry && !isNew && !heightChanged && !gapChanged) continue;
+        if (
+          entry &&
+          Math.abs(entry.measurement.height - measurement.height) <= intrinsicSizeTolerance &&
+          entry.measurement.gap === measurement.gap
+        ) {
+          // Width may change without a new height target. Refresh geometry while
+          // keeping the existing spring clock, including its completion deadline.
+          entry.measurement = measurement;
+          apply(entry, entry.size.get());
+          remeasured.push(entry);
+          continue;
+        }
         if (!entry) {
           const initial = isNew
             ? measurement.body === replacement?.body
@@ -282,12 +306,13 @@ export function createChatInsertions(
         entry.measurement = measurement;
         apply(entry, reduced ? measurement.height + measurement.gap : entry.size.get());
         updated.push(entry);
+        remeasured.push(entry);
       }
       // Atomic starting layout: absolutely no geometry reads inside the write loop.
       // Otherwise a new zero-height slot plus its neighbor's already-reduced gap
       // temporarily shortens the list, and a forced layout clamps scrollTop before
       // the neighbor can restore its previous footprint (e.g. 8px -> 3px).
-      for (const entry of updated) measureRemaining(entry);
+      for (const entry of remeasured) measureRemaining(entry);
       changed(localSend, anchor);
       for (const entry of updated) {
         if (reduced) finish(entry);

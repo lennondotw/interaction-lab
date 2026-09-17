@@ -6,9 +6,11 @@ Let the list model declare which rows need new geometry. Do not measure the enti
 
 On an immutable items-array update, compare IDs, content inputs, and each item's computed leading gap. New items and changed rows enter an affected set. A normal insertion affects the new row and may affect its next neighbor. Presentation-only tail changes do not change body height. Later rows move through normal document flow without individual animation entries.
 
-A shared ResizeObserver watches intrinsic bodies, not animated slots. First delivery establishes the height cache; later changes, such as loaded content, enter the same transaction. A viewport width change invalidates all mounted targets because wrapping is a global dependency. Active rows release temporary width for measurement but retain their current height.
+A shared ResizeObserver watches intrinsic bodies, not animated slots. Observation supplies geometry, not animation intent: settled rows accept natural size changes immediately and refresh their cached heights. Reflow, image loading, and font loading do not create layout animations. A later explicit content edit or adjacency change still animates from that refreshed baseline.
 
-Model comparison remains O(n) per changed array. Target measurement is O(k) for k affected rows; initial observation and width invalidation can touch all rows. Binary reading-anchor lookup avoids a full body scan, but rendering, browser layout, active visual copies, and other consumers still cost work. The 10,000-row regression measures the production layout manager, not constant-time whole-app performance. Virtualization is not implemented.
+Existing animation entries remain active when their bodies resize. They retain their current footprint and velocity while retargeting to the new dimensions. A viewport width change explicitly remeasures only active rows, whose temporary fixed widths would otherwise prevent wrapping. Unchanged height/gap targets keep the existing spring clock. Stable rows reflow through CSS and report their sizes through the observer; no resize debounce or cause inference is needed. An insertion during resize still has explicit model intent and receives its own animation.
+
+Model comparison remains O(n) per changed array. Target measurement is O(k) for k affected rows; initial observation and width-driven observer delivery can touch all rows. Binary reading-anchor lookup avoids a full body scan, but rendering, browser layout, active visual copies, and other consumers still cost work. The 10,000-row regression measures the production layout manager, not constant-time whole-app performance. Virtualization is not implemented.
 
 ## Evidence
 
