@@ -18,7 +18,9 @@ An unowned downward scroll can restore following upon entering the zone. A non-z
 
 Newly inserted outgoing messages request bottom catch-up by default; incoming messages do not. The optional `scrollToBottom` field overrides that request independently of message side and entrance style. History insertion sets it to `false`: detached readers keep their reading anchor, while an already following viewport continues to follow layout. A normal local send still requests bottom scrolling even when detached. Every catch-up remains interruptible. Settled layout ticks track directly; active catch-up retargets only when its projected destination changes beyond tolerance.
 
-The **Detach Following State On Pointer Down** story opts into immediate pointer interruption; other demos use the non-blocking default. Both modes retain the held-pointer restoration gate once detached.
+Pointer and touch lifetimes are tracked independently. Native touch scrolling can emit `pointercancel` while fingers remain on screen; that event ends only the pointer lifetime. Contacts that started in the viewport keep the restoration gate closed until all of them end or cancel, even if released outside the viewport. The last nonzero movement is shared across that interaction, so adding or lifting one finger does not erase its direction. Ordinary touch contact does not itself detach or restore following; upward movement is still detected from scrolling, without a separate touch-direction threshold.
+
+The **Detach Following State On Pointer Down** story opts into immediate pointer interruption; other demos use the non-blocking default. Both modes retain the pointer-and-touch restoration gate once detached.
 
 ## Evidence
 
