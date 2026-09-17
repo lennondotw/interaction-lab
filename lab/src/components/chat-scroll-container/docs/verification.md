@@ -132,6 +132,12 @@ In **Automatic Replies**, use 0.25x, send `Hey!`, scroll upward about 100px, the
   and geometry-read budgets with 100 and 10,000 mounted rows.
 - [Resizable window checks](../../../../../scripts/test-chat-resize-window.mjs): repeated reflow leaves
   settled bubbles idle; an active insertion keeps its progress and finishes at its new natural size.
+  A nearly clipped reading message keeps its bottom and identity through single-step and continuous
+  width round trips, including container translation. Frame samples cover insertion before and after
+  that message through final layout handoff: anchor identity and bottom stay stable, and detached intent
+  remains intact. Insertion above compensates scrollTop; insertion below leaves it unchanged.
+  Real wheel scrolling reselects the anchor. **Show anchor element** highlights the
+  manager's candidate with an inert rectangular overlay (compensation uses it only while detached).
   Also covers resizer capture, missed releases, cancellation, and keyboard input. Included in the local
   full suite, not the CI smoke suite.
 

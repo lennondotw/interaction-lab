@@ -71,7 +71,7 @@ export function ResizableWindow({ children }: { children: ReactNode }) {
       <header className="flex h-9 shrink-0 items-center justify-between border-b border-neutral-500/20 px-3 text-xs text-neutral-500 dark:text-neutral-400">
         <span>Chat · Resizable window</span>
         <span className="font-mono tabular-nums">
-          {size.width} × {size.height}
+          {size.width.toFixed(2)} × {size.height.toFixed(2)}
         </span>
       </header>
       <div className="min-h-0 flex-1 p-3">{children}</div>

@@ -120,11 +120,13 @@ function BubbleDebugToggle({ value, onChange }: { value: boolean; onChange: (val
 
 function ChatDemo({
   withMessageInput = false,
+  withAnchorDebug = false,
   withHistoryInsertion = false,
   automaticReplies = false,
   interruptOnPointerDown = false,
 }: {
   withMessageInput?: boolean;
+  withAnchorDebug?: boolean;
   withHistoryInsertion?: boolean;
   automaticReplies?: boolean;
   interruptOnPointerDown?: boolean;
@@ -133,6 +135,7 @@ function ChatDemo({
   const [threshold, setThreshold] = useState(2);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [debugBubbles, setDebugBubbles] = useState(false);
+  const [debugReadingAnchor, setDebugReadingAnchor] = useState(false);
   const [scrollState, setScrollState] = useState<ChatScrollState>();
   const [draft, setDraft] = useState('');
   const [sendAfterLayout, setSendAfterLayout] = useState(false);
@@ -248,6 +251,28 @@ function ChatDemo({
     });
   }
 
+  function insertNearFirstVisibleMessage(placement: 'before' | 'after') {
+    const viewport = hostRef.current?.querySelector<HTMLElement>('[data-slot="chat-scroll-viewport"]');
+    if (!viewport) return;
+    const top = viewport.getBoundingClientRect().top;
+    const first = Array.from(viewport.querySelectorAll<HTMLElement>('[data-message-id]')).find(
+      (body) => body.getBoundingClientRect().bottom > top
+    );
+    if (!first) return;
+    const message: ChatMessage = {
+      id: `message-${nextMessageId.current++}`,
+      variant: 'incoming',
+      entrance: 'fade',
+      scrollToBottom: false,
+      content: `A note just ${placement} the first visible message.`,
+    };
+    setChatItems((previous) => {
+      const firstIndex = previous.findIndex((item) => item.id === first.dataset.messageId);
+      const index = firstIndex + (placement === 'after' ? 1 : 0);
+      return [...previous.slice(0, index), message, ...previous.slice(index)];
+    });
+  }
+
   return (
     <div className="flex size-full flex-col gap-3">
       <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
@@ -255,6 +280,7 @@ function ChatDemo({
           ref={chatRef}
           items={chatItems}
           debugBubbles={debugBubbles}
+          debugReadingAnchor={debugReadingAnchor}
           incomingTyping={withMessageInput && incomingTyping}
           bottomThreshold={threshold}
           animationSpeed={animationSpeed}
@@ -312,6 +338,16 @@ function ChatDemo({
       ) : (
         <>
           <div className="flex shrink-0 flex-col items-center gap-2">
+            {withAnchorDebug && (
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button type="button" onClick={() => insertNearFirstVisibleMessage('before')}>
+                  Insert incoming before first visible message
+                </Button>
+                <Button type="button" onClick={() => insertNearFirstVisibleMessage('after')}>
+                  Insert incoming after first visible message
+                </Button>
+              </div>
+            )}
             {withMessageInput && (
               <Button type="button" onClick={() => chatRef.current?.scrollToBottom()}>
                 Scroll to bottom
@@ -387,6 +423,19 @@ function ChatDemo({
               />
             </fieldset>
             <BubbleDebugToggle value={debugBubbles} onChange={setDebugBubbles} />
+            {withAnchorDebug && (
+              <label
+                className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"
+                title="Reading anchor candidate; used for position compensation while detached."
+              >
+                <input
+                  type="checkbox"
+                  checked={debugReadingAnchor}
+                  onChange={(event) => setDebugReadingAnchor(event.target.checked)}
+                />
+                Show anchor element
+              </label>
+            )}
             <div className="grid grid-cols-2 gap-x-4">
               <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
               <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
@@ -418,7 +467,7 @@ export const ResizableMessageInput: Story = {
   parameters: { controls: { disable: true }, resizableWindow: true },
   render: () => (
     <ResizableWindow>
-      <ChatDemo withMessageInput />
+      <ChatDemo withMessageInput withAnchorDebug />
     </ResizableWindow>
   ),
 };
