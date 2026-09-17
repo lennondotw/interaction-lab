@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { Segmented } from '#src/instruments/controls/controls.js';
+import { ResizableWindow } from '#src/instruments/resizable-window/resizable-window.js';
 
 import { Button } from '../button/index.js';
 import { useChatSendFlight } from '../chat-send-flight/chat-send-flight.js';
@@ -80,19 +81,24 @@ const meta = {
   args: { messages },
   argTypes: { messages: { control: false } },
   decorators: [
-    (Story, context) => (
-      <div className="flex min-h-svh items-center justify-center px-4 py-8">
-        <div
-          className={
-            context.parameters.happyPathGuide
-              ? 'grid w-full max-w-4xl grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]'
-              : 'h-[min(640px,calc(100svh-64px))] w-full max-w-md'
-          }
-        >
+    (Story, context) =>
+      context.parameters.resizableWindow ? (
+        <div className="flex min-h-svh items-start p-8">
           <Story />
         </div>
-      </div>
-    ),
+      ) : (
+        <div className="flex min-h-svh items-center justify-center px-4 py-8">
+          <div
+            className={
+              context.parameters.happyPathGuide
+                ? 'grid w-full max-w-4xl grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]'
+                : 'h-[min(640px,calc(100svh-64px))] w-full max-w-md'
+            }
+          >
+            <Story />
+          </div>
+        </div>
+      ),
   ],
 } satisfies Meta<typeof ChatScrollContainer>;
 
@@ -405,6 +411,16 @@ export const SendMessages: Story = {
 export const WithMessageInput: Story = {
   parameters: { controls: { disable: true } },
   render: () => <ChatDemo withMessageInput />,
+};
+
+/** Reuses the composer demo so resize can be inspected during any chat transition. */
+export const ResizableMessageInput: Story = {
+  parameters: { controls: { disable: true }, resizableWindow: true },
+  render: () => (
+    <ResizableWindow>
+      <ChatDemo withMessageInput />
+    </ResizableWindow>
+  ),
 };
 
 /** Opt-in policy: pressing the message viewport immediately yields follow and flight. */
