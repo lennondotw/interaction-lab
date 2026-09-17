@@ -57,7 +57,7 @@ try {
           start = performance.now();
         while (performance.now() - start < 80) await new Promise(requestAnimationFrame);
         const elapsed = (performance.now() - start) / 1000;
-        const omega = 22 * speed;
+        const omega = 15 * speed;
         const phase = omega * elapsed;
         const fromRest = (4100 - startTop) * (1 - (1 + phase) * Math.exp(-phase));
         const carried = velocity * elapsed * Math.exp(-phase);

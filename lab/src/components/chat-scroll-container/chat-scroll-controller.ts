@@ -29,7 +29,7 @@ interface Options {
 
 const spring = {
   type: 'spring',
-  ...toSpringPhysics({ angularFrequency: 22, dampingRatio: 1 }),
+  ...toSpringPhysics({ angularFrequency: 15, dampingRatio: 1 }),
   restDelta: 0.1,
   restSpeed: 1,
 } as const;
@@ -325,6 +325,10 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
 
   return {
     contentChanged,
+    scrollToBottom() {
+      anchorRemainder = 0;
+      scrollToBottom('Scroll to bottom');
+    },
     updateOptions(next: Options) {
       const needsReport = options.threshold !== next.threshold || (!options.onStateChange && next.onStateChange);
       options = next;

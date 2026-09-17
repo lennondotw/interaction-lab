@@ -14,10 +14,11 @@ dampingRatio = damping / (2 * mass * angularFrequency)
 | Motion                                       | Frequency | Damping ratio |
 | -------------------------------------------- | --------- | ------------- |
 | Composer flight                              | 18        | 0.8           |
-| Bottom catch-up and destination compensation | 22        | 1             |
+| Bottom catch-up                              | 15        | 1             |
+| Flight destination compensation              | 22        | 1             |
 | Typing exit visuals                          | 22        | 1             |
 | Ordinary message and typing entrance visuals | 26        | 1             |
-| Item and typing slot height                  | 28        | 1             |
+| Item/typing slots and composer space release | 28        | 1             |
 
 Mass defaults to 1. Vertical flight progress uses the same generator sampled 100ms later than horizontal progress. These are tuned parameters, not duration guarantees; completion also depends on thresholds, distance, layout, and handoff.
 

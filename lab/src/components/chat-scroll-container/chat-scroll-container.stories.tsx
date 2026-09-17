@@ -12,6 +12,7 @@ import {
   type ChatListItem,
   type ChatMessage,
   type ChatScrollState,
+  type ChatScrollContainerHandle,
 } from './chat-scroll-container.js';
 import { useChatComposerSpace } from './use-chat-composer-space.js';
 
@@ -123,13 +124,14 @@ function ChatDemo({
   interruptOnPointerDown?: boolean;
 }) {
   const [chatItems, setChatItems] = useState<ChatListItem[]>(messages);
-  const [threshold, setThreshold] = useState(20);
+  const [threshold, setThreshold] = useState(2);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [debugBubbles, setDebugBubbles] = useState(false);
   const [scrollState, setScrollState] = useState<ChatScrollState>();
   const [draft, setDraft] = useState('');
   const [sendAfterLayout, setSendAfterLayout] = useState(false);
   const [incomingTyping, setIncomingTyping] = useState(false);
+  const chatRef = useRef<ChatScrollContainerHandle>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const { bottomSpace, preserveOnReset } = useChatComposerSpace(composerRef, 12);
@@ -244,10 +246,11 @@ function ChatDemo({
     <div className="flex size-full flex-col gap-3">
       <div ref={hostRef} className="relative grid min-h-0 min-w-0 flex-1 rounded-lg">
         <ChatScrollContainer
+          ref={chatRef}
           items={chatItems}
           debugBubbles={debugBubbles}
           incomingTyping={withMessageInput && incomingTyping}
-          bottomThreshold={automaticReplies ? 2 : threshold}
+          bottomThreshold={threshold}
           animationSpeed={animationSpeed}
           interruptOnPointerDown={interruptOnPointerDown}
           onScrollStateChange={automaticReplies ? undefined : setScrollState}
@@ -302,43 +305,50 @@ function ChatDemo({
         </div>
       ) : (
         <>
-          <div className="flex shrink-0 flex-wrap justify-center gap-2">
+          <div className="flex shrink-0 flex-col items-center gap-2">
+            {withMessageInput && (
+              <Button type="button" onClick={() => chatRef.current?.scrollToBottom()}>
+                Scroll to bottom
+              </Button>
+            )}
             {withHistoryInsertion && (
-              <>
+              <div className="flex flex-wrap justify-center gap-2">
                 <Button type="button" onClick={() => insertInHistory('incoming')}>
                   Insert incoming in history
                 </Button>
                 <Button type="button" onClick={() => insertInHistory('outgoing')}>
                   Insert outgoing in history
                 </Button>
-              </>
+              </div>
             )}
-            <Button type="button" onClick={() => appendMessage('incoming')}>
-              Receive a message
-            </Button>
-            {withMessageInput && (
-              <Button
-                type="button"
-                onClick={() => {
-                  setIncomingTyping(false);
-                  appendMessage('incoming');
-                }}
-              >
-                Receive a message and turn typing off
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" onClick={() => appendMessage('incoming')}>
+                Receive a message
               </Button>
-            )}
-            <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
-              Send a message
-            </Button>
-            {withMessageInput && (
-              <Button
-                type="button"
-                aria-pressed={incomingTyping}
-                allPossibleContents={['Typing on', 'Typing off']}
-                onClick={() => setIncomingTyping((previous) => !previous)}
-              >
-                {incomingTyping ? 'Typing on' : 'Typing off'}
+              <Button type="button" disabled={sendAfterLayout} onClick={() => appendMessage('outgoing')}>
+                Send a message
               </Button>
+            </div>
+            {withMessageInput && (
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setIncomingTyping(false);
+                    appendMessage('incoming');
+                  }}
+                >
+                  Receive a message and turn typing off
+                </Button>
+                <Button
+                  type="button"
+                  aria-pressed={incomingTyping}
+                  allPossibleContents={['Typing on', 'Typing off']}
+                  onClick={() => setIncomingTyping((previous) => !previous)}
+                >
+                  {incomingTyping ? 'Typing on' : 'Typing off'}
+                </Button>
+              </div>
             )}
           </div>
           <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-neutral-500/20 p-3 text-xs leading-5 text-neutral-600 tabular-nums dark:text-neutral-400">
