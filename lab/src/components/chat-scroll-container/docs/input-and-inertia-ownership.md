@@ -1,7 +1,8 @@
 # Input intent and native inertia ownership
 
-This topic defines the implemented contact and takeover policy, with the evidence below;
-[bottom following](./bottom-following.md) defines the three public states and restoration rules.
+This topic defines who may control scrolling and interrupt catch-up. [Bottom following](./bottom-following.md)
+defines the three public states and restoration rules; [native inertia takeover](./native-inertia-takeover.md)
+documents the browser workaround that implements the handoff.
 
 ## Why separate input from position
 
@@ -37,68 +38,29 @@ over while the finger remains down. It must not clear touch contacts. Following 
 while a tracked contact remains held; release alone is not downward intent. See
 [the restoration rules](./bottom-following.md#decision-and-why).
 
-## Defined programmatic takeover
+## Programmatic ownership
 
-Local sends requesting bottom scrolling and explicit bottom commands share this protocol. Layout
-retargeting does not initiate it independently.
+Local sends requesting bottom scrolling and explicit bottom commands establish new programmatic intent.
+Layout retargeting does not independently acquire native scrolling. A pending handoff belongs to the
+controller, not a message, slot, or flight; it remains interruptible and uses the latest target when ready.
 
-1. Touch movement marks that native scrolling may remain unsettled after release. A tap alone does
-   not arm takeover. `scrollend` with no active contacts clears this eligibility; it never restores
-   following. Without that event, a later command may conservatively perform the short takeover.
-2. A command encountering released, unsettled touch movement stops the old spring and enters
-   `animating`. It hides `overflow-y`, reads layout to apply the hidden state, and waits two rAFs.
-   This is an internal pending phase of catch-up, not another public follow state.
-3. Restore the previous inline overflow value and priority. Read the actual position into the shared
-   observation cursor, then start toward the latest projected bottom. Synchronizing the cursor does
-   not itself scroll the viewport or manufacture a DOM event.
-4. Old native notifications continue updating position observations without canceling the acquired
-   catch-up. A new pointer/touch contact or vertical non-zoom wheel clears this exemption; the input
-   policy above decides whether contact interrupts immediately. Scrolling keys detach directly.
-5. Following may finish before the last compositor delta arrives, especially with reduced motion.
-   While the old-tail exemption remains, following pins the actual bottom. The exemption ends on new
-   input, detach, or `scrollend` while following within the existing 1px boundary tolerance.
+After native takeover, old position notifications continue updating the shared observation cursor without
+canceling catch-up. A new pointer/touch contact or vertical non-zoom wheel clears that exemption; the input
+policy above decides whether contact interrupts immediately. Scrolling keys detach directly. Merely
+receiving a delayed notification does not make it a new gesture.
 
-Two rAFs are a browser workaround, not a compositor acknowledgment. One rAF succeeded in the iOS
-experiments but failed in the earlier Chromium stop probe. No universal minimum delay is claimed.
-Reduced motion skips the spring, but still performs any required native handoff.
+Following may finish before the last native delta arrives, especially with reduced motion. During this
+old-tail exemption, following pins the actual bottom. The exemption ends on new input, detachment, or
+`scrollend` while following within the existing 1px boundary tolerance. `scrollend` never grants follow
+intent by itself. Reduced motion skips the spring, not a required native handoff.
 
-## Lifecycle invariants
-
-- Pending takeover belongs to the controller, not a message, layout slot, or flight. Layout updates
-  may refresh geometry during the wait but cannot start the spring early; restoration uses the latest
-  target, including concurrently inserted items.
-- A newer command replaces a pending one. New interrupting input or disposal invalidates the callback
-  and immediately restores overflow. A canceled callback must never restart scrolling or restore an
-  obsolete style over its replacement.
-- The observation cursor is shared by layout callbacks, native notifications, and owned writes. A
-  queued notification is not a second movement simply because it arrived through another callback.
-- Ordinary commands with no unsettled touch movement do not acquire a two-frame delay. Active spring
-  retargets retain their existing velocity policy. Desktop wheel interruption remains unchanged.
-- The 2px zone controls eligibility to resume following; it is not a delay or inertia detector. The
-  0.5px target tolerance and 1px browser-boundary tolerance serve separate geometry checks.
-
-## Evidence and limits
-
-[Touch takeover regressions](../../../../../scripts/test-chat-touch-takeover.mjs) cover contact policy,
-queued updates, cancellation/style restoration, replacement commands, concurrent layout, reduced
-motion, and real Chromium flings followed by a command or native button tap. They run in the local
-full suite, not the CI subset. [Interaction contracts](../../../../../scripts/test-chat-contracts.mjs)
-also cover contact lifetimes, mouse opt-in stories, restoration, and flight interruption.
-
-The [iOS research record](./inertia-ios-experiments.md#production-integration-verification) includes
-three successful production takeovers and two new-touch interruption trials. A tap during slow
-catch-up produced zero later controller writes and zero sampled movement. These are simulator results,
-not physical-iPhone or desktop-trackpad guarantees. Research measurements explain the workaround;
-regressions define the behavior to preserve when the workaround changes.
+Ordinary active-spring retargets retain their velocity policy. The 2px zone controls eligibility to resume
+following; it is not an inertia detector or an arrival test. See the [workaround](./native-inertia-takeover.md)
+for eligibility, geometry tolerances, scheduling, and cleanup.
 
 ## Defined behavior: a satisfied bottom command preserves native bounce
 
-Before acquiring native inertia, compare the legal current position with the projected final bottom
-using the existing 0.5px target tolerance. Clamp positive overscroll to the current bottom for this
-comparison: bounce distance cannot satisfy a message's still-unexpanded height. The 2px restoration
-zone is not an arrival test.
-
-When that target is already satisfied, the command invalidates any old programmatic animation and
+When the projected final target is already satisfied, the command invalidates any old programmatic animation and
 establishes following intent without writing scrollTop, hiding overflow, or starting a spring. A
 preexisting pending takeover is still cleaned up. This applies both at rest and during bottom bounce,
 and when an explicit command resumes a detached viewport already at its destination.
@@ -109,10 +71,15 @@ using that decrease to detach or overwrite contact direction. Genuine movement i
 range, new wheel/key input, and touch interruption of active catch-up retain their existing policies.
 Downward movement still supplies restoration intent through the normal contact gate.
 
-No bounce state or timer is added: command eligibility and movement classification own these rules.
 A changed final target still requires ordinary following/catch-up; this does not promise to preserve
-bounce when a concurrent layout mutation requires repositioning. Deterministic controller tests cover
-boundary classification and projected growth; the iOS research record captures the native RED/GREEN
-bounce trajectory and confirms zero controller position writes for a satisfied command.
+bounce when a concurrent layout mutation requires repositioning. No bounce state or timer is added.
+
+## Verification
+
+[Interaction contracts](../../../../../scripts/test-chat-contracts.mjs) cover contact lifetimes, mouse
+opt-in stories, restoration, and flight interruption. [Touch takeover regressions](../../../../../scripts/test-chat-touch-takeover.mjs)
+cover new-input interruption, delayed observations, satisfied commands, and handoff cleanup in the local
+full suite. The [workaround evidence and limits](./native-inertia-takeover.md#evidence-and-limits) distinguish
+these contracts from browser-specific measurements.
 
 [Architecture index](../README.md)

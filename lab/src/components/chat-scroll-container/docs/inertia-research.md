@@ -3,6 +3,9 @@
 Research snapshot: 2026-09-21, implementation at `a9f7a00`. This note records browser capabilities and
 experiments, not a shipped fix or a cross-browser behavior contract.
 
+Current implementation: [programmatic takeover of native inertia](./native-inertia-takeover.md).
+The candidate discussion below is preserved as the historical research snapshot.
+
 Follow-up: [35 iOS simulator trials](./inertia-ios-experiments.md) distinguish stopping movement from
 reconciling queued notifications, including native button taps and fresh-gesture interruption.
 

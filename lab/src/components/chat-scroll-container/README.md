@@ -71,7 +71,8 @@ between independent animation ticks.
 | [Animated layout slots](./docs/layout-slots.md)                                         | Top-aligned full-size bodies and temporary animated footprints.         |
 | [Default visual entrance](./docs/default-presence.md)                                   | Shared upward fade and explicit special cases.                          |
 | [Bottom following as user intent](./docs/bottom-following.md)                           | Following, catch-up, detachment, and user escape.                       |
-| [Input intent and native inertia ownership](./docs/input-and-inertia-ownership.md)      | Touch, mouse, pen, native takeover, cancellation, and bounce scope.     |
+| [Input intent and native inertia ownership](./docs/input-and-inertia-ownership.md)      | Contact policy, interruption rights, and bounce behavior.               |
+| [Programmatic takeover of native inertia](./docs/native-inertia-takeover.md)            | Overflow workaround, eligibility, scheduling, cleanup, and evidence.    |
 | [Catch-up continuity](./docs/catch-up-continuity.md)                                    | Coordinate height expansion, retargeting, and a moving scroll boundary. |
 | [Scroll ownership and browser clamping](./docs/scroll-ownership.md)                     | One observation cursor for layout and native scroll events.             |
 | [Preserving the reading anchor](./docs/reading-anchor.md)                               | Bottom-edge anchoring, resize stability, scroll timing, and rounding.   |

@@ -45,9 +45,10 @@ The public `ChatScrollContainerHandle.scrollToBottom()` command requests animate
 ## Input and native inertia
 
 [Input intent and native inertia ownership](./input-and-inertia-ownership.md) defines the contact
-policy, two-rAF native takeover, delayed-notification ownership, cancellation lifecycle, and evidence.
-It also defines satisfied bottom commands that preserve native bounce without writing position. Reduced motion
-skips the spring; if native takeover is needed, it completes that handoff first.
+policy, delayed-notification ownership, and satisfied bottom commands that preserve native bounce without
+writing position. [Programmatic takeover of native inertia](./native-inertia-takeover.md) describes the
+overflow workaround, eligibility, and cleanup. Reduced motion skips the spring; if native takeover is
+needed, it completes that handoff first.
 
 ## Evidence
 

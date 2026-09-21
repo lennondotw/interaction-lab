@@ -175,6 +175,9 @@ stopped motion in this iOS simulator. Do not assume the iOS shortcut generalizes
 
 ## Production integration verification
 
+See [programmatic takeover of native inertia](./native-inertia-takeover.md) for the current implementation
+sequence and [input ownership](./input-and-inertia-ownership.md) for the behavior contract.
+
 The controller now applies the two-rAF overflow takeover itself, synchronizes the observation cursor,
 and retains ownership of delayed native notifications until new input or settled following. The
 research harness's `command` and `manual-command` modes do not add an overflow intervention.
