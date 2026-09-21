@@ -22,3 +22,8 @@ They are not in CI. `smoke-stories` is minutes for 230-odd stories, and its answ
 only changes when a component does — so it belongs before a refactor lands, not on
 every push. It is what caught the two React warnings fixed alongside it, neither of
 which the build or the unit tests could see.
+
+`research/chat-inertia-repro.mjs` and `research/chat-inertia-stop.mjs` are manual research probes,
+not pass/fail CI checks. See the [inertia research note](../lab/src/components/chat-scroll-container/docs/inertia-research.md)
+for commands, platform limits, and the recorded observations. Generated evidence goes to ignored
+`artifacts/research/` by default.

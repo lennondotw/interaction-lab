@@ -1,0 +1,168 @@
+{
+  "date": "2026-09-21",
+  "browser": "Chromium 153.0.8010.12",
+  "environment": "Headless, mobile touch emulation, native CDP fling; not physical iOS or trackpad",
+  "sourceCommit": "a9f7a00",
+  "results": [
+    {
+      "method": "baseline",
+      "trial": 0,
+      "driftAfterActionPx": -236,
+      "positionRangeAfter50msPx": 165,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "baseline",
+      "trial": 1,
+      "driftAfterActionPx": -230,
+      "positionRangeAfter50msPx": 160,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "same-position",
+      "trial": 0,
+      "driftAfterActionPx": -235,
+      "positionRangeAfter50msPx": 164,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "same-position",
+      "trial": 1,
+      "driftAfterActionPx": -230,
+      "positionRangeAfter50msPx": 159,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "instant-plus-one",
+      "trial": 0,
+      "driftAfterActionPx": -238,
+      "positionRangeAfter50msPx": 166,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "instant-plus-one",
+      "trial": 1,
+      "driftAfterActionPx": -235,
+      "positionRangeAfter50msPx": 163,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "prevent-default",
+      "trial": 0,
+      "driftAfterActionPx": -234,
+      "positionRangeAfter50msPx": 163,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "prevent-default",
+      "trial": 1,
+      "driftAfterActionPx": -228,
+      "positionRangeAfter50msPx": 159,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "touch-action",
+      "trial": 0,
+      "driftAfterActionPx": -228,
+      "positionRangeAfter50msPx": 158,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "touch-action",
+      "trial": 1,
+      "driftAfterActionPx": -234,
+      "positionRangeAfter50msPx": 163,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-sync-flush",
+      "trial": 0,
+      "driftAfterActionPx": -234,
+      "positionRangeAfter50msPx": 163,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-sync-flush",
+      "trial": 1,
+      "driftAfterActionPx": -238,
+      "positionRangeAfter50msPx": 166,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-one-frame",
+      "trial": 0,
+      "driftAfterActionPx": -233,
+      "positionRangeAfter50msPx": 162,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-one-frame",
+      "trial": 1,
+      "driftAfterActionPx": -238,
+      "positionRangeAfter50msPx": 166,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-100ms",
+      "trial": 0,
+      "driftAfterActionPx": -19,
+      "positionRangeAfter50msPx": 0,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-100ms",
+      "trial": 1,
+      "driftAfterActionPx": -20,
+      "positionRangeAfter50msPx": 0,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-two-frames",
+      "trial": 0,
+      "driftAfterActionPx": -20,
+      "positionRangeAfter50msPx": 0,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-two-frames",
+      "trial": 1,
+      "driftAfterActionPx": -36,
+      "positionRangeAfter50msPx": 0,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-four-frames",
+      "trial": 0,
+      "driftAfterActionPx": -19,
+      "positionRangeAfter50msPx": 0,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    },
+    {
+      "method": "hidden-four-frames",
+      "trial": 1,
+      "driftAfterActionPx": -19,
+      "positionRangeAfter50msPx": 0,
+      "wheelEvents": 0,
+      "touchMovesAfterAction": 0
+    }
+  ]
+}
