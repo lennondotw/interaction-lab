@@ -3,6 +3,9 @@
 Research snapshot: 2026-09-21, implementation at `a9f7a00`. This note records browser capabilities and
 experiments, not a shipped fix or a cross-browser behavior contract.
 
+Follow-up: [35 iOS simulator trials](./inertia-ios-experiments.md) distinguish stopping movement from
+reconciling queued notifications, including native button taps and fresh-gesture interruption.
+
 ## The failure being investigated
 
 In With Message Input, fling toward history and request Scroll to bottom while the finger has already

@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #090909;
+        overflow: hidden;
+      }
+      iframe {
+        border: 0;
+        width: 100%;
+        height: 100dvh;
+      }
+      #status {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+        pointer-events: none;
+        color: #fff;
+        background: #303;
+        font: 11px monospace;
+        padding: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">Loading research probe</div>
+    <iframe id="frame"></iframe>
+    <script>
+      // Research-only: load through Storybook's /@fs route so the story iframe stays same-origin.
+      const endpoint = new URLSearchParams(location.search).get('collector') ?? 'http://localhost:6011';
+      const frame = document.querySelector('#frame');
+      const badge = document.querySelector('#status');
+      let lastId;
+      const post = (path, data) =>
+        fetch(endpoint + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      async function start(job) {
+        frame.src =
+          '/iframe.html?id=components-chat-scroll-container--with-message-input&viewMode=story&reactScan=false&research=' +
+          encodeURIComponent(job.id);
+        badge.textContent = job.id + ' loading';
+        await new Promise((r) => (frame.onload = r));
+        const w = frame.contentWindow,
+          d = w.document;
+        let v;
+        for (let i = 0; i < 100; i++) {
+          v = d.querySelector('[data-slot="chat-scroll-viewport"]');
+          if (v) break;
+          await sleep(100);
+        }
+        if (!v) throw Error('viewport missing');
+        await sleep(700);
+        const button = [...d.querySelectorAll('button')].find((e) => e.textContent === 'Scroll to bottom');
+
+        const p = {
+          ...job,
+          ua: w.navigator.userAgent,
+          screen: { width: w.innerWidth, height: w.innerHeight, dpr: w.devicePixelRatio },
+          capabilities: { momentum: 'momentum' in w.WheelEvent.prototype, scrollend: 'onscrollend' in v },
+          events: [],
+          samples: [],
+        };
+        const read = (type) => ({
+          t: w.performance.now(),
+          type,
+          top: v.scrollTop,
+          overflowY: v.style.overflowY,
+          contentBottom: v.firstElementChild.getBoundingClientRect().bottom,
+          bottom: v.scrollHeight - v.clientHeight,
+          width: v.clientWidth,
+          height: v.clientHeight,
+          state: [...d.querySelectorAll('strong')]
+            .map((e) => e.textContent)
+            .find((s) => ['following', 'animating', 'detached'].includes(s)),
+          reason: d.body.innerText.match(/Last transition:([^\n]*)/)?.[1],
+        });
+        const descriptor = Object.getOwnPropertyDescriptor(w.Element.prototype, 'scrollTop');
+        Object.defineProperty(v, 'scrollTop', {
+          get() {
+            return descriptor.get.call(this);
+          },
+          set(value) {
+            descriptor.set.call(this, value);
+            p.events.push({ ...read('write'), requested: value });
+          },
+        });
+        let started = false,
+          finished = false;
+        const raf = () => {
+          if (finished) return;
+          // Sparse probes avoid forcing layout while overflow is hidden.
+          if (!(job.method.includes('sparse') && v.style.overflowY === 'hidden')) p.samples.push(read('frame'));
+          w.requestAnimationFrame(raf);
+        };
+        const done = () => {
+          if (finished) return;
+          finished = true;
+          const a = p.after ?? p.before ?? p.samples[0];
+          const tail = p.samples.filter((s) => s.t >= a.t + 100);
+          p.summary = {
+            method: job.method,
+            events: p.events.length,
+            before: p.before,
+            after: p.after,
+            restored: p.restored,
+            command: p.command,
+            end: p.samples.at(-1),
+            drift: p.samples.at(-1).top - a.top,
+            rangeAfter100ms: Math.max(...tail.map((x) => x.top)) - Math.min(...tail.map((x) => x.top)),
+            touchMovesAfter: p.events.filter((e) => e.type === 'touchmove' && e.t > a.t).length,
+            wheelCount: p.events.filter((e) => e.type === 'wheel').length,
+          };
+          badge.textContent = job.id + ' done ' + p.summary.end.state + ' Δ' + p.summary.drift.toFixed(1);
+          post('/result', p);
+        };
+        const command = () => {
+          p.command = read('command');
+          button.click();
+          p.events.push(read('command-after'));
+        };
+        const act = () => {
+          p.before = read('before');
+          let prev = v.style.overflowY;
+          const restore = () => {
+            v.style.overflowY = prev;
+            p.restored = read('restored');
+            if (job.method.startsWith('command-after-') || job.method.startsWith('native-hidden-')) {
+              // Diagnostic only: consume the current position before the new command.
+              // This synthetic notification does not generate native scrolling.
+              if (job.method.includes('reconcile')) v.dispatchEvent(new w.Event('scroll'));
+              command();
+            }
+          };
+          if (job.method === 'same-position') v.scrollTo({ top: v.scrollTop, behavior: 'instant' });
+          if (job.method === 'instant-plus-one') v.scrollTo({ top: v.scrollTop + 1, behavior: 'instant' });
+          if (job.method === 'prevent-default')
+            for (const type of ['touchmove', 'wheel', 'scroll'])
+              v.addEventListener(
+                type,
+                (e) => {
+                  if (e.cancelable) e.preventDefault();
+                  p.events.push({
+                    ...read('blocked-' + type),
+                    cancelable: e.cancelable,
+                    prevented: e.defaultPrevented,
+                  });
+                },
+                { passive: false }
+              );
+          if (job.method === 'touch-action') v.style.touchAction = 'none';
+          if (job.method.includes('hidden')) {
+            // Compare frame counts independently from flushing and cursor reconciliation.
+            const timing = job.method.replace(/-reconcile|-no-flush|-sparse/g, '');
+            v.style.overflowY = 'hidden';
+            if (!job.method.includes('no-flush')) {
+              void v.offsetHeight;
+              p.hidden = read('hidden');
+            }
+            if (timing.endsWith('sync')) restore();
+            if (timing.endsWith('timer')) w.setTimeout(restore, 0);
+            if (timing.endsWith('one-frame')) w.requestAnimationFrame(restore);
+            if (timing.endsWith('two-frames')) w.requestAnimationFrame(() => w.requestAnimationFrame(restore));
+            if (timing.endsWith('four-frames'))
+              w.requestAnimationFrame(() =>
+                w.requestAnimationFrame(() => w.requestAnimationFrame(() => w.requestAnimationFrame(restore)))
+              );
+            if (timing.endsWith('100ms')) w.setTimeout(restore, 100);
+            if (job.method.startsWith('command-during-')) command();
+          }
+          // Deliberately crude negative control: suppress scroll delivery, not browser movement.
+          // A new touch removes it. This is not the proposed production ownership policy.
+          if (job.method === 'command-ignore-scroll') {
+            const suppress = (e) => {
+              p.events.push(read('suppressed-scroll'));
+              e.stopImmediatePropagation();
+            };
+            v.addEventListener('scroll', suppress, { capture: true, passive: true });
+            const release = () => v.removeEventListener('scroll', suppress, true);
+            v.addEventListener('touchstart', release, { once: true, passive: true });
+            w.setTimeout(release, 4000);
+            command();
+          }
+          if (job.method === 'command') command();
+          if (!job.method.includes('no-flush')) p.after = read('after');
+        };
+        for (const type of [
+          'touchstart',
+          'touchmove',
+          'touchend',
+          'touchcancel',
+          'pointerdown',
+          'pointercancel',
+          'pointerup',
+          'scroll',
+          'scrollend',
+          'wheel',
+          'chat-scroll-interrupted',
+        ])
+          v.addEventListener(
+            type,
+            (e) => {
+              if (job.method.includes('sparse') && v.style.overflowY === 'hidden') {
+                p.events.push({ t: w.performance.now(), type, trusted: e.isTrusted, geometrySkipped: true });
+                return;
+              }
+              p.events.push({
+                ...read(type),
+                cancelable: e.cancelable,
+                trusted: e.isTrusted,
+                touches: e.touches?.length,
+              });
+              if (type === 'touchstart' && !started) {
+                started = true;
+                p.start = read('start');
+                raf();
+                w.setTimeout(done, 4500);
+              }
+            },
+            { passive: true }
+          );
+        if (job.method.startsWith('native-hidden-')) {
+          button.addEventListener(
+            'click',
+            (e) => {
+              if (!e.isTrusted) return;
+              p.events.push(read('native-command-request'));
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              act();
+            },
+            { capture: true }
+          );
+        } else v.addEventListener('touchend', () => w.setTimeout(act, job.delay ?? 80), { once: true });
+        button.addEventListener('click', () => p.events.push(read('button-click')));
+        const r = v.getBoundingClientRect();
+        p.rect = { x: r.x, y: r.y, width: r.width, height: r.height };
+        badge.textContent = job.id + ' READY: fling down in chat';
+        await post('/status', {
+          id: job.id,
+          phase: 'ready',
+          rect: p.rect,
+          screen: p.screen,
+          capabilities: p.capabilities,
+        });
+      }
+      setInterval(async () => {
+        try {
+          const job = await (await fetch(endpoint + '/job')).json();
+          if (job.id !== lastId) {
+            lastId = job.id;
+            start(job).catch((e) => {
+              badge.textContent = String(e);
+              post('/status', { id: job.id, phase: 'error', error: String(e) });
+            });
+          }
+        } catch (e) {
+          badge.textContent = String(e);
+        }
+      }, 300);
+    </script>
+  </body>
+</html>
