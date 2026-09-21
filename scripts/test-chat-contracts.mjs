@@ -92,7 +92,7 @@ try {
     ]) {
       const fixture = await mount();
       try {
-        if (signal === 'pointer-opt-in') fixture.update({ interruptOnPointerDown: true });
+        if (signal === 'pointer-opt-in') fixture.update({ interruptOnMouseDown: true });
         fixture.send('first');
         fixture.send('second');
         await flush(2);
@@ -102,12 +102,12 @@ try {
         if (signal === 'down-wheel') fire(v, new WheelEvent('wheel', { deltaY: 1, cancelable: true }));
         if (signal === 'zoom-wheel') fire(v, new WheelEvent('wheel', { deltaY: -1, ctrlKey: true, cancelable: true }));
         if (signal === 'pointer' || signal === 'pointer-opt-in')
-          fire(v, new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+          fire(v, new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true, cancelable: true }));
         if (signal === 'key')
           fire(v, new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true }));
         if (signal === 'scroll') v.dispatchEvent(new Event('scroll'));
         if (signal === 'native-up') {
-          fire(v, new PointerEvent('pointerdown', { bubbles: true }));
+          fire(v, new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));
           v.scrollTop -= 8;
           v.dispatchEvent(new Event('scroll'));
         }
@@ -146,9 +146,9 @@ try {
     for (const end of ['pointerup', 'pointercancel']) {
       const fixture = await mount();
       try {
-        fixture.update({ interruptOnPointerDown: true });
+        fixture.update({ interruptOnMouseDown: true });
         const v = viewport(fixture);
-        v.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        v.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));
         v.scrollTop -= 8;
         v.dispatchEvent(new Event('scroll'));
         await flush();
@@ -172,7 +172,7 @@ try {
           `${end} restores eligibility after downward return: ${JSON.stringify({ states: fixture.states.slice(-5), top: v.scrollTop, bottom: v.scrollHeight - v.clientHeight })}`
         );
         check(v.scrollTop === beforeRelease, 'Reattachment does not snap the remaining pixel');
-        v.dispatchEvent(new PointerEvent('pointerdown'));
+        v.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse' }));
         window.dispatchEvent(new PointerEvent(end));
         await flush();
         check(mode(fixture) === 'detached', 'A release without downward movement does not restore following');
@@ -239,15 +239,15 @@ try {
         const wheel = (deltaY, ctrlKey = false) =>
           fire(v, new WheelEvent('wheel', { deltaY, ctrlKey, cancelable: true }));
         const bottom = () => v.scrollHeight - v.clientHeight;
-        for (const interruptOnPointerDown of [false, true]) {
-          fixture.update({ interruptOnPointerDown });
-          fire(v, new PointerEvent('pointerdown', { bubbles: true }));
+        for (const interruptOnMouseDown of [false, true]) {
+          fixture.update({ interruptOnMouseDown });
+          fire(v, new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));
           await flush();
           check(
-            mode(fixture) === (interruptOnPointerDown ? 'detached' : 'following'),
+            mode(fixture) === (interruptOnMouseDown ? 'detached' : 'following'),
             'Pointer policy is live and defaults to non-blocking'
           );
-          if (interruptOnPointerDown) {
+          if (interruptOnMouseDown) {
             wheel(1);
             await flush();
             check(mode(fixture) === 'detached', 'Downward boundary wheel cannot steal an active pointer');
@@ -255,7 +255,7 @@ try {
           window.dispatchEvent(new PointerEvent('pointerup'));
           await flush();
           check(
-            mode(fixture) === (interruptOnPointerDown ? 'detached' : 'following'),
+            mode(fixture) === (interruptOnMouseDown ? 'detached' : 'following'),
             'Click release alone never reacquires follow'
           );
           const top = v.scrollTop;
@@ -531,7 +531,7 @@ try {
   // Real pointer input verifies that both composed stories wire the shared policy
   // to follow and flight, rather than only exercising synthetic controller branches.
   for (const interrupt of [false, true]) {
-    const story = interrupt ? 'interrupt-on-pointer-down' : 'with-message-input';
+    const story = interrupt ? 'interrupt-on-mouse-down' : 'with-message-input';
     await page.goto(`${base}/iframe.html?id=components-chat-scroll-container--${story}&viewMode=story`);
     await page.getByText('0.1×', { exact: true }).click();
     await page.waitForFunction(() => document.querySelector('#storybook-root strong')?.textContent === 'following');

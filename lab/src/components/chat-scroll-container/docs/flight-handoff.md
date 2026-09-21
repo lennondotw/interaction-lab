@@ -19,7 +19,7 @@ Explicit interaction with the scrolling viewport stops all active flights and re
 
 - Upward `wheel` input (`deltaY < 0`, excluding `ctrlKey` zoom gestures).
 - Downward non-zoom `wheel` input while the scroll controller is `animating`; native scrolling takes over catch-up in either direction.
-- `pointerdown` in the viewport when `interruptOnPointerDown` is enabled. It defaults to `false`.
+- Mouse `pointerdown` in the viewport when `interruptOnMouseDown` is enabled. It defaults to `false`. Touch contact during active catch-up interrupts independently; pen contact alone does not.
 - Actual unowned upward scrolling, including a drag after a non-blocking pointer press.
 - `ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`, `Home`, `End`, or Space received by the viewport.
 
