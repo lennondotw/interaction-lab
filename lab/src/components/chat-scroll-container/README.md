@@ -114,4 +114,5 @@ coordinate conversion, and arrival continuity used by the flight implementation.
   labels, reply timing, and the shared guided story.
 - [Behavior contracts](./docs/behavior-contracts.md): intended outcomes and the regressions that protect them.
 - [Verification guide](./docs/verification.md): regression entry points and manual scenarios.
+- [Native inertia research](./docs/inertia-research.md): event attribution, takeover limits, and manual browser probes; not a shipped behavior contract.
 - [Story composition](./chat-scroll-container.stories.tsx): explicit composer, receive, typing, and flight wiring.
