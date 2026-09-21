@@ -20,6 +20,7 @@ const fullSuite = [
   'composer-release',
   'flight-composer',
   'scroll-ownership',
+  'touch-takeover',
   'send-flight',
   'items',
   'typing-exit',
