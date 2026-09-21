@@ -1,0 +1,10 @@
+trial,delayMs,commandOverscrollPx,controllerWrites,hiddenFrames,finalMode,finalDistancePx
+bounce-green-baseline,80,,0,0,following,0
+bounce-green-command-0,0,63,0,0,following,0
+bounce-green-command-250,250,16,0,0,following,0
+bounce-green-command,80,54,0,0,following,0
+bounce-green-manual-command,80,0,0,0,following,0
+bounce-green-user-escape,0,63,0,0,detached,478
+bounce-red-baseline,80,,0,0,detached,0
+bounce-red-command,80,47,1,2,following,0
+bounce-red-manual-command,80,1,1,2,following,0
