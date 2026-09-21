@@ -124,14 +124,14 @@ function ChatDemo({
   resizable = false,
   withHistoryInsertion = false,
   automaticReplies = false,
-  interruptOnPointerDown = false,
+  interruptOnMouseDown = false,
 }: {
   withMessageInput?: boolean;
   withAnchorDebug?: boolean;
   resizable?: boolean;
   withHistoryInsertion?: boolean;
   automaticReplies?: boolean;
-  interruptOnPointerDown?: boolean;
+  interruptOnMouseDown?: boolean;
 }) {
   const [chatItems, setChatItems] = useState<ChatListItem[]>(messages);
   const [threshold, setThreshold] = useState(2);
@@ -285,7 +285,7 @@ function ChatDemo({
         incomingTyping={withMessageInput && incomingTyping}
         bottomThreshold={threshold}
         animationSpeed={animationSpeed}
-        interruptOnPointerDown={interruptOnPointerDown}
+        interruptOnMouseDown={interruptOnMouseDown}
         onScrollStateChange={automaticReplies ? undefined : setScrollState}
         className="col-start-1 row-start-1"
         bottomSpace={withMessageInput ? bottomSpace : undefined}
@@ -491,11 +491,11 @@ export const ResizableMessageInput: Story = {
   render: () => <ChatDemo withMessageInput withAnchorDebug resizable />,
 };
 
-/** Opt-in policy: pressing the message viewport immediately yields follow and flight. */
-export const InterruptOnPointerDown: Story = {
-  name: 'Detach Following State On Pointer Down',
+/** Opt-in policy: a mouse press in the message viewport immediately yields follow and flight. */
+export const InterruptOnMouseDown: Story = {
+  name: 'Detach Following State On Mouse Down',
   parameters: { controls: { disable: true } },
-  render: () => <ChatDemo withMessageInput interruptOnPointerDown />,
+  render: () => <ChatDemo withMessageInput interruptOnMouseDown />,
 };
 
 export const InsertInHistory: Story = {

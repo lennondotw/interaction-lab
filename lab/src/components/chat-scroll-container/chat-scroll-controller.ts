@@ -21,7 +21,7 @@ export interface ChatScrollState {
 
 interface Options {
   threshold: number;
-  interruptOnPointerDown?: boolean;
+  interruptOnMouseDown?: boolean;
   reducedMotion: boolean;
   animationSpeed: number;
   onStateChange?: (state: ChatScrollState) => void;
@@ -35,7 +35,7 @@ const spring = {
 } as const;
 const positionTolerance = 0.5;
 
-/** Owns programmatic scrolling only; native input never has its default action cancelled. */
+/** Owns programmatic scrolling; input handlers never prevent native default actions. */
 export function createChatScrollController(viewport: HTMLElement, content: HTMLElement, initialOptions: Options) {
   let options = initialOptions;
   let mode: ChatScrollMode = 'following';
@@ -48,6 +48,13 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   let animationTarget = 0;
   let animation: ReturnType<typeof animate> | undefined;
   let pointerHeld = false;
+  // A touch move can leave native inertia running after contact ends. scrollend
+  // clears this eligibility, but is never used to decide follow intent.
+  let nativeTouchScroll = false;
+  // A native scroll notification cannot identify which gesture produced it.
+  // After explicit takeover, only NEW input can reclaim an active catch-up.
+  let ownsNativeTail = false;
+  let takeover: { frame: number; restore: () => void } | undefined;
   const activeTouches = new Set<number>();
   let interactionMovedDown = false;
   const interactionHeld = () => pointerHeld || activeTouches.size > 0;
@@ -85,8 +92,19 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     // scrollHeight/clientHeight are integers; the actual boundary can differ by
     // up to one CSS pixel. This is rounding tolerance, not the bottom-zone setting.
     const clamped = delta < 0 && rangeShrank && Math.abs(current.top - current.bottom) <= 1;
+    // Safari exposes bottom overscroll in scrollTop. Returning within that outer
+    // region is bounce, not movement into history. Keep raw downward movement for
+    // contact/restoration intent, but never detach solely for this rebound.
+    const bottomRebound = delta < 0 && previous.top >= previous.bottom && current.top >= current.bottom;
     observedScroll = current;
-    if (!clamped && delta !== 0) {
+    // After takeover, notifications cannot reclaim ownership without new input.
+    // Reduced motion may finish before the compositor delivers its final delta;
+    // keep following geometry pinned until native scrolling reports completion.
+    if (ownsNativeTail) {
+      if (!takeover && mode === 'following' && current.top !== current.bottom) write(current.bottom);
+      return;
+    }
+    if (!takeover && !clamped && !bottomRebound && delta !== 0) {
       anchorRemainder = 0;
       if (interactionHeld()) interactionMovedDown = delta > 0;
       if (delta < 0) detach('User scrolled up');
@@ -121,6 +139,8 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
 
   function detach(cause: string) {
     anchorRemainder = 0;
+    cancelTakeover();
+    ownsNativeTail = false;
     mode = 'detached'; // Close the write gate before stopping/resetting MotionValue.
     generation++;
     position.jump(viewport.scrollTop);
@@ -138,6 +158,81 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     reason = cause;
     // Intent only: leave the remaining threshold pixels and native input alone.
     report();
+  }
+
+  function cancelTakeover() {
+    if (!takeover) return;
+    const pending = takeover;
+    takeover = undefined;
+    cancelAnimationFrame(pending.frame);
+    pending.restore();
+  }
+
+  /** Explicit commands own a new position baseline; layout retargets do not. */
+  function requestBottom(cause: string, instant = false) {
+    if (takeover) {
+      cancelTakeover();
+      // No spring exists yet; an equivalent old target cannot skip this command.
+      mode = 'following';
+    }
+    const current = readScrollPosition();
+    const target = finalChatBottom(viewport);
+    // A satisfied command grants follow intent without changing native geometry.
+    // Clamp positive overscroll: bounce cannot satisfy an unexpanded future target.
+    if (Math.abs(target - Math.min(current.top, current.bottom)) <= positionTolerance) {
+      generation++;
+      mode = 'following'; // Close the write gate before resetting a previous spring.
+      position.jump(current.top);
+      observedScroll = current;
+      animationTarget = target;
+      ownsNativeTail = false;
+      reason = cause;
+      report();
+      return;
+    }
+    if (!nativeTouchScroll || activeTouches.size > 0) {
+      observedScroll = readScrollPosition();
+      scrollToBottom(cause, { instant });
+      return;
+    }
+
+    // A position write alone does not stop native touch inertia. Briefly remove
+    // the scrollable overflow before starting our spring. Two rAFs worked in both
+    // Chromium and iOS probes; one worked only on iOS. This is a browser workaround,
+    // not a compositor acknowledgment. See docs/inertia-ios-experiments.md.
+    generation++;
+    ownsNativeTail = true;
+    mode = 'following'; // Close the spring write gate before resetting its value.
+    position.jump(viewport.scrollTop);
+    mode = 'animating';
+    reason = cause;
+    const overflow = viewport.style.getPropertyValue('overflow-y');
+    const priority = viewport.style.getPropertyPriority('overflow-y');
+    const pending = {
+      frame: 0,
+      restore: () => {
+        if (overflow) viewport.style.setProperty('overflow-y', overflow, priority);
+        else viewport.style.removeProperty('overflow-y');
+      },
+    };
+    takeover = pending;
+    viewport.style.setProperty('overflow-y', 'hidden', 'important');
+    // Commit the hidden state now; otherwise hide/restore can be coalesced.
+    observedScroll = readScrollPosition();
+    report();
+    pending.frame = requestAnimationFrame(() => {
+      if (takeover !== pending) return;
+      pending.frame = requestAnimationFrame(() => {
+        if (takeover !== pending) return;
+        cancelTakeover();
+        nativeTouchScroll = false;
+        // Consume the actual position BEFORE establishing the new animation.
+        // A queued pre-command scroll must not look like a fresh upward gesture.
+        observedScroll = readScrollPosition();
+        mode = 'following'; // Do not reuse the previous target/velocity for this new owner.
+        scrollToBottom(cause, { instant });
+      });
+    });
   }
 
   function scrollToBottom(cause: string, { instant = false } = {}) {
@@ -226,8 +321,10 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       // into the next layout tick instead of accumulating visible reading drift.
       anchorRemainder = Math.max(-1, Math.min(1, requestedTop - viewport.scrollTop));
     }
-    if (localSend || mode !== 'detached') {
-      scrollToBottom(localSend ? 'Local message sent' : clearanceChanged ? 'Composer resized' : 'Content resized', {
+    if (localSend) {
+      requestBottom('Local message sent', mode === 'following');
+    } else if (!takeover && mode !== 'detached') {
+      scrollToBottom(clearanceChanged ? 'Composer resized' : 'Content resized', {
         // Follow intent owns the current bottom across ALL layout changes, including
         // natural reflow. No resize-cause inference or second spring is needed.
         // Reconcile user movement above first; detached readers keep their anchor,
@@ -245,6 +342,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
 
   function onWheel(event: WheelEvent) {
     if (event.ctrlKey) return;
+    if (event.deltaY !== 0) ownsNativeTail = false;
     if (event.deltaY < 0) detach('Upward wheel');
     else if (event.deltaY > 0) {
       // Yield before native scrolling runs: a still-active spring would overwrite
@@ -254,10 +352,12 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     }
   }
 
-  function onPointerDown() {
+  function onPointerDown(event: PointerEvent) {
+    ownsNativeTail = false;
     if (!interactionHeld()) interactionMovedDown = false;
     pointerHeld = true;
-    if (options.interruptOnPointerDown) detach('Pointer interaction');
+    if (event.pointerType === 'touch' && mode === 'animating') detach('Touch interrupted catch-up');
+    else if (event.pointerType === 'mouse' && options.interruptOnMouseDown) detach('Mouse interaction');
   }
 
   function finishInteraction() {
@@ -272,10 +372,24 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function onTouchStart(event: TouchEvent) {
+    ownsNativeTail = false;
+    // Fallback for touch-only browsers; pointerdown may already have detached.
+    if (mode === 'animating') detach('Touch interrupted catch-up');
     if (!interactionHeld()) interactionMovedDown = false;
     // Native scrolling cancels the pointer while fingers can remain on screen.
     // Track viewport contacts independently until their own end/cancel events.
     for (const touch of event.changedTouches) activeTouches.add(touch.identifier);
+  }
+
+  function onTouchMove() {
+    if (activeTouches.size > 0) nativeTouchScroll = true;
+  }
+
+  function onScrollEnd() {
+    if (activeTouches.size === 0) {
+      nativeTouchScroll = false;
+      if (mode === 'following' && distance() <= 1) ownsNativeTail = false;
+    }
   }
 
   function onTouchEnd(event: TouchEvent) {
@@ -294,6 +408,8 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   viewport.addEventListener('wheel', onWheel, { passive: true });
   viewport.addEventListener('pointerdown', onPointerDown, { passive: true });
   viewport.addEventListener('touchstart', onTouchStart, { passive: true });
+  viewport.addEventListener('touchmove', onTouchMove, { passive: true });
+  viewport.addEventListener('scrollend', onScrollEnd, { passive: true });
   viewport.addEventListener('keydown', onKeyDown);
   window.addEventListener('pointerup', onPointerUp, { passive: true });
   window.addEventListener('pointercancel', onPointerUp, { passive: true });
@@ -321,16 +437,17 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     contentChanged,
     scrollToBottom() {
       anchorRemainder = 0;
-      scrollToBottom('Scroll to bottom');
+      requestBottom('Scroll to bottom');
     },
     updateOptions(next: Options) {
       const needsReport = options.threshold !== next.threshold || (!options.onStateChange && next.onStateChange);
       options = next;
       if (animation) animation.speed = options.animationSpeed;
-      if (options.reducedMotion && mode === 'animating') scrollToBottom('Reduced motion');
+      if (options.reducedMotion && mode === 'animating' && !takeover) scrollToBottom('Reduced motion');
       if (needsReport) report();
     },
     dispose() {
+      cancelTakeover();
       mode = 'detached';
       generation++;
       position.destroy();
@@ -341,6 +458,8 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       viewport.removeEventListener('wheel', onWheel);
       viewport.removeEventListener('pointerdown', onPointerDown);
       viewport.removeEventListener('touchstart', onTouchStart);
+      viewport.removeEventListener('touchmove', onTouchMove);
+      viewport.removeEventListener('scrollend', onScrollEnd);
       viewport.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);

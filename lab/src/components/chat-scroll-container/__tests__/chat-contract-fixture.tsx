@@ -12,7 +12,7 @@ interface Model {
   typing: boolean;
   speed: number;
   draft: string;
-  interruptOnPointerDown: boolean;
+  interruptOnMouseDown: boolean;
   threshold: number;
   debugBubbles: boolean;
 }
@@ -38,7 +38,7 @@ export function mountChatContractFixture() {
       typing: false,
       speed: 0.25,
       draft: '1',
-      interruptOnPointerDown: false,
+      interruptOnMouseDown: false,
       threshold: 20,
       debugBubbles: false,
     });
@@ -60,7 +60,7 @@ export function mountChatContractFixture() {
           incomingTyping={value.typing}
           animationSpeed={value.speed}
           bottomThreshold={value.threshold}
-          interruptOnPointerDown={value.interruptOnPointerDown}
+          interruptOnMouseDown={value.interruptOnMouseDown}
           onScrollStateChange={(state) => states.push(state)}
           className="min-h-0 flex-1"
         />

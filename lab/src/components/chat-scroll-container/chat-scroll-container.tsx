@@ -49,8 +49,8 @@ export interface ChatScrollContainerProps extends ComponentPropsWithoutRef<'sect
   debugBubbles?: boolean;
   /** Highlight the reading anchor candidate; compensation uses it only while detached. */
   debugReadingAnchor?: boolean;
-  /** Opt into interrupting follow and send flight on viewport pointerdown. Upward scrolling always interrupts. */
-  interruptOnPointerDown?: boolean;
+  /** Opt into interrupting follow and send flight on mouse press. Touch interrupts active catch-up independently. */
+  interruptOnMouseDown?: boolean;
   /** Playback rate for programmatic scrolling. Native gestures remain immediate. */
   animationSpeed?: number;
   contentClassName?: string;
@@ -70,7 +70,7 @@ export function ChatScrollContainer({
   bottomThreshold = 2,
   debugBubbles = false,
   debugReadingAnchor = false,
-  interruptOnPointerDown = false,
+  interruptOnMouseDown = false,
   animationSpeed = 1,
   contentClassName,
   bottomSpace,
@@ -162,12 +162,12 @@ export function ChatScrollContainer({
     }
     controllerRef.current?.updateOptions({
       threshold: Math.max(0, bottomThreshold),
-      interruptOnPointerDown,
+      interruptOnMouseDown,
       reducedMotion: reducedMotion === true,
       animationSpeed: Math.max(0.01, animationSpeed),
       onStateChange: onScrollStateChange,
     });
-  }, [bottomThreshold, interruptOnPointerDown, animationSpeed, reducedMotion, onScrollStateChange]);
+  }, [bottomThreshold, interruptOnMouseDown, animationSpeed, reducedMotion, onScrollStateChange]);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
