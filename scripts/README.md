@@ -33,3 +33,9 @@ Safari/simulator experiment surface. See the [iOS experiment procedure](../lab/s
 for native gesture sequences, intervention variants, and the numeric snapshot.
 
 `node scripts/test-chat-touch-takeover.mjs` covers touch/mouse/pen policies, cancelable native-inertia takeover, and real Chromium flings. It runs in the local full chat suite, not the CI subset.
+
+`node scripts/test-chat-wheel-stability.mjs` checks full upward movement, no reversal, and no programmatic
+position writes during idle scrolling across three chat stories. It exercises wheel and browser smooth-scroll
+continuation separately, without claiming physical-hardware replay. Use `STORYBOOK_URL` to select a running
+Storybook. Frame evidence is saved to `/tmp/chat-wheel-stability.json` and collected by the local full suite;
+the CI subset is unchanged.

@@ -72,6 +72,11 @@ typing reversal/replacement, and label alignment.
 
 ## Scrolling and composer
 
+- [Wheel stability](../../../../../scripts/test-chat-wheel-stability.mjs): settled Resizable Message Input,
+  With Message Input, and Long List preserve a full 240px upward movement without reverse frames or
+  controller position writes. Wheel and native smooth-scroll continuation run separately; the latter must
+  include intermediate frames. Local full suite only, with frame evidence on success and assertion failure.
+
 - [Touch takeover](../../../../../scripts/test-chat-touch-takeover.mjs): touch/mouse/pen contact policy, delayed scroll reconciliation, overflow restoration on cancellation/disposal, superseding commands, reduced motion, and real Chromium flings with programmatic and native-button takeover. Local full suite only; iOS simulator evidence is in [the research record](./inertia-ios-experiments.md).
 
 - [Interaction contracts](../../../../../scripts/test-chat-contracts.mjs): explicit flight cancellation and non-cancellation signals, pending departures, both mouse-press policies in fixtures and real stories, zero-displacement downward wheel restoration at 2px/20px, downward catch-up takeover inside/outside 2px with delayed scroll notification and real-wheel frame sampling, pointer-held restoration, atomic typing replacement boundaries, geometry, and disposal.
