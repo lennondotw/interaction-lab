@@ -71,7 +71,9 @@ paints it itself, under three rules:
 1. **On `<html>`, never on a wrapper.** Set it as an inline style on
    `document.documentElement` when the story mounts. A full-screen wrapper with a background
    sits above the root element and hides whatever the Background toolbar puts there, so the
-   toolbar silently stops working for that story.
+   toolbar silently stops working for that story. `<body>` is the one element the toolbar
+   clears for you under every option except `Unmodified`, so a body background does no harm
+   there, but it is not the place for it either: it only covers the body's own box.
 2. **No `!important`.** The toolbar's overrides are `!important`; a story that uses it too wins
    against them.
 3. **Remove it on unmount**, so it does not leak into the next story.
