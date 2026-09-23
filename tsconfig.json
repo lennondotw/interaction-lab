@@ -11,6 +11,9 @@
       "path": "./lab/tsconfig.json"
     },
     {
+      "path": "./packages/storybook-addons/tsconfig.json"
+    },
+    {
       "path": "./packages/utils/tsconfig.json"
     }
   ]

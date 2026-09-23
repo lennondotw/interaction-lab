@@ -20,6 +20,9 @@
   "exclude": ["**/__tests__/"],
   "references": [
     {
+      "path": "../packages/storybook-addons/tsconfig.json"
+    },
+    {
       "path": "../packages/utils/tsconfig.json"
     }
   ]

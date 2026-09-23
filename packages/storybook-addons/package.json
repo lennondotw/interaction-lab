@@ -1,0 +1,32 @@
+{
+  "name": "@monorepo/storybook-addons",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./background": {
+      "import": "./dist/background/index.js",
+      "default": null
+    }
+  },
+  "scripts": {
+    "build": "pnpm run tsc:build",
+    "tsc:build": "tsgo --build tsconfig.json",
+    "tsc:build:clean": "tsgo --build tsconfig.json --clean",
+    "tsc:build:upstream": "pnpm --filter '{.}...' --workspace-concurrency=-2 run tsc:build",
+    "tsc:build:watch": "tsgo --build tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "@monorepo/tsconfig": "workspace:^",
+    "@storybook/react-vite": "catalog:",
+    "@types/react": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "react": "catalog:",
+    "storybook": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "@storybook/react-vite": "catalog:",
+    "react": "catalog:"
+  }
+}
