@@ -85,10 +85,15 @@ const STYLESHEET = `
   }
 
   /*
-   * Clears the page color so the canvas is see-through. Behind it is the manager's <iframe>
-   * element, then the manager itself - but only while the preview's used color-scheme matches
-   * the iframe element's; on a mismatch the browser paints an opaque Canvas backdrop inside the
-   * iframe instead.
+   * Removes the page background, nothing more. What shows instead depends on the host, which is
+   * why the toolbar labels it "varies by host":
+   * - inside the manager, with matching color-schemes: the manager's own background, through
+   *   the (transparent) <iframe> element;
+   * - inside the manager with mismatched color-schemes, or opened standalone: the browser's
+   *   Canvas color for the root's used color-scheme (#fff, or about #121212 in Chrome's dark),
+   *   because the canvas must be opaque there.
+   * It is never actually see-through to anything under test. To inspect a component's own
+   * transparency, use Grid.
    */
   :root[${ATTRIBUTE}='transparent'] {
     background: transparent !important;
@@ -145,7 +150,9 @@ export const globalTypes = {
       items: [
         { value: 'unmodified', title: 'Unmodified', icon: 'paintbrush' },
         { value: 'solid', title: 'Solid', icon: 'circle' },
-        { value: 'transparent', title: 'Transparent', icon: 'eye' },
+        // `right` is the grey hint shown next to the item in the dropdown; the toolbar button
+        // itself keeps the short title. See the stylesheet comment above for what "varies" means.
+        { value: 'transparent', title: 'Transparent', right: 'varies by host', icon: 'eye' },
         { value: 'grid', title: 'Grid', icon: 'grid' },
       ],
       dynamicTitle: true,
