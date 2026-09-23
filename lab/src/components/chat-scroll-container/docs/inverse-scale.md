@@ -20,7 +20,7 @@ This preserves text dimensions, not the exact composer line breaks: a wider comp
 ## Evidence
 
 - Implementation: [content transform and coordinate conversion](../../chat-send-flight/chat-send-flight.ts).
-- Related implementation: [text transform origin and clip](../../chat-send-flight/chat-send-flight.css).
+- Related implementation: [text transform origin and clip](../../chat-send-flight/chat-send-flight.module.css).
 - History: [072ee4d](https://github.com/lennondotw/interaction-lab/commit/072ee4d); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#geometry-and-flight).
 

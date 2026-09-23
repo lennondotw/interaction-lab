@@ -1,0 +1,38 @@
+/*
+ * Send-flight styles, as module classes. `chat-send-flight.ts` builds the flight layer, carrier
+ * and text clip at runtime and adds these classes itself. Their `data-slot` names and the
+ * carrier's `data-chat-send-flight` marker stay for the browser contracts in `scripts/`; no
+ * rule here keys on them.
+ */
+
+@layer components {
+  .layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: clip;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .carrier {
+    position: absolute;
+    max-width: none;
+    margin: 0;
+    transform-origin: center;
+    will-change: transform;
+  }
+
+  .clip {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    border-radius: inherit;
+  }
+
+  /* The bubble's text, moved out of the bubble into the clip. */
+  .clip > .clippedContent {
+    position: absolute;
+    transform-origin: left top;
+  }
+}

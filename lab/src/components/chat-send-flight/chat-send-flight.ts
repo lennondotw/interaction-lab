@@ -6,7 +6,7 @@ import { cloneWithoutChatDebug, registerChatDebugVisual } from '../chat-scroll-c
 import { hasChatLayoutAnimation, projectedChatY } from '../chat-scroll-container/chat-layout.js';
 import { scrollAnchorInterrupted } from '../scroll-anchor/scroll-anchor-controller.js';
 
-import './chat-send-flight.css';
+import styles from './chat-send-flight.module.css';
 
 export const chatSendFlightSpring = toSpringPhysics({ angularFrequency: 18, dampingRatio: 0.8 });
 export const chatSendFlightLag = 100;
@@ -64,18 +64,22 @@ function startFlight(
   const originalVisibility = target.style.visibility;
   const layer = document.createElement('div');
   layer.dataset.slot = 'chat-send-flight-layer';
+  layer.className = styles.layer!;
   layer.setAttribute('aria-hidden', 'true');
   layer.inert = true;
   const carrier = cloneWithoutChatDebug(target);
   carrier.removeAttribute('id');
   carrier.style.margin = '0';
   carrier.dataset.chatSendFlight = '';
+  carrier.classList.add(styles.carrier!);
   const content = carrier.querySelector<HTMLElement>('[data-slot="message-bubble-content"]')!;
   const targetContent = target.querySelector<HTMLElement>('[data-slot="message-bubble-content"]')!;
   // Final bubble wrapping may need more lines than the wider composer. Clip
   // counter-scaled text to the moving body without clipping the separate tail.
   const contentClip = document.createElement('div');
   contentClip.dataset.slot = 'chat-send-flight-clip';
+  contentClip.className = styles.clip!;
+  content.classList.add(styles.clippedContent!);
   contentClip.append(content);
   carrier.append(contentClip);
   layer.append(carrier);
