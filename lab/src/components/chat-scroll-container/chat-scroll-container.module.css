@@ -1,17 +1,17 @@
 /*
- * Chat list styles, as module classes. `chat-scroll-container.tsx` applies them in JSX; the
- * helpers that create or mark elements at runtime (`chat-insertions.ts`, `chat-item-debug.ts`,
- * `chat-presence.ts`) import this module and add the class themselves.
+ * Chat list styles. Parts that exist only to be styled get module classes:
+ * `chat-scroll-container.tsx` applies them in JSX, and the helpers that create elements at
+ * runtime (`chat-insertions.ts`, `chat-item-debug.ts`, `chat-presence.ts`) import this module
+ * and add the class themselves. Those parts still carry a `data-slot` naming them.
  *
- * The elements keep their data attributes: `data-slot` names each part, and markers such as
- * `data-chat-item`, `data-chat-entrance`, `data-chat-reading-anchor` and
- * `data-chat-debug-anchor` are queried by runtime code and the browser contracts in
- * `scripts/`. No rule here keys on them. Where the runtime toggles a marker, it toggles the
- * matching class with it.
+ * Markers that runtime code and the browser contracts in `scripts/` already query
+ * (`data-chat-item`, `data-chat-entrance`, `data-chat-reading-anchor`,
+ * `data-chat-debug-anchor`) are styled through the attribute itself. A second, class-based
+ * marker would have to be kept in sync with each toggle and each clone.
  */
 
 @layer components {
-  :where(.readingAnchor) {
+  :where([data-chat-reading-anchor]) {
     position: relative;
   }
 
@@ -25,7 +25,7 @@
   }
 
   /* Low specificity preserves positioned carriers, including absolute flight copies. */
-  :where(.debugAnchor) {
+  :where([data-chat-debug-anchor]) {
     position: relative;
   }
 
@@ -67,7 +67,7 @@
     pointer-events: none;
   }
 
-  .entrance {
+  [data-chat-entrance] {
     position: absolute;
     max-width: none;
     margin: 0;
@@ -79,7 +79,7 @@
     gap: 0;
   }
 
-  .item {
+  [data-chat-item] {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
@@ -89,7 +89,7 @@
     overflow: visible;
   }
 
-  .item > * {
+  [data-chat-item] > * {
     flex-shrink: 0;
   }
 }

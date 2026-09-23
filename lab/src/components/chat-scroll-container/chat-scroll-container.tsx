@@ -340,7 +340,6 @@ export function ChatScrollContainer({
                 data-chat-row-id={item.id}
                 data-chat-item=""
                 className={cn(
-                  styles.item,
                   'min-w-0',
                   message && 'max-w-[80%]',
                   align === 'end' ? 'self-end' : align === 'start' ? 'self-start' : 'self-stretch'
@@ -374,7 +373,7 @@ export function ChatScrollContainer({
             <li
               ref={typing.rowRef}
               data-chat-item=""
-              className={cn(styles.item, 'relative self-start')}
+              className="relative self-start"
               data-slot={
                 typing.replacing
                   ? 'typing-replacement'
