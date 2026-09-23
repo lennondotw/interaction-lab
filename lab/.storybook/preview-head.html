@@ -161,3 +161,62 @@
     visibility: hidden;
   }
 </style>
+<style>
+  /*
+   * Keep the story root measurable while Storybook prepares a story
+   * ===============================================================
+   *
+   * What this is for
+   * ----------------
+   * Components that size themselves from a measurement taken when they mount (the
+   * buffered-split studies read their root's width in a layout effect) sometimes mounted
+   * measuring 0 when switching stories: the whole layout committed at 0px and stayed collapsed
+   * until the window was resized. It happened on the first open of a story in a session.
+   *
+   * Why it happened
+   * ---------------
+   * When a story switch starts, Storybook's preview starts a 100ms timer (`PREPARING_DELAY` in
+   * its `WebView`). If the story is still loading when it fires - a lazily loaded story module
+   * usually is, the first time - it puts `<body>` in the preparing mode, which also drops
+   * `sb-show-main`, and its `iframe.html` template then hides everything but the loader:
+   *
+   *   .sb-show-preparing-story:not(.sb-show-main) > :not(.sb-preparing-story) { display: none; }
+   *
+   * The story renders while that is in force and only then does Storybook switch back to
+   * `sb-show-main`. So the story mounts inside a `display: none` root, where every layout read
+   * returns 0. Patching the component to wait for a size (a `ResizeObserver` on the first
+   * non-zero width) was tried and rejected: its layout lands a frame after the root appears, so
+   * one frame still paints at the wrong size. The mount measurement itself has to be right.
+   *
+   * The fix
+   * -------
+   * While preparing, keep the roots in layout and only make them invisible: `display: block`
+   * restores the box that `display: none` removed, `visibility: hidden` keeps it unseen. The
+   * story then mounts at its real size. Nothing shows through early: the preparing loader is
+   * opaque and stacked at the maximum z-index above it, and `visibility` flips back the moment
+   * Storybook adds `sb-show-main`.
+   *
+   * `:not([hidden])` leaves alone a root Storybook has hidden on purpose - the story root in
+   * docs mode, the docs root in story mode - since `display: block` would otherwise override the
+   * `hidden` attribute. The `#id` selectors out-rank Storybook's all-class rule without
+   * `!important`.
+   *
+   * Depends on (checked against storybook 10.6): the `sb-show-preparing-story` /
+   * `sb-show-preparing-docs` / `sb-show-main` body classes, the `#storybook-root` /
+   * `#storybook-docs` ids, and the `display: none` rule above. If an upgrade renames them this
+   * silently stops matching and zero-width mounts come back.
+   *
+   * Not handled: layout classes such as `sb-main-centered` (its padding) are applied together
+   * with `sb-show-main`, so a component measuring at mount during preparing sees the root without
+   * them. The fullscreen-layout stories this was written for are unaffected.
+   *
+   * How to check it: reload the manager on one buffered-split study, then open another one for
+   * the first time. Its left pane must not be 0 wide on any frame, and the root's width must
+   * already be the full preview width when the study's layout effect reads it.
+   */
+  .sb-show-preparing-story:not(.sb-show-main) > #storybook-root:not([hidden]),
+  .sb-show-preparing-docs:not(.sb-show-main) > #storybook-docs:not([hidden]) {
+    display: block;
+    visibility: hidden;
+  }
+</style>
