@@ -22,6 +22,12 @@ import { createElement, useEffect } from 'react';
  * background only reaches the canvas when the root's own background is
  * transparent, which the preview's stylesheet never leaves it.
  *
+ * Why `<body>` is cleared too: once the root has a background, a body
+ * background no longer propagates to the canvas; it paints its own box on top
+ * of the root and hides the override. So every option except `unmodified`
+ * also makes `<body>` transparent. `unmodified` removes the attribute, so a
+ * story's body background is left alone there like everything else.
+ *
  * Why `!important`: the overrides have to beat both the page's own `:root`
  * background (Tailwind's `base` layer) and a story's inline background on
  * `<html>` (see "Stories with their own background" below). An `!important`
@@ -49,7 +55,8 @@ import { createElement, useEffect } from 'react';
  *
  * 1. Paint it on `<html>` - inline, set on mount and removed on unmount - not
  *    on a wrapper element. A wrapper sits above the root and hides whatever
- *    the addon puts there.
+ *    the addon puts there. (`<body>` is the one exception the addon clears
+ *    for you; no other element can be addressed generically.)
  * 2. No `!important`, or it out-ranks the override.
  * 3. Clean up on unmount, so the background does not leak into the next story.
  *
@@ -81,6 +88,11 @@ const STYLESHEET_ID = 'sb-background-overrides';
 const CHECKER_SQUARE = 'light-dark(#d0d0d0, #333)';
 
 const STYLESHEET = `
+  /* Any override: a body background would paint over the root's. See "Why <body> is cleared too". */
+  :root[${ATTRIBUTE}] body {
+    background: transparent !important;
+  }
+
   :root[${ATTRIBUTE}='solid'] {
     background: light-dark(#fff, #000) !important;
   }
