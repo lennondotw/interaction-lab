@@ -14,8 +14,8 @@ interface Drag {
 }
 
 // Bounds keep the chat usable while allowing narrow reflow.
-const initialSize = { width: 560, height: 800 };
-const minimumSize = { width: 320, height: 560 };
+const defaultInitialSize = { width: 560, height: 800 };
+const defaultMinimumSize = { width: 320, height: 560 };
 // Absolute insets start at the inner border edge. Half the 1px stroke places
 // each handle's center on the painted border center, rather than inside it.
 const handles = [
@@ -28,8 +28,24 @@ const handles = [
   { axis: 'both', label: 'Resize window', className: '-right-1 -bottom-1 size-6 cursor-nwse-resize' },
 ] as const;
 
+interface ResizableWindowProps {
+  children: ReactNode;
+  /** Shown in the header. */
+  title?: string;
+  /** Accessible name of the window region. */
+  label?: string;
+  initialSize?: Size;
+  minimumSize?: Size;
+}
+
 /** A stable top-left origin makes pointer deltas equal actual window size changes. */
-export function ResizableWindow({ children }: { children: ReactNode }) {
+export function ResizableWindow({
+  children,
+  title = 'Chat · Resizable window',
+  label: regionLabel = 'Resizable chat window',
+  initialSize = defaultInitialSize,
+  minimumSize = defaultMinimumSize,
+}: ResizableWindowProps) {
   const [size, setSize] = useState<Size>(initialSize);
   const drag = useRef<Drag | null>(null);
 
@@ -64,12 +80,12 @@ export function ResizableWindow({ children }: { children: ReactNode }) {
 
   return (
     <section
-      aria-label="Resizable chat window"
+      aria-label={regionLabel}
       className="relative flex shrink-0 flex-col rounded-xl border border-neutral-500/30"
       style={size}
     >
       <header className="flex h-9 shrink-0 items-center justify-between border-b border-neutral-500/20 px-3 text-xs text-neutral-500 dark:text-neutral-400">
-        <span>Chat · Resizable window</span>
+        <span>{title}</span>
         <span className="font-mono tabular-nums">
           {size.width.toFixed(2)} × {size.height.toFixed(2)}
         </span>
