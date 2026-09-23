@@ -86,7 +86,7 @@ const STYLESHEET = `
 
   /*
    * Removes the page background, nothing more. What shows instead depends on the host, which is
-   * why the toolbar labels it "varies by host":
+   * why the toolbar labels it "varies by host, use with caution":
    * - inside the manager, with matching color-schemes: the manager's own background, through
    *   the (transparent) <iframe> element;
    * - inside the manager with mismatched color-schemes, or opened standalone: the browser's
@@ -143,17 +143,21 @@ export const decorators: Decorator[] = [WithBackground];
 
 export const globalTypes = {
   background: {
-    description: 'Preview background',
+    // Shown as the toolbar button's tooltip. Names the two things a developer needs: what is
+    // replaced (the canvas background) and where (the root element), which is also where a story
+    // must paint a background of its own for these options to override it.
+    description: 'Canvas background (overrides <html>)',
     toolbar: {
       title: 'Background',
       icon: 'photo',
       items: [
-        { value: 'unmodified', title: 'Unmodified', icon: 'paintbrush' },
-        { value: 'solid', title: 'Solid', icon: 'circle' },
-        // `right` is the grey hint shown next to the item in the dropdown; the toolbar button
-        // itself keeps the short title. See the stylesheet comment above for what "varies" means.
-        { value: 'transparent', title: 'Transparent', right: 'varies by host', icon: 'eye' },
-        { value: 'grid', title: 'Grid', icon: 'grid' },
+        // `right` is the grey hint shown next to each item in the dropdown; the toolbar button
+        // itself keeps the short title. Transparent's hint is a warning rather than a description,
+        // see its stylesheet comment above for what varies and why.
+        { value: 'unmodified', title: 'Unmodified', right: 'no override', icon: 'paintbrush' },
+        { value: 'solid', title: 'Solid', right: '#fff / #000', icon: 'circle' },
+        { value: 'transparent', title: 'Transparent', right: 'varies by host, use with caution', icon: 'eye' },
+        { value: 'grid', title: 'Grid', right: 'checkerboard · shows alpha', icon: 'grid' },
       ],
       dynamicTitle: true,
     },

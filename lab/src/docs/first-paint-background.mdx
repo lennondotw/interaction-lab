@@ -51,10 +51,10 @@ Each surface, what paints it, and the level it reaches:
   draws it in a fixed light palette. It takes whatever level the backdrop behind it has.
 - **The Background toolbar addon** — `@monorepo/storybook-addons/background`. `Unmodified`
   leaves the page alone, which is level 1; the other options are explicit choices rather than
-  first paint. `Transparent` is labelled "varies by host": it only removes the page background,
-  and what shows instead is the manager's background inside the manager, or the browser's
-  `Canvas` colour standalone and on a `color-scheme` mismatch. To check a component's own
-  transparency, use `Grid`.
+  first paint. `Transparent` is labelled "varies by host, use with caution": it only removes the
+  page background, and what shows instead is the manager's background inside the manager, or the
+  browser's `Canvas` colour standalone and on a `color-scheme` mismatch. To check a component's
+  own transparency, use `Grid`.
 
 The one known gap: when the toolbar forces a theme opposite to the system's, the first frames
 follow the system until the theme decorator sets `data-theme`. That is level 2, and it is
