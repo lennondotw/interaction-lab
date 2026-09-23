@@ -27,3 +27,136 @@
     console.warn('unable to reset the React DevTools hook placeholder', e);
   }
 </script>
+<style>
+  /*
+   * First-paint colors for the preview iframe
+   * =========================================
+   *
+   * What this block is for
+   * ----------------------
+   * Opening a story (or `iframe.html` directly) flashed white before the story appeared, even
+   * with the system and the toolbar both set to dark. There were two separate white flashes;
+   * rules 1 and 2 each remove one, and rule 3 hides the placeholder cards that the docs-page
+   * variant of the loader draws. Nothing here affects a story once it has rendered.
+   *
+   * The rule these follow - real background on the first frame, else the system appearance,
+   * never a hard-coded white - is written up in `src/docs/first-paint-background.mdx`
+   * (Storybook: Documentation / First-paint background).
+   *
+   * Why it lives in the preview head
+   * --------------------------------
+   * Storybook copies this file verbatim into the `<head>` of `iframe.html`, after its own inline
+   * styles. It is plain HTML, so it applies from the very first frame; everything else in the
+   * preview (`global.css`, the theme decorator in `preview.tsx`) only runs once the JavaScript
+   * bundle has loaded and executed.
+   *
+   * Load timeline without this block (dev server, system dark, toolbar "Always Dark"):
+   *
+   *   0-180 ms    HTML parsed, no project CSS yet       -> flash 1: white canvas
+   *   ~180 ms     global.css injected by JS             -> dark
+   *   190-280 ms  Storybook's "preparing" loader shows  -> flash 2: white overlay
+   *   ~280 ms     story rendered, data-theme set        -> dark
+   *
+   * Keep in sync with
+   * -----------------
+   * - Rules 1 and 2 use Tailwind's neutral-50 / neutral-950, the same values `global.css` (via
+   *   `@monorepo/tailwindcss`) puts on `:root` for light and dark. If that page background
+   *   changes, change both `light-dark()` calls, or the first frames will not match the page
+   *   they hand over to.
+   * - Rule 2 targets Storybook internals: the `.sb-preparing-story` / `.sb-preparing-docs`
+   *   elements and the unlayered `background-color: white` rule that Storybook's `iframe.html`
+   *   template ships for them (checked against storybook 10.6). If a Storybook upgrade renames
+   *   those classes the rule silently stops matching and the second flash comes back. Rule 3
+   *   depends only on `.sb-preparing-docs` too, never on the skeleton's own classes or colors.
+   *
+   * Deliberately not handled
+   * ------------------------
+   * - The toolbar's theme global is not readable here. When it forces a theme opposite to the
+   *   system's, the first frames follow the system until the theme decorator sets `data-theme`.
+   *   Fixing that would take a blocking script that parses the URL / storage before first paint,
+   *   which is not worth it for a few hundred milliseconds.
+   * - Docs pages show no loading indicator: rule 3 hides the whole skeleton, and the spinner
+   *   lives inside its preview card. The loader is up for ~150 ms, so a plain backdrop for that
+   *   long is fine. Story pages keep their spinner; rule 3 does not touch `.sb-preparing-story`.
+   *
+   * How to check it still works
+   * ---------------------------
+   * Load `iframe.html?id=<story>&globals=theme:dark` with the system in dark mode and sample
+   * `getComputedStyle(document.documentElement).backgroundColor` plus the loader's background on
+   * every animation frame: both should be neutral-950 from the first frame on. Deleting this
+   * block brings back white in both windows of the timeline above.
+   */
+
+  /*
+   * Rule 1 - the canvas before `global.css` arrives (flash 1).
+   *
+   * Until the project CSS is injected, `<html>` has no background and `color-scheme: normal`.
+   * With no background on the root element, the browser paints the canvas with the system
+   * `Canvas` color of the page's used color scheme, and `normal` with no
+   * `<meta name="color-scheme">` resolves to light - so the canvas is white regardless of the
+   * system setting.
+   *
+   * `color-scheme: light dark` lets the used scheme follow the system preference, and
+   * `light-dark()` picks the matching page color from it. (`light-dark()` reads the element's
+   * used color scheme, not the `prefers-color-scheme` media query; the two agree here only
+   * because the scheme is `light dark`.)
+   *
+   * The rule sits in `@layer preview-boot`. Because this is the first layer the document
+   * declares, it is the lowest-priority one, so Tailwind's `base`-layer rules on `:root` override
+   * it as soon as `global.css` loads - including the `color-scheme` and background they derive
+   * from `data-theme`, which is what makes "Always Light" / "Always Dark" work. Left unlayered,
+   * this rule would outrank every layered rule and pin the preview to the system theme forever.
+   */
+  @layer preview-boot {
+    :root {
+      color-scheme: light dark;
+      background-color: light-dark(oklch(98.5% 0 none), oklch(14.5% 0 none));
+    }
+  }
+
+  /*
+   * Rule 2 - Storybook's "preparing" loader (flash 2).
+   *
+   * While Storybook prepares a story (or a docs page) it adds `sb-show-preparing-story` /
+   * `sb-show-preparing-docs` to `<body>` and shows `.sb-preparing-story` / `.sb-preparing-docs`:
+   * a full-size overlay with a spinner, stacked above the story at the maximum z-index. Its
+   * stylesheet paints that overlay `white`, so on a dark page it is a white flash of its own,
+   * after the canvas has already turned dark.
+   *
+   * Here it gets the page color instead. It stays opaque on purpose: the story is already
+   * rendering underneath while the overlay is up, and hiding that half-drawn frame is the
+   * overlay's whole job. The spinner uses `mix-blend-mode: difference`, so it stays visible on
+   * either color.
+   *
+   * This rule must stay unlayered: Storybook's rule is unlayered, and any layered rule loses to
+   * an unlayered one. With equal specificity it wins on source order, because the preview head is
+   * emitted after Storybook's own styles. `light-dark()` resolves against the root's
+   * `color-scheme`, so once `global.css` has loaded the overlay follows `data-theme` too.
+   */
+  .sb-preparing-story,
+  .sb-preparing-docs {
+    background-color: light-dark(oklch(98.5% 0 none), oklch(14.5% 0 none));
+  }
+
+  /*
+   * Rule 3 - the docs-page skeleton inside that loader.
+   *
+   * On a docs page the loader (`.sb-preparing-docs`) is not just a backdrop: it draws a mock of
+   * the page to come - a preview card and an args table - with its own hard-coded light palette
+   * (`#fff` card and cell backgrounds, `#e6e6e6` dots and separators, black-alpha placeholder
+   * bars). After rule 2 darkened the backdrop, a dark docs load still flashed white cards for
+   * ~150 ms.
+   *
+   * The skeleton is hidden rather than recolored. Recoloring meant copying Storybook's skeleton
+   * palette and the docs theme's card colors into this file and following both through every
+   * upgrade; hiding depends on nothing but the `.sb-preparing-docs` class rule 2 already relies
+   * on. What remains visible while a docs page loads is rule 2's page-colored backdrop.
+   *
+   * `visibility` rather than `display`: the skeleton keeps its layout, so nothing about the
+   * loader's own box changes, and Storybook still toggles the loader exactly as before.
+   * Storybook sets no `visibility` on these children, so there is nothing to out-rank here.
+   */
+  .sb-preparing-docs > * {
+    visibility: hidden;
+  }
+</style>
