@@ -71,8 +71,9 @@ pnpm lint              # syntax only, instant
 pnpm lint:type-aware   # adds the tsgolint semantic rules
 pnpm format            # oxfmt --write
 pnpm format:check
-pnpm tsc:build:packages
-pnpm test:packages
+pnpm typecheck         # tsgo --build over the whole solution; also emits package dist
+pnpm test
+pnpm dev               # Storybook; workspace packages load from source via the `development` export condition
 ```
 
 ### What the move to oxc gave up

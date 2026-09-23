@@ -5,20 +5,20 @@
   "type": "module",
   "exports": {
     "./background": {
+      "development": "./src/background/index.ts",
       "import": "./dist/background/index.js",
       "default": null
     },
     "./theme": {
+      "development": "./src/theme/index.ts",
       "import": "./dist/theme/index.js",
       "default": null
     }
   },
   "scripts": {
-    "build": "pnpm run tsc:build",
-    "tsc:build": "tsgo --build tsconfig.json",
-    "tsc:build:clean": "tsgo --build tsconfig.json --clean",
-    "tsc:build:upstream": "pnpm --filter '{.}...' --workspace-concurrency=-2 run tsc:build",
-    "tsc:build:watch": "tsgo --build tsconfig.json --watch"
+    "build": "tsgo --build",
+    "clean": "tsgo --build --clean",
+    "dev": "tsgo --build --watch"
   },
   "devDependencies": {
     "@monorepo/tsconfig": "workspace:^",
