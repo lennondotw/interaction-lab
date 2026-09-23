@@ -1,7 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { useLayoutEffect, useRef, type ComponentPropsWithoutRef } from 'react';
 
-import './message-input.css';
+import styles from './message-input.module.css';
 
 export type MessageInputProps = ComponentPropsWithoutRef<'textarea'>;
 
@@ -59,11 +59,12 @@ export function MessageInput({ className, value, defaultValue, onInput, ...props
           onInput?.(event);
         }}
         data-slot="message-input-field"
+        className={styles.field}
       />
       <span
         aria-hidden="true"
         data-slot="message-input-border"
-        className="pointer-events-none absolute inset-0 rounded-[inherit]"
+        className={cn(styles.border, 'pointer-events-none absolute inset-0 rounded-[inherit]')}
       />
     </span>
   );

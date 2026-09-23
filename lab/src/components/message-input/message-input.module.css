@@ -1,7 +1,13 @@
 @reference "../../../../packages/tailwindcss/tailwindcss.css";
 
+/*
+ * Composer styles, as module classes applied by `message-input.tsx`. Its parts keep their
+ * `data-slot` names; no rule here keys on them. The rules stay in the `components` layer so
+ * utilities on the elements win.
+ */
+
 @layer components {
-  [data-slot='message-input-field'] {
+  .field {
     /* 17px line + 9px on each side = a 35px single-line composer by design.
        Independent of the message bubble's 33px body; sending measures both boxes. */
     position: relative;
@@ -36,7 +42,7 @@
     }
   }
 
-  [data-slot='message-input-border'] {
+  .border {
     /* Paint inside the pill so the 1px stroke does not add to its height. */
     box-shadow: inset 0 0 0 1px rgb(0 0 0 / 18%);
 
