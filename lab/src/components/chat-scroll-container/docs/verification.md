@@ -32,6 +32,14 @@ The [behavior contracts](./behavior-contracts.md) identify the intended outcomes
 protect. Synthetic events exercise controller branches; real browser interactions and frame samples
 cover the composed stories. Neither alone reproduces every native trackpad gesture.
 
+Handoff precedes spring rest. A flight releases its copy within one CSS pixel of the real row, and
+layout slots finish on their own clocks, while the 15/1 catch-up spring may still be settling a
+sub-pixel tail, visibly so at 0.1x playback. Checks that read an end state therefore wait until the
+reported state is no longer `animating` (or the viewport is within 1px of its bottom), rather than
+treating flight or layout completion as the end of scrolling. Flight/scroll ordering is asserted as a
+contract, not as a frame race: the last flying frame is still away from the bottom, so the slower
+catch-up remains the final handoff gate.
+
 ## Geometry and flight
 
 [Flight checks](../../../../../scripts/test-chat-send-flight.mjs) sample short, bulleted, and long text

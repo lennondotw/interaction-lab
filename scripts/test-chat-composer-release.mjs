@@ -105,10 +105,13 @@ try {
       assert.ok(interrupted.space - interrupted.composer - 12 > 10, 'Interruption retains the layout footprint');
       assert.equal(interrupted.flying, 0, 'Upward input hands off flight immediately');
     }
+    // Flight hands off within one CSS pixel; the 15/1 catch-up spring may still be
+    // settling its sub-pixel tail afterwards, especially at 0.1x. Wait for that too.
     await page.waitForFunction(() => {
       const viewport = document.querySelector('[data-slot="chat-scroll-viewport"]');
       return (
         !document.querySelector('[data-chat-send-flight], [data-chat-inserting], [data-chat-entrance]') &&
+        document.querySelector('#storybook-root strong')?.textContent !== 'animating' &&
         Math.abs(
           viewport.querySelector('[data-slot="chat-bottom-space"]').getBoundingClientRect().height -
             document.querySelector('form').getBoundingClientRect().height -
