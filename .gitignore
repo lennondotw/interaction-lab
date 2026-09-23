@@ -34,6 +34,7 @@ next-env.d.ts
 
 # Workspace temp files
 workspace-tmp/
+/tmp/
 
 # TypeScript
 *.tsbuildinfo
