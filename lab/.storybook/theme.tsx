@@ -22,8 +22,8 @@ const themeConfig: Omit<ThemeVarsPartial, 'base'> = {
    * manager theme (the system appearance) rather than flashing white. As a side effect, the
    * background addon's "Transparent" option shows the manager's background here, as long as the
    * preview's `color-scheme` matches the element's; on a mismatch the browser paints an opaque
-   * `Canvas` backdrop inside the iframe regardless. That option is labelled "varies by host"
-   * for exactly this reason.
+   * `Canvas` backdrop inside the iframe regardless. That option is labelled "varies by host, use
+   * with caution" for exactly this reason.
    *
    * Known and accepted: the manager theme follows the system only, so when the toolbar forces
    * a preview theme opposite to the system's, the overscroll gap shows the opposite color.
