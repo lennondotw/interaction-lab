@@ -65,6 +65,9 @@ try {
       await page.evaluate(async (count) => {
         const { createChatInsertions } = await import('/src/components/chat-scroll-container/chat-insertions.ts');
         const { finalChatBottom } = await import('/src/components/chat-scroll-container/chat-layout.ts');
+        // Rows take their gap padding and flex layout from the production list styles.
+        const { default: styles } =
+          await import('/src/components/chat-scroll-container/chat-scroll-container.module.css');
         const host = document.createElement('section');
         host.style.cssText = 'position:fixed;inset:0;background:white;z-index:99999;';
         const viewport = document.createElement('div');
@@ -75,6 +78,7 @@ try {
         const makeRow = (id, gap = 3) => {
           const row = document.createElement('li');
           row.dataset.chatItem = '';
+          row.className = styles.item;
           row.style.setProperty('--chat-item-gap', `${gap}px`);
           const body = document.createElement('div');
           body.dataset.chatItemId = String(id);

@@ -1,5 +1,7 @@
 import { cancelFrame, frame } from 'motion/react';
 
+import styles from './chat-scroll-container.module.css';
+
 interface Visual {
   element: HTMLElement;
   phase: () => string;
@@ -10,13 +12,18 @@ interface Visual {
 const visuals = new WeakMap<HTMLElement, Map<HTMLElement, Visual>>();
 const listeners = new WeakMap<HTMLElement, () => void>();
 
+/** The attribute is the query hook; the class carries the positioning style. */
+function markDebugAnchor(element: Element, marked: boolean) {
+  element.toggleAttribute('data-chat-debug-anchor', marked);
+  element.classList.toggle(styles.debugAnchor!, marked);
+}
+
 /** Clones inherit content, never instrumentation belonging to the source visual. */
 export function cloneWithoutChatDebug(source: HTMLElement) {
   const clone = source.cloneNode(true) as HTMLElement;
   for (const badge of clone.querySelectorAll('[data-slot="chat-item-debug"]')) badge.remove();
-  clone.removeAttribute('data-chat-debug-anchor');
-  for (const anchor of clone.querySelectorAll('[data-chat-debug-anchor]'))
-    anchor.removeAttribute('data-chat-debug-anchor');
+  markDebugAnchor(clone, false);
+  for (const anchor of clone.querySelectorAll('[data-chat-debug-anchor]')) markDebugAnchor(anchor, false);
   return clone;
 }
 
@@ -83,7 +90,7 @@ export function createChatItemDebug(viewport: HTMLElement, content: HTMLElement)
   function removeBadge(source: HTMLElement) {
     const badge = badges.get(source);
     if (!badge) return;
-    badge.parentElement?.removeAttribute('data-chat-debug-anchor');
+    if (badge.parentElement) markDebugAnchor(badge.parentElement, false);
     badge.remove();
     badges.delete(source);
   }
@@ -117,18 +124,20 @@ export function createChatItemDebug(viewport: HTMLElement, content: HTMLElement)
       if (!badge) {
         badge = document.createElement('span');
         badge.dataset.slot = 'chat-item-debug';
+        badge.className = styles.debug!;
         badge.setAttribute('aria-hidden', 'true');
         badge.inert = true;
         badges.set(source, badge);
       }
       if (badge.parentElement !== anchor) {
-        badge.parentElement?.removeAttribute('data-chat-debug-anchor');
-        anchor.setAttribute('data-chat-debug-anchor', '');
+        if (badge.parentElement) markDebugAnchor(badge.parentElement, false);
+        markDebugAnchor(anchor, true);
         anchor.append(badge);
       }
       const text = `${source.dataset.chatItemId ?? 'typing'} · ${kind}\n${phase} · layout: ${layout ? 'animating' : 'idle'}`;
       if (badge.textContent !== text) badge.textContent = text;
-      badge.dataset.side = kind === 'content' ? 'inside-right' : kind === 'outgoing' ? 'left' : 'right';
+      badge.classList.toggle(styles.debugInsideRight!, kind === 'content');
+      badge.classList.toggle(styles.debugLeft!, kind === 'outgoing');
     }
   };
   listeners.set(viewport, paint);

@@ -5,6 +5,8 @@ import { readChatItemGap } from './chat-items.js';
 import { registerChatLayout, type ChatLayoutEntry } from './chat-layout.js';
 import { chatLayoutSpring } from './chat-presence.js';
 
+import styles from './chat-scroll-container.module.css';
+
 interface Measurement {
   row: HTMLElement;
   body: HTMLElement;
@@ -43,10 +45,13 @@ export function createChatInsertions(
 
   function showAnchor(element?: HTMLElement) {
     if (!anchorOverlay || anchorOverlay.parentElement === element) return;
-    anchorOverlay.parentElement?.removeAttribute('data-chat-reading-anchor');
+    const previous = anchorOverlay.parentElement;
+    previous?.removeAttribute('data-chat-reading-anchor');
+    previous?.classList.remove(styles.readingAnchor!);
     anchorOverlay.remove();
     if (element) {
       element.setAttribute('data-chat-reading-anchor', '');
+      element.classList.add(styles.readingAnchor!);
       element.append(anchorOverlay);
     }
   }
@@ -332,6 +337,7 @@ export function createChatInsertions(
       if (enabled && !anchorOverlay) {
         anchorOverlay = document.createElement('span');
         anchorOverlay.dataset.slot = 'chat-reading-anchor-overlay';
+        anchorOverlay.className = styles.readingAnchorOverlay!;
         anchorOverlay.setAttribute('aria-hidden', 'true');
         // Show the manager's saved selection, without an independent geometry scan.
         showAnchor(anchors.saved()?.element);

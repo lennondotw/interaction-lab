@@ -15,7 +15,7 @@ Completion removes temporary height, width, and gap overrides so normal flow own
 ## Evidence
 
 - Implementation: [slot measurement, painting, and restoration](../chat-insertions.ts).
-- Related implementation: [slot styling](../chat-scroll-container.css) and [pending geometry](../../scroll-anchor/pending-layout.ts).
+- Related implementation: [slot styling](../chat-scroll-container.module.css) and [pending geometry](../../scroll-anchor/pending-layout.ts).
 - History: [8a1e0aa](https://github.com/lennondotw/interaction-lab/commit/8a1e0aa); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#layout-and-typing).
 

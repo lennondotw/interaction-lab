@@ -12,7 +12,7 @@ Flight text has an additional body-shaped clip: final-width wrapping can produce
 
 ## Evidence
 
-- Implementation: [slot and entrance-layer styles](../chat-scroll-container.css).
+- Implementation: [slot and entrance-layer styles](../chat-scroll-container.module.css).
 - Related implementation: [flight-layer styles](../../chat-send-flight/chat-send-flight.css) and [entrance-copy lifecycle](../chat-presence.ts).
 - History: [8a1e0aa](https://github.com/lennondotw/interaction-lab/commit/8a1e0aa); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#geometry-and-flight).

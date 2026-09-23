@@ -30,7 +30,7 @@ import { ChatDateLabel, ChatStatusLabel } from './chat-list-labels.js';
 import { animateChatEntrance } from './chat-presence.js';
 import { useTypingExit } from './use-typing-exit.js';
 
-import './chat-scroll-container.css';
+import styles from './chat-scroll-container.module.css';
 
 export type ChatScrollState = ScrollAnchorState;
 
@@ -315,7 +315,12 @@ export function ChatScrollContainer({
             this surface; their hidden measurement anchors must not extend it. */}
         <ol
           ref={contentRef}
-          className={cn('m-0 flex list-none flex-col overflow-clip p-5', bottomSpace && 'pb-0', contentClassName)}
+          className={cn(
+            styles.list,
+            'm-0 flex list-none flex-col overflow-clip p-5',
+            bottomSpace && 'pb-0',
+            contentClassName
+          )}
         >
           {items.map((item, index) => {
             const message = isChatMessage(item);
@@ -335,6 +340,7 @@ export function ChatScrollContainer({
                 data-chat-row-id={item.id}
                 data-chat-item=""
                 className={cn(
+                  styles.item,
                   'min-w-0',
                   message && 'max-w-[80%]',
                   align === 'end' ? 'self-end' : align === 'start' ? 'self-start' : 'self-stretch'
@@ -368,7 +374,7 @@ export function ChatScrollContainer({
             <li
               ref={typing.rowRef}
               data-chat-item=""
-              className="relative self-start"
+              className={cn(styles.item, 'relative self-start')}
               data-slot={
                 typing.replacing
                   ? 'typing-replacement'
