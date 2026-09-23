@@ -24,8 +24,18 @@
 
 import { cn } from '@monorepo/utils';
 import { useIntervalEffect } from '@react-hookz/web';
-import { useAnimationFrame } from 'motion/react';
-import { useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
+import { cancelFrame, frame } from 'motion/react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FC,
+  type ReactNode,
+} from 'react';
 
 import { Button } from '#src/components/button/button.js';
 import {
@@ -261,30 +271,35 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
    *
    * Written straight to the elements rather than through state: a React render per frame
    * would be a cost the tracer is being blamed for.
+   *
+   * Autoplay owns only the inline `gap` and child `width`; React owns only `--row-gap`,
+   * which the row's class reads. Removing the inline properties therefore falls back to
+   * the controls' values, and no code has to know them. The loop lives and dies with this
+   * layout effect, so stopping cancels it and hands layout back in one step, before paint.
    */
-  useAnimationFrame((time) => {
+  useLayoutEffect(() => {
     if (!autoplay) return;
-    const row = rowRef.current;
-    if (!row) return;
-    row.style.gap = `${(6 + 26 * (0.5 + 0.5 * Math.sin(time / 900))).toFixed(1)}px`;
-    for (let index = 0; index < row.children.length; index++) {
-      const child = row.children[index];
-      if (!(child instanceof HTMLElement)) continue;
-      child.style.width = `${(70 + 46 * (0.5 + 0.5 * Math.sin(time / 700 + index))).toFixed(1)}px`;
-    }
-  });
-
-  // Hand layout back to the controls when autoplay stops, or the last animated frame
-  // would stick and the `Gap` control would look broken.
-  useEffect(() => {
-    if (autoplay) return;
-    const row = rowRef.current;
-    if (!row) return;
-    row.style.removeProperty('gap');
-    for (const child of row.children) {
-      if (child instanceof HTMLElement) child.style.removeProperty('width');
-    }
-  }, [autoplay, count, pill]);
+    const row = rowRef.current!;
+    let start: number | undefined;
+    const tick = ({ timestamp }: { timestamp: number }) => {
+      start ??= timestamp;
+      const time = timestamp - start;
+      row.style.gap = `${(6 + 26 * (0.5 + 0.5 * Math.sin(time / 900))).toFixed(1)}px`;
+      for (let index = 0; index < row.children.length; index++) {
+        const child = row.children[index];
+        if (!(child instanceof HTMLElement)) continue;
+        child.style.width = `${(70 + 46 * (0.5 + 0.5 * Math.sin(time / 700 + index))).toFixed(1)}px`;
+      }
+    };
+    frame.update(tick, true);
+    return () => {
+      cancelFrame(tick);
+      row.style.removeProperty('gap');
+      for (const child of row.children) {
+        if (child instanceof HTMLElement) child.style.removeProperty('width');
+      }
+    };
+  }, [autoplay]);
 
   useIntervalEffect(() => {
     const last = lastRef.current;
@@ -354,8 +369,8 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
             <div
               ref={rowRef}
               data-testid="rect-region"
-              className={cn('flex w-full flex-row items-center justify-center py-10')}
-              style={{ gap }}
+              className="flex w-full flex-row items-center justify-center gap-(--row-gap) py-10"
+              style={{ '--row-gap': `${gap}px` } as CSSProperties}
             >
               {Array.from({ length: count }, (_, index) => (
                 <Rect
