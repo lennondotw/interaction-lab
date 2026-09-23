@@ -294,8 +294,8 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
           </p>
           <p>
             Positions come from the core, not the DOM, so the {layout === 'flow' ? 'flow' : 'absolute'} layout only has
-            to match the core. The state panel shows the residual: where the anchor row&apos;s element is minus where
-            the core says it is. It should stay at zero in both layouts.
+            to match the core. The state panel shows the DOM residual: where the anchor row&apos;s element is minus
+            where the core says it is. It should stay at zero in both layouts.
           </p>
         </section>
       ) : (
@@ -452,10 +452,9 @@ const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mounted
     const panel = panelRef.current!;
     const field = (name: string) => panel.querySelector<HTMLElement>(`[data-field="${name}"]`)!;
     const outputs = new Map(
-      [...stateFields.map(([name]) => name), 'viewport', 'minimap', 'anchor', 'change', 'residual'].map((name) => [
-        name,
-        field(name),
-      ])
+      [...stateFields.map(([name]) => name), 'viewport', 'minimap', 'anchor', 'change', 'residual', 'scroll'].map(
+        (name) => [name, field(name)]
+      )
     );
     const write = (name: string, value: string) => {
       const output = outputs.get(name)!;
@@ -488,18 +487,23 @@ const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mounted
           ? `${anchor ? `${anchor.key}, ${signedPx(anchor.fromLine)} from the line` : '—'} at ratio ${model.anchoring.ratio} (${layout} layout)`
           : `off (${layout} layout)`
       );
-      const last = model.lastAnchor;
+      const last = model.lastChange;
       write(
         'change',
         last ? `${last.reason}: ${last.key ? `held ${last.key}, ` : ''}scrolled ${signedPx(last.delta)}` : '—'
       );
       write(
         'residual',
-        `${last && last.residual !== null ? signedPx(last.residual) : '—'}, largest ${signedPx(model.maxResidual)}`
+        `${last && last.domResidual !== null ? signedPx(last.domResidual) : '—'}, largest ${signedPx(model.maxDomResidual)}`
+      );
+      const { scrollTop, quantization } = model.presentation;
+      write(
+        'scroll',
+        `scrollTop ${formatPx(scrollTop)}, quantization ${signedPx(quantization)}, largest ${signedPx(model.maxQuantization)}`
       );
       write(
         'viewport',
-        `${viewport ? `${formatPx(viewport.offset)} + ${formatPx(viewport.size)}` : '—'}, scrolling ${model.scroll.direction}`
+        `${viewport ? `reading offset ${formatPx(viewport.offset)}, size ${formatPx(viewport.size)}` : '—'}, scrolling ${model.scroll.direction}`
       );
     });
   }, [model, layout, mountedCount]);
@@ -531,6 +535,9 @@ const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mounted
       </span>
       <span className="tabular-nums">
         DOM residual: <span data-field="residual" />
+      </span>
+      <span className="tabular-nums">
+        Presentation: <span data-field="scroll" />
       </span>
       <ul className="flex flex-row flex-wrap gap-x-3 gap-y-1 text-neutral-500">
         <LegendItem className="bg-neutral-500/40">Measured</LegendItem>

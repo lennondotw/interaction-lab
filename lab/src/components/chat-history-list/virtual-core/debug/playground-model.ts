@@ -30,19 +30,19 @@ export function nextScrollDirection(state: ScrollDirection, offset: number): Scr
 /** How the playground places mounted rows. */
 export type PlaygroundLayout = 'flow' | 'absolute';
 
-/** What the last layout change did to the reading position, for the state panel. */
-export interface AnchorStatus {
+/** What the last layout change did to the reading offset, for the state panel. */
+export interface ChangeLog {
   /** The change that ran, such as `prepend` or `row size`. */
   reason: string;
   /** The row held still, or null when anchoring was off or no candidate survived. */
   key: string | null;
-  /** How far the scroll position moved to hold it. */
+  /** How far the reading offset moved. Logged only: never added to anything. */
   delta: number;
   /**
-   * Where the anchor row's element actually is minus where the core puts it, after the
-   * correction was written. Non-zero means the DOM and the core disagree about the layout.
+   * Where the anchor row's element is minus where the core puts it, in content coordinates.
+   * Zero while the DOM layout equals the core's; null when the anchor row is not mounted.
    */
-  residual: number | null;
+  domResidual: number | null;
 }
 
 /** Height of a pulsing row's striped block at rest, in pixels. */
@@ -96,9 +96,16 @@ export class PlaygroundModel {
   minimap: { view: MinimapView; height: number } = { view: initialMinimapView, height: 0 };
   /** Anchoring settings from the story; the driver reads them at every change. */
   anchoring: { enabled: boolean; ratio: number } = { enabled: true, ratio: 0 };
-  lastAnchor: AnchorStatus | null = null;
-  /** Largest residual seen since mount, by magnitude. */
-  maxResidual = 0;
+  lastChange: ChangeLog | null = null;
+  /** Largest DOM residual seen since mount, by magnitude. */
+  maxDomResidual = 0;
+  /**
+   * The scroller's `scrollTop` and its quantization error: `scrollTop` minus the reading offset,
+   * which is the core's viewport offset. Presentation only; never read back into the offset.
+   */
+  presentation = { scrollTop: 0, quantization: 0 };
+  /** Largest quantization error seen since mount, by magnitude. */
+  maxQuantization = 0;
   private readonly painters = new Set<() => void>();
   private readonly viewportListeners = new Set<(viewport: VirtualViewport) => void>();
   private frame = 0;
