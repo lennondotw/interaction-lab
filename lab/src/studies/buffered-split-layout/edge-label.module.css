@@ -1,8 +1,11 @@
 /*
- * A labelled frame whose label cuts a gap in the frame line. Opt in with the
- * `data-edge-label-frame` attribute; like the lab's other hand-written CSS, it keys on a data
- * attribute rather than a class so it does not read as an unknown Tailwind utility, and sits in
- * the `components` layer so the element's `after:` utilities (colour, line style) win over it.
+ * A labelled frame whose label cuts a gap in the frame line. Opt in with the `frame` class
+ * from this module - `edgeLabel()` in `edge-label.ts` hands it out as `frameClassName`. It is a
+ * CSS Module, the direction the lab's hand-written CSS is moving in (the older files still key
+ * on data attributes): the class name is scoped and hashed, and because it reaches `className`
+ * as an expression rather than a string literal, the Tailwind lint does not flag it as an
+ * unknown utility. The rule sits in the `components` layer so the element's `after:` utilities
+ * (colour, line style) win over it.
  *
  * The frames in these studies carry a small label sitting on their top edge. The label used
  * to hide the line behind it with a background of the page colour, which only worked on a
@@ -37,7 +40,7 @@
  */
 
 @layer components {
-  [data-edge-label-frame]::after {
+  .frame::after {
     --edge-label-gap: calc(var(--label-ch, 0) * 1ch + 8px);
 
     content: '';

@@ -666,11 +666,13 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
       <section
         data-demo-left-live
         style={{ ...leftLiveStyle, ...LABEL_LEFT_LIVE.frameStyle }}
-        data-edge-label-frame
-        className={`
-          absolute inset-y-4 left-3 z-10 after:border-slate-300 contain-[layout]
-          dark:after:border-neutral-700
-        `}
+        className={cn(
+          LABEL_LEFT_LIVE.frameClassName,
+          `
+            absolute inset-y-4 left-3 z-10 after:border-slate-300 contain-[layout]
+            dark:after:border-neutral-700
+          `
+        )}
       >
         <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_LIVE.text}</span>
         <div data-demo-left-blur-surface style={leftBlurSurfaceStyle}>
@@ -679,24 +681,28 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
               <div
                 data-demo-left-content-layer
                 style={LABEL_LEFT_CONTENT_LAYER.frameStyle}
-                data-edge-label-frame
-                className={`
-                  absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2
-                  after:border-sky-300 contain-[layout] after:border-dashed
-                  dark:after:border-sky-400/60
-                `}
+                className={cn(
+                  LABEL_LEFT_CONTENT_LAYER.frameClassName,
+                  `
+                    absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2
+                    after:border-sky-300 contain-[layout] after:border-dashed
+                    dark:after:border-sky-400/60
+                  `
+                )}
               >
                 <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_CONTENT_LAYER.text}</span>
                 <div data-demo-left-content-layer-scroll className="absolute inset-0 overflow-y-auto">
                   <div
                     data-demo-left-content
                     style={LABEL_LEFT_REAL_CONTENT.frameStyle}
-                    data-edge-label-frame
-                    className={`
-                      relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
-                      -translate-x-1/2 after:border-sky-300 after:border-dashed
-                      dark:after:border-sky-400/60
-                    `}
+                    className={cn(
+                      LABEL_LEFT_REAL_CONTENT.frameClassName,
+                      `
+                        relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
+                        -translate-x-1/2 after:border-sky-300 after:border-dashed
+                        dark:after:border-sky-400/60
+                      `
+                    )}
                   >
                     <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_REAL_CONTENT.text}</span>
                     <div className="p-4 pt-8 text-center">
@@ -739,8 +745,8 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
       <section
         data-demo-right-live
         style={{ ...rightLiveStyle, ...LABEL_RIGHT_LIVE.frameStyle }}
-        data-edge-label-frame
         className={cn(
+          LABEL_RIGHT_LIVE.frameClassName,
           `
             absolute inset-y-4 z-10 after:border-slate-300 contain-[layout]
             dark:after:border-neutral-700
@@ -755,24 +761,28 @@ export const BufferedSplitLayoutBlurCommitDemo: FC<BufferedSplitLayoutBlurCommit
               <div
                 data-demo-right-content-layer
                 style={LABEL_RIGHT_CONTENT_LAYER.frameStyle}
-                data-edge-label-frame
-                className={`
-                  absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2
-                  after:border-emerald-300 contain-[layout] after:border-dashed
-                  dark:after:border-emerald-400/60
-                `}
+                className={cn(
+                  LABEL_RIGHT_CONTENT_LAYER.frameClassName,
+                  `
+                    absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2
+                    after:border-emerald-300 contain-[layout] after:border-dashed
+                    dark:after:border-emerald-400/60
+                  `
+                )}
               >
                 <span className={EDGE_LABEL_CLASS}>{LABEL_RIGHT_CONTENT_LAYER.text}</span>
                 <div data-demo-right-content-layer-scroll className="absolute inset-0 overflow-y-auto">
                   <div
                     data-demo-right-content
                     style={LABEL_RIGHT_REAL_CONTENT.frameStyle}
-                    data-edge-label-frame
-                    className={`
-                      relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
-                      -translate-x-1/2 after:border-emerald-300 after:border-dashed
-                      dark:after:border-emerald-400/60
-                    `}
+                    className={cn(
+                      LABEL_RIGHT_REAL_CONTENT.frameClassName,
+                      `
+                        relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
+                        -translate-x-1/2 after:border-emerald-300 after:border-dashed
+                        dark:after:border-emerald-400/60
+                      `
+                    )}
                   >
                     <span className={EDGE_LABEL_CLASS}>{LABEL_RIGHT_REAL_CONTENT.text}</span>
                     <div className="p-4 pt-8 text-center">

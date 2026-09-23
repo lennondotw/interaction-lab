@@ -839,13 +839,15 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
 
       <section
         data-demo-left-live
-        data-edge-label-frame
         style={LABEL_LEFT_LIVE.frameStyle}
-        className={`
-          absolute inset-y-4 left-3 z-10 w-[max(0px,calc(var(--split-leading-live-width)-20px))]
-          after:border-slate-300 contain-[layout]
-          dark:after:border-neutral-700
-        `}
+        className={cn(
+          LABEL_LEFT_LIVE.frameClassName,
+          `
+            absolute inset-y-4 left-3 z-10 w-[max(0px,calc(var(--split-leading-live-width)-20px))]
+            after:border-slate-300 contain-[layout]
+            dark:after:border-neutral-700
+          `
+        )}
       >
         <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_LIVE.text}</span>
         <div className="absolute inset-0 overflow-hidden">
@@ -858,24 +860,28 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
               x: leftCommittedXPx,
               ...LABEL_LEFT_COMMITTED.frameStyle,
             }}
-            data-edge-label-frame
-            className={`
-              absolute inset-y-7 left-0 after:border-sky-300 contain-[layout] after:border-dashed
-              dark:after:border-sky-400/60
-            `}
+            className={cn(
+              LABEL_LEFT_COMMITTED.frameClassName,
+              `
+                absolute inset-y-7 left-0 after:border-sky-300 contain-[layout] after:border-dashed
+                dark:after:border-sky-400/60
+              `
+            )}
           >
             <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_COMMITTED.text}</span>
             {/* The committed container owns scrolling, so the content label and width move with committed geometry. */}
             <div data-demo-left-committed-scroll className="absolute inset-0 overflow-y-auto">
               <div
                 data-demo-left-content
-                data-edge-label-frame
                 style={LABEL_LEFT_CONTENT.frameStyle}
-                className={`
-                  relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
-                  -translate-x-1/2 after:border-sky-300 after:border-dashed
-                  dark:after:border-sky-400/60
-                `}
+                className={cn(
+                  LABEL_LEFT_CONTENT.frameClassName,
+                  `
+                    relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
+                    -translate-x-1/2 after:border-sky-300 after:border-dashed
+                    dark:after:border-sky-400/60
+                  `
+                )}
               >
                 <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_CONTENT.text}</span>
                 <div className="p-4 pt-8 text-center">
@@ -917,8 +923,8 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
           left: trailingOpen ? 'calc(100% - var(--split-trailing-live-width) + 8px)' : '100%',
           ...LABEL_RIGHT_LIVE.frameStyle,
         }}
-        data-edge-label-frame
         className={cn(
+          LABEL_RIGHT_LIVE.frameClassName,
           `
             absolute inset-y-4 z-10 w-[max(0px,calc(var(--split-trailing-live-width)-20px))]
             after:border-slate-300 contain-[layout]
@@ -933,24 +939,28 @@ export const BufferedSplitLayoutDemo: FC<BufferedSplitLayoutDemoProps> = ({
           <motion.div
             data-demo-right-committed
             style={{ filter: rightBufferedFilter, width: rightCommittedWidthPx, ...LABEL_RIGHT_COMMITTED.frameStyle }}
-            data-edge-label-frame
-            className={`
-              absolute inset-y-7 left-1/2 -translate-x-1/2 after:border-emerald-300
-              contain-[layout] after:border-dashed
-              dark:after:border-emerald-400/60
-            `}
+            className={cn(
+              LABEL_RIGHT_COMMITTED.frameClassName,
+              `
+                absolute inset-y-7 left-1/2 -translate-x-1/2 after:border-emerald-300
+                contain-[layout] after:border-dashed
+                dark:after:border-emerald-400/60
+              `
+            )}
           >
             <span className={EDGE_LABEL_CLASS}>{LABEL_RIGHT_COMMITTED.text}</span>
             <div data-demo-right-committed-scroll className="absolute inset-0 overflow-y-auto">
               <div
                 data-demo-right-content
-                data-edge-label-frame
                 style={LABEL_RIGHT_CONTENT.frameStyle}
-                className={`
-                  relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
-                  -translate-x-1/2 after:border-emerald-300 after:border-dashed
-                  dark:after:border-emerald-400/60
-                `}
+                className={cn(
+                  LABEL_RIGHT_CONTENT.frameClassName,
+                  `
+                    relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
+                    -translate-x-1/2 after:border-emerald-300 after:border-dashed
+                    dark:after:border-emerald-400/60
+                  `
+                )}
               >
                 <span className={EDGE_LABEL_CLASS}>{LABEL_RIGHT_CONTENT.text}</span>
                 <div className="p-4 pt-8 text-center">
