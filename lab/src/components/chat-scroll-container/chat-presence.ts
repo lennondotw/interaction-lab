@@ -43,7 +43,6 @@ export function animateChatEntrance(
   visual.removeAttribute('data-chat-item-id');
   visual.removeAttribute('id');
   visual.dataset.chatEntrance = '';
-  visual.classList.add(styles.entrance!);
   visual.style.marginTop = '0px';
   layer.append(visual);
   host.append(layer);

@@ -12,18 +12,13 @@ interface Visual {
 const visuals = new WeakMap<HTMLElement, Map<HTMLElement, Visual>>();
 const listeners = new WeakMap<HTMLElement, () => void>();
 
-/** The attribute is the query hook; the class carries the positioning style. */
-function markDebugAnchor(element: Element, marked: boolean) {
-  element.toggleAttribute('data-chat-debug-anchor', marked);
-  element.classList.toggle(styles.debugAnchor!, marked);
-}
-
 /** Clones inherit content, never instrumentation belonging to the source visual. */
 export function cloneWithoutChatDebug(source: HTMLElement) {
   const clone = source.cloneNode(true) as HTMLElement;
   for (const badge of clone.querySelectorAll('[data-slot="chat-item-debug"]')) badge.remove();
-  markDebugAnchor(clone, false);
-  for (const anchor of clone.querySelectorAll('[data-chat-debug-anchor]')) markDebugAnchor(anchor, false);
+  clone.removeAttribute('data-chat-debug-anchor');
+  for (const anchor of clone.querySelectorAll('[data-chat-debug-anchor]'))
+    anchor.removeAttribute('data-chat-debug-anchor');
   return clone;
 }
 
@@ -90,7 +85,7 @@ export function createChatItemDebug(viewport: HTMLElement, content: HTMLElement)
   function removeBadge(source: HTMLElement) {
     const badge = badges.get(source);
     if (!badge) return;
-    if (badge.parentElement) markDebugAnchor(badge.parentElement, false);
+    badge.parentElement?.removeAttribute('data-chat-debug-anchor');
     badge.remove();
     badges.delete(source);
   }
@@ -130,8 +125,8 @@ export function createChatItemDebug(viewport: HTMLElement, content: HTMLElement)
         badges.set(source, badge);
       }
       if (badge.parentElement !== anchor) {
-        if (badge.parentElement) markDebugAnchor(badge.parentElement, false);
-        markDebugAnchor(anchor, true);
+        badge.parentElement?.removeAttribute('data-chat-debug-anchor');
+        anchor.setAttribute('data-chat-debug-anchor', '');
         anchor.append(badge);
       }
       const text = `${source.dataset.chatItemId ?? 'typing'} · ${kind}\n${phase} · layout: ${layout ? 'animating' : 'idle'}`;

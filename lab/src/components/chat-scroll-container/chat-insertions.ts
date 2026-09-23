@@ -45,13 +45,10 @@ export function createChatInsertions(
 
   function showAnchor(element?: HTMLElement) {
     if (!anchorOverlay || anchorOverlay.parentElement === element) return;
-    const previous = anchorOverlay.parentElement;
-    previous?.removeAttribute('data-chat-reading-anchor');
-    previous?.classList.remove(styles.readingAnchor!);
+    anchorOverlay.parentElement?.removeAttribute('data-chat-reading-anchor');
     anchorOverlay.remove();
     if (element) {
       element.setAttribute('data-chat-reading-anchor', '');
-      element.classList.add(styles.readingAnchor!);
       element.append(anchorOverlay);
     }
   }
