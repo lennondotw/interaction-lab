@@ -4,7 +4,8 @@
  * The unit tests cover the pure parts and CI builds the Storybook, but neither
  * notices a story that renders an empty box, throws on mount, or logs a React
  * warning — the failures that only exist once a component is actually mounted.
- * This walks the whole index and looks for exactly those.
+ * This walks the whole index and looks for exactly those, plus one convention a
+ * mounted story can break: painting a background on `<body>`.
  *
  * Needs a Storybook running, because it drives the real stories rather than a copy
  * of them, the same bargain the archive probes make:
@@ -91,6 +92,15 @@ for (const [id, entry] of stories) {
       // counts, not just text, or every canvas and SVG story would report empty.
       empty:
         root.innerText.trim().length === 0 && root.querySelectorAll('svg, canvas, img, video, [style]').length === 0,
+      // With the root painting the canvas, a body background covers only the body's own
+      // box, and the Background toolbar has to clear it to show its overrides. Stories
+      // paint theirs on <html>. Read under the default Unmodified option, which clears
+      // nothing, so this sees whatever the story wrote.
+      bodyBackground: (() => {
+        const style = getComputedStyle(document.body);
+        const painted = style.backgroundColor !== 'rgba(0, 0, 0, 0)' || style.backgroundImage !== 'none';
+        return painted ? `${style.backgroundColor} ${style.backgroundImage}`.slice(0, 160) : null;
+      })(),
     };
   });
 
@@ -98,7 +108,7 @@ for (const [id, entry] of stories) {
   page.off('pageerror', onPageError);
 
   checked += 1;
-  const broken = state.missing || state.errorDisplay || state.empty || messages.length > 0;
+  const broken = state.missing || state.errorDisplay || state.empty || state.bodyBackground || messages.length > 0;
 
   if (broken) failures.push({ id, title: entry.title, name: entry.name, ...state, messages });
 
@@ -121,6 +131,11 @@ for (const failure of failures) {
   if (failure.missing) console.log('  story not in the index');
   if (failure.errorDisplay) console.log(`  error display — ${failure.errorDisplay}`);
   if (failure.empty) console.log('  rendered nothing');
+  if (failure.bodyBackground) {
+    console.log(
+      `  paints <body> — ${failure.bodyBackground}; paint it on <html> (Documentation/First-paint background)`
+    );
+  }
   for (const message of failure.messages) console.log(`  console — ${message}`);
   console.log('');
 }
