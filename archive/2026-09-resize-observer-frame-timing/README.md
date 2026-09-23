@@ -45,6 +45,14 @@ First painted frame after mount (CSS px, bitmap in CSS px at DPR 2):
 | svg-path         | 512 → 520 / 512 → 343, bitmap likewise | 520 / 343, bitmap from frame 1 |
 | rect-field       | overlay 1 → 680 / 1 → 343              | 680 / 343, bitmap from frame 1 |
 
+rect-field's overlay also changed its _content_ one frame after mount, with the size and
+bitmap already right. That was not timing: an effect meant to hand layout back when
+autoplay stops also ran on mount and deleted the `gap` React had written through the style
+prop, which React never rewrites. The first frame traced the laid-out 24px gap, the next the
+collapsed 0px one, while the Gap control still said 24. Autoplay now owns only the inline
+`gap` and widths, React owns only a `--row-gap` variable the class reads, and the loop's own
+layout-effect cleanup removes the inline properties; the first frame is the final one.
+
 Live resize, 520 → 400px wide in 21 steps, painted frames showing a stale size:
 
 | story            | before: box behind column | after: box behind column | after: bitmap behind box |
