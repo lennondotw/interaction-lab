@@ -11,20 +11,60 @@ import { BUBBLE_PALETTES } from './render/palette.js';
 import { useColorScheme } from './use-color-scheme.js';
 
 // The bubbles are glass — they need colour under them to refract, not a
-// flat panel. Light is a broad pastel sweep; dark is midnight, so the
-// stops sit close together and stay near-black, letting a faint blue →
-// violet shift read without a visible band.
-const Stage: FC<{ children: ReactNode }> = ({ children }) => (
-  <div
-    className={`
-      flex min-h-screen w-full items-center justify-center
-      bg-[linear-gradient(180deg,#d4e3ff_0%,#e7d6ff_55%,#f3deca_100%)]
-      dark:bg-[linear-gradient(180deg,#06091a_0%,#12102b_55%,#090a1c_100%)]
-    `}
-  >
-    <div className="relative h-150 w-5xl">{children}</div>
-  </div>
-);
+// flat panel. The backdrop is a loose mesh: four soft colour pools in the
+// corners, large enough to overlap, plus one in the middle so the bubbles
+// at the centre are not left on the bare base tint - every bubble has a
+// different hue behind it.
+// Light keeps the pastel family (sky, lilac, blush, peach, mint). Dark uses
+// the same hues but stays mostly black and neutral: a near-neutral base and
+// pools kept dark and low in chroma, so each hue reads as a faint tint the
+// glass can still bend, not as a neon wash.
+//
+// Every colour is a `light-dark()` pair: `light-dark()` only takes colours,
+// not whole gradients, so the layers are shared and their stops switch.
+// They resolve against the root's `color-scheme`, which the page sets from
+// the theme toolbar.
+const pool = (at: string, size: string, light: string, dark: string) =>
+  `radial-gradient(${size} at ${at}, light-dark(${light}, ${dark}) 0%, transparent 70%)`;
+
+const PAGE_BACKGROUND = [
+  pool('50% 50%', '45% 45%', '#f1e3fb', 'oklch(0.27 0.05 285)'),
+  pool('10% 15%', '75% 80%', '#cfe2ff', 'oklch(0.3 0.07 260)'),
+  pool('90% 12%', '70% 75%', '#ecd6ff', 'oklch(0.29 0.07 310)'),
+  pool('88% 90%', '75% 80%', '#ffdcc8', 'oklch(0.29 0.065 10)'),
+  pool('12% 88%', '70% 75%', '#d3f3e6', 'oklch(0.29 0.055 185)'),
+  'light-dark(#ebe4fb, oklch(0.17 0.008 280))',
+].join(', ');
+
+/**
+ * Paints the scene's backdrop on `<html>` for as long as the story is
+ * mounted, instead of on a full-screen wrapper. The root element is where
+ * the Background toolbar draws its overrides, so a wrapper would cover them
+ * and the toolbar would stop working here; painted on the root, `Unmodified`
+ * shows this gradient and every other option replaces it. Inline and not
+ * `!important`, so the toolbar's `!important` rules win, and removed on
+ * unmount so the next story starts from the page background. Layout effect,
+ * so the first painted frame already has it. See
+ * `src/docs/first-paint-background.mdx`, "Stories with their own background".
+ */
+const usePageBackground = (background: string) => {
+  useLayoutEffect(() => {
+    const { style } = document.documentElement;
+    style.setProperty('background', background);
+    return () => {
+      style.removeProperty('background');
+    };
+  }, [background]);
+};
+
+const Stage: FC<{ children: ReactNode }> = ({ children }) => {
+  usePageBackground(PAGE_BACKGROUND);
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center">
+      <div className="relative h-150 w-5xl">{children}</div>
+    </div>
+  );
+};
 
 // ── Controls-friendly wrapper ─────────────────────────────────────────
 //

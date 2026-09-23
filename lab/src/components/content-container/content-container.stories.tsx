@@ -70,12 +70,7 @@ const ContainerGuides: FC = () => (
 );
 
 const Stage: FC<{ children: ReactNode }> = ({ children }) => (
-  <div
-    className={`
-      relative min-h-screen bg-neutral-100 py-8
-      dark:bg-neutral-950
-    `}
-  >
+  <div className="relative min-h-screen py-8">
     <ContainerGuides />
     {children}
   </div>

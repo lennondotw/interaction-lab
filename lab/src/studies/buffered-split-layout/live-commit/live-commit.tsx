@@ -558,6 +558,13 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
       // it can measure the real story instead of a copy of it.
       data-testid="stage"
       style={rootStyle}
+      // Deliberate exception to "no story-owned background" (Story conventions, rule 1): this
+      // surface paints its own flat colour on purpose, and the Background toolbar does not reach
+      // under it. The edge labels knock the dashed outlines out with a background of this exact
+      // colour, so the labels only read cleanly on a surface of a known colour. Moving it to
+      // `<html>` would let the toolbar replace it and leave the knockouts as opaque boxes on the
+      // override. To drop the exception, stop knocking out the outlines instead (leave a gap in
+      // the dash, or outline the text) and then remove this background.
       className={`
         relative h-dvh min-h-[620px] w-full overflow-hidden bg-white font-mono text-[12px] text-slate-500
         dark:bg-neutral-950 dark:text-neutral-400

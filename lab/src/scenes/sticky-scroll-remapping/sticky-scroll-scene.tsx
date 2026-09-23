@@ -87,15 +87,7 @@ export const StickyScrollScene: FC<StickyScrollSceneProps> = ({
   }, [sectionHeight, stickyHeight, trackTop, viewportHeight]);
 
   return (
-    <div
-      className={cn(
-        `
-          relative bg-neutral-50 text-neutral-950
-          dark:bg-neutral-950 dark:text-neutral-50
-        `,
-        className
-      )}
-    >
+    <div className={cn('relative', className)}>
       <NativeScrollRuler className="absolute inset-y-0 left-0 z-100 w-[34px]" side="left" />
       <NativeScrollRuler className="absolute inset-y-0 right-0 z-100 w-[34px]" side="right" />
 

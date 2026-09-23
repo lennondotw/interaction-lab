@@ -1,0 +1,105 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Documentation/First-paint background" />
+
+# First-paint background
+
+What colour the lab shows before a story has rendered: the manager's preview area, the
+preview iframe while its CSS and JavaScript load, Storybook's loaders, and every gap a scroll
+bounce can open. One rule decides all of them.
+
+## The rule
+
+In order of preference:
+
+1. **Show the real background from the first frame.** Whatever the page will look like once
+   loaded, the first frame should already look like that.
+2. **Where the real background is not knowable yet, follow the system appearance.** That at
+   least matches the browser's own UI and the Storybook manager, which follows the system by
+   default. This is the level the lab settles for wherever level 1 would cost a blocking
+   script.
+3. **Never hard-code white** — or any other fixed light colour. On a dark system a white frame
+   is a flash, however short. A default that someone else hard-coded counts too: Storybook ships
+   several, and each one is overridden below.
+
+"Follow the system" in CSS means `color-scheme: light dark` plus `light-dark()` for the colour,
+or simply `transparent`, so the surface shows a layer that already follows the system.
+`light-dark()` alone does nothing useful: with `color-scheme: normal` it always picks the
+light value.
+
+## Where each surface stands
+
+Each surface, what paints it, and the level it reaches:
+
+- **Manager page, before its bundle loads** — `managerHead` in `.storybook/main.ts` injects
+  `color-scheme: light dark` and a `light-dark()` background built from the Storybook themes'
+  own `appBg`. Since the manager picks its theme from the system too, this is the colour it is
+  about to paint. Level 1.
+- **Manager UI** — the Storybook theme, switched on `prefers-color-scheme` in
+  `.storybook/manager.tsx`. Follows the system by design, and that is its real background.
+- **The manager's preview `<iframe>` element** — `appPreviewBg: 'transparent'` in
+  `.storybook/theme.tsx`; Storybook defaults it to `#FFF` in both of its themes. Level 2: it
+  shows the manager behind it, which is what an overscroll bounce or a story switch reveals.
+- **Preview canvas, before `global.css` loads** — rule 1 in `.storybook/preview-head.html`:
+  `color-scheme: light dark` and `light-dark()`, in the lowest cascade layer so the page's own
+  rules take over. Level 2, and level 1 whenever the toolbar theme matches the system.
+- **Preview canvas, after `global.css` loads** — the `:root` rules in `@monorepo/tailwindcss`,
+  from `data-theme`. Level 1.
+- **Storybook's "preparing" loader** — rule 2 in `preview-head.html`, replacing Storybook's
+  hard-coded `white`. Level 2, then level 1 once `global.css` has loaded.
+- **The docs-page loader skeleton** — rule 3 in `preview-head.html` hides it, since Storybook
+  draws it in a fixed light palette. It takes whatever level the backdrop behind it has.
+- **The Background toolbar addon** — `@monorepo/storybook-addons/background`. `Unmodified`
+  leaves the page alone, which is level 1; the other options are explicit choices rather than
+  first paint.
+
+The one known gap: when the toolbar forces a theme opposite to the system's, the first frames
+follow the system until the theme decorator sets `data-theme`. That is level 2, and it is
+accepted — reaching level 1 would take a blocking script in the preview head that parses the
+URL and storage before first paint.
+
+## Stories with their own background
+
+Most stories should not have one — see rule 1 in Story conventions. When a story genuinely needs
+a page background (a scene whose glass needs something to refract, like `BubblePicker`), it
+paints it itself, under three rules:
+
+1. **On `<html>`, never on a wrapper.** Set it as an inline style on
+   `document.documentElement` when the story mounts. A full-screen wrapper with a background
+   sits above the root element and hides whatever the Background toolbar puts there, so the
+   toolbar silently stops working for that story.
+2. **No `!important`.** The toolbar's overrides are `!important`; a story that uses it too wins
+   against them.
+3. **Remove it on unmount**, so it does not leak into the next story.
+
+Give it both appearances, with `light-dark()` or the `dark:` variant's selectors, so it follows
+the theme toolbar like the page background does.
+
+### How the Background toolbar overrides it
+
+The addon never writes a style. It injects one unlayered stylesheet into the preview and selects
+an option by setting `data-sb-background` on `<html>`; `Unmodified` removes the attribute, which
+undoes everything it did. Its rules are `!important`, which beats both the page's `:root`
+background and a story's inline one. They stay unlayered on purpose: for `!important`
+declarations layer order is inverted, so an unlayered important rule is the weakest important
+rule there is and never out-ranks one that asked for `!important` deliberately. Colours come from
+`light-dark()`, so the overrides follow the theme without any script.
+
+## When adding something that paints early
+
+Anything that can be on screen before a story renders — a new loader, an addon that writes to
+the document, a change to `preview-head.html`, a new manager panel:
+
+- Decide which level it reaches, and say so in a comment next to it.
+- If it needs a colour before the page's own CSS is available, use `light-dark()` under
+  `color-scheme: light dark`, or make it transparent over a layer that already follows the
+  system. Never a literal light colour.
+- If it overrides a Storybook default, write down which internal it depends on and the
+  Storybook version it was checked against: those overrides fail silently on upgrade.
+
+## Checking it
+
+Load `iframe.html?id=<story>&globals=theme:dark` with the system in dark mode and sample
+`getComputedStyle(document.documentElement).backgroundColor`, plus the background of any
+visible `.sb-preparing-story` / `.sb-preparing-docs`, on every animation frame. Every sample
+should be dark from the first frame on. Repeat with the system in light mode.

@@ -43,6 +43,12 @@ The exception is a component whose behaviour **depends** on what is behind it �
 because there is nothing to see otherwise. That is a story about the backdrop, not
 a story that happens to have one.
 
+When that backdrop is the whole page — a scene like `BubblePicker` whose glass needs
+something to refract — paint it on `<html>`, not on a full-screen wrapper. A wrapper
+covers the root element, which is where the Background toolbar draws, so the toolbar
+stops working for that story. The rules for doing it are in
+[First-paint background](?path=/docs/documentation-first-paint-background--documentation).
+
 ## 2. Prefer single stories, one per parameter — and add the composed one too
 
 Most stories should render **one instance** and correspond to **one parameter

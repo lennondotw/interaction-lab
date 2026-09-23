@@ -569,12 +569,7 @@ const OrbitItem: FC<OrbitItemProps> = ({ containerWidth, orbitProgress, slotCoun
 };
 
 export const OrbitTrackScrollScene: FC<Omit<OrbitTrackProps, 'scrollLinked'>> = (props) => (
-  <div
-    className={`
-      relative min-h-[2400px] bg-neutral-50 py-20 text-neutral-950
-      dark:bg-neutral-950 dark:text-neutral-50
-    `}
-  >
+  <div className="relative min-h-[2400px] py-20">
     <NativeScrollRuler className="absolute inset-y-0 left-0 z-100 w-[34px]" side="left" />
     <NativeScrollRuler className="absolute inset-y-0 right-0 z-100 w-[34px]" side="right" />
 

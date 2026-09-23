@@ -73,10 +73,17 @@ export const NavigationContainer: FC<NavigationContainerProps> = ({
             [HEADER_HEIGHT_VAR]: `${headerHeight ?? 0}px`,
           } as CSSProperties
         }
+        // The `::after` is a half-transparent inner stroke that gives the frame its own edge, so
+        // it stays readable on any page background rather than depending on one that contrasts
+        // with its fill. It is an overlay, not an inset `box-shadow` on the frame, because the
+        // views paint over the frame's own box; z-index 1000 keeps it above the header (z-20) and
+        // every view (z-index = stack depth).
         className={cn(
           `
             relative flex h-full flex-col overflow-hidden rounded-2xl bg-neutral-200
-            dark:bg-neutral-900
+            after:pointer-events-none after:absolute after:inset-0 after:z-1000 after:rounded-[inherit]
+            after:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)]
+            dark:bg-neutral-900 dark:after:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]
           `,
           className
         )}
