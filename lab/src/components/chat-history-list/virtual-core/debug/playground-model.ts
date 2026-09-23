@@ -61,6 +61,21 @@ export function pulseHeight(elapsed: number) {
   return pulseBaseHeight + (pulseAmplitude * (1 - Math.cos((2 * Math.PI * elapsed) / pulsePeriod))) / 2;
 }
 
+/**
+ * A length for display, always with two decimals so a changing value keeps its width. A value
+ * that rounds to zero reads 0.00 whatever its sign.
+ */
+export function formatPx(value: number) {
+  const fixed = value.toFixed(2);
+  return `${fixed === '-0.00' ? '0.00' : fixed}px`;
+}
+
+/** A change in length for display: its sign spelled out, from the rounded value. */
+export function signedPx(value: number) {
+  const magnitude = formatPx(Math.abs(value));
+  return magnitude === '0.00px' ? magnitude : `${value > 0 ? '+' : '−'}${magnitude}`;
+}
+
 export const minLines = 1;
 export const maxLines = 10;
 /** How long a size update stays highlighted, in the list and in the minimap. */
