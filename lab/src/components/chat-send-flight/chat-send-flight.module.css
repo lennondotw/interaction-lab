@@ -1,8 +1,8 @@
 /*
- * Send-flight styles, as module classes. `chat-send-flight.ts` builds the flight layer, carrier
- * and text clip at runtime and adds these classes itself. Their `data-slot` names and the
- * carrier's `data-chat-send-flight` marker stay for the browser contracts in `scripts/`; no
- * rule here keys on them.
+ * Send-flight styles. `chat-send-flight.ts` builds the flight layer, text clip and clipped text
+ * at runtime and adds these module classes itself; the layer and clip also keep a `data-slot`
+ * naming them. The carrier is styled through its `data-chat-send-flight` marker, which the
+ * browser contracts in `scripts/` already query.
  */
 
 @layer components {
@@ -15,7 +15,7 @@
     pointer-events: none;
   }
 
-  .carrier {
+  [data-chat-send-flight] {
     position: absolute;
     max-width: none;
     margin: 0;
