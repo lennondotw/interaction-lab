@@ -345,7 +345,12 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
             className="relative w-full"
             style={widthMode === 'auto' ? undefined : { width: widthMode, maxWidth: widthMode, flex: 'none' }}
           >
-            <canvas ref={canvasRef} style={{ width, height }} className="pointer-events-none absolute inset-0" />
+            <canvas
+              ref={canvasRef}
+              data-testid="sdf-surface"
+              style={{ width, height }}
+              className="pointer-events-none absolute inset-0"
+            />
             <div
               ref={rowRef}
               data-testid="rect-region"

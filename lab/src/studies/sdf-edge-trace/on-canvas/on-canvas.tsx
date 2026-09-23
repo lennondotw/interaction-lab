@@ -1,7 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { useIntervalEffect } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
-import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Ball,
@@ -96,11 +96,10 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
     ballsRef.current = createBalls(ballCount);
   }, [ballCount]);
 
-  useAnimationFrame((time, delta) => {
+  /** Draws the last traced state at `displaySize`. Advances nothing and records no stats. */
+  const paint = (displaySize: number) => {
     const canvas = canvasRef.current;
-    if (!canvas || !measures) return;
-    const displaySize = measures.width;
-
+    if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
     const targetWidth = Math.round(displaySize * dpr);
     if (canvas.width !== targetWidth) {
@@ -109,6 +108,30 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
     }
     const context = canvas.getContext('2d');
     if (!context) return;
+    renderScene(context, {
+      tracer,
+      balls: ballsRef.current,
+      radius: RADIUS,
+      scale: displaySize / VIEW,
+      dpr,
+      showOverlay,
+      showPoints,
+      showFill,
+      smooth,
+      dashOffset: dash ? dashRef.current : null,
+      activeBall: activeBallRef.current,
+    });
+  };
+
+  // A resize commits before its frame paints, but after that frame's rAF already
+  // drew at the old size. Repaint here so a stretched stale bitmap is never shown.
+  const repaint = useEffectEvent(paint);
+  useLayoutEffect(() => {
+    if (measures) repaint(measures.width);
+  }, [measures]);
+
+  useAnimationFrame((time, delta) => {
+    if (!measures) return;
 
     if (autoplay && activeBallRef.current === null) orbitBalls(ballsRef.current, time);
 
@@ -138,19 +161,7 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
 
     dashRef.current += delta * 0.05;
 
-    renderScene(context, {
-      tracer,
-      balls: ballsRef.current,
-      radius: RADIUS,
-      scale: displaySize / VIEW,
-      dpr,
-      showOverlay,
-      showPoints,
-      showFill,
-      smooth,
-      dashOffset: dash ? dashRef.current : null,
-      activeBall: activeBallRef.current,
-    });
+    paint(measures.width);
   });
 
   useIntervalEffect(() => {
@@ -193,6 +204,7 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
         <div ref={containerRef} className="w-full max-w-[520px] shrink-0">
           <canvas
             ref={canvasRef}
+            data-testid="sdf-surface"
             {...handlers}
             className={`
               aspect-square w-full touch-none rounded-2xl bg-neutral-900/5
