@@ -34,10 +34,11 @@ import { createElement, useEffect } from 'react';
  * for `!important` on purpose.
  *
  * Light and dark come from `light-dark()`, which resolves against the root's
- * used `color-scheme`. The page is expected to set that from its theme -
- * `@monorepo/tailwindcss` sets it from `data-theme` - so a theme switch
- * restyles the override with no script running. On a page that leaves
- * `color-scheme: normal`, `light-dark()` always picks the light value.
+ * used `color-scheme`, so a theme switch restyles the override with no script
+ * running. Used together with `./theme`, that is guaranteed: the theme addon
+ * always sets `color-scheme`. Used on its own, the page must set it from its
+ * theme; on a page that leaves `color-scheme: normal`, `light-dark()` always
+ * picks the light value.
  *
  * Stories with their own background
  * ---------------------------------

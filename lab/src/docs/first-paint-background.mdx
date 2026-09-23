@@ -44,7 +44,8 @@ Each surface, what paints it, and the level it reaches:
   `color-scheme: light dark` and `light-dark()`, in the lowest cascade layer so the page's own
   rules take over. Level 2, and level 1 whenever the toolbar theme matches the system.
 - **Preview canvas, after `global.css` loads** — the `:root` rules in `@monorepo/tailwindcss`,
-  from `data-theme`. Level 1.
+  from `data-theme`, which the theme addon (`@monorepo/storybook-addons/theme`) sets along with
+  `color-scheme`. Level 1.
 - **Storybook's "preparing" loader** — rule 2 in `preview-head.html`, replacing Storybook's
   hard-coded `white`. Level 2, then level 1 once `global.css` has loaded.
 - **The docs-page loader skeleton** — rule 3 in `preview-head.html` hides it, since Storybook
@@ -57,7 +58,7 @@ Each surface, what paints it, and the level it reaches:
   own transparency, use `Grid`.
 
 The one known gap: when the toolbar forces a theme opposite to the system's, the first frames
-follow the system until the theme decorator sets `data-theme`. That is level 2, and it is
+follow the system until the theme addon sets `data-theme`. That is level 2, and it is
 accepted — reaching level 1 would take a blocking script in the preview head that parses the
 URL and storage before first paint.
 
