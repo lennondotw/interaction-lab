@@ -448,22 +448,6 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
             every setting here fits inside a frame, so this says the clip does not blow the budget, not that it is free
             within it.
           </p>
-
-          {pinched && (
-            <p
-              className={`
-                max-w-prose text-xs/relaxed text-amber-800
-                dark:text-amber-400
-              `}
-            >
-              The surface is {stats.surfaceLoops} loop{stats.surfaceLoops === 1 ? '' : 's'} and the inner contour is{' '}
-              {stats.insetLoops} — {inset}px in from the edge, the waist has nothing left in it, so the ring is
-              genuinely two pieces. Switch to <span className="font-mono">stroke + clip</span> and it becomes one
-              continuous band again, because a clipped stroke is the outline pushed inward and cannot report that.
-              Neither is a bug; they answer different questions, and only the iso offset answers &ldquo;{inset}px in
-              from the edge&rdquo;.
-            </p>
-          )}
         </div>
       </div>
 
@@ -484,6 +468,25 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
           pinchInsets={PINCH_INSETS}
         />
       </div>
+
+      {/*
+        Last on the page on purpose: it appears and disappears with the pinch, and
+        anywhere higher it would push the benchmark panel up and down with it.
+      */}
+      {pinched && (
+        <p
+          className={`
+            max-w-prose text-xs/relaxed text-amber-800
+            dark:text-amber-400
+          `}
+        >
+          The surface is {stats.surfaceLoops} loop{stats.surfaceLoops === 1 ? '' : 's'} and the inner contour is{' '}
+          {stats.insetLoops} — {inset}px in from the edge, the waist has nothing left in it, so the ring is genuinely
+          two pieces. Switch to <span className="font-mono">stroke + clip</span> and it becomes one continuous band
+          again, because a clipped stroke is the outline pushed inward and cannot report that. Neither is a bug; they
+          answer different questions, and only the iso offset answers &ldquo;{inset}px in from the edge&rdquo;.
+        </p>
+      )}
     </div>
   );
 };
