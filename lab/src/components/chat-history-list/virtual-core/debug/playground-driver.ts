@@ -1,7 +1,7 @@
 import { captureAnchor, resolveAnchor } from '../../anchor/anchor.js';
 import { alignedScrollStep, measureScrollStep, presentReadingOffset } from '../../anchor/presentation.js';
 import type { VirtualRange } from '../virtual-core.js';
-import { nextScrollDirection, type PlaygroundModel } from './playground-model.js';
+import { formatPx, nextScrollDirection, type PlaygroundModel } from './playground-model.js';
 
 export interface PlaygroundDriverHost {
   scroller: HTMLElement;
@@ -20,8 +20,6 @@ export interface PlaygroundDriverHost {
 
 /** A change that keeps mounting or measuring rows for longer than this is a bug. */
 const maxPasses = 8;
-
-const formatPx = (value: number) => `${Number(value.toFixed(2))}px`;
 
 const sameRange = (a: VirtualRange | null, b: VirtualRange | null) =>
   a === b || (a !== null && b !== null && a.startIndex === b.startIndex && a.endIndex === b.endIndex);

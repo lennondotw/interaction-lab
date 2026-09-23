@@ -12,10 +12,12 @@ import { PlaygroundDriver } from './playground-driver.js';
 import {
   flashDuration,
   flashEasing,
+  formatPx,
   maxLines,
   minLines,
   PlaygroundModel,
   pulseHeight,
+  signedPx,
   toOverscan,
   type PlaygroundLayout,
   type PlaygroundOverscanKind,
@@ -43,8 +45,6 @@ export interface VirtualCorePlaygroundProps {
   /** Where the reference line sits in the viewport: 0 is the top, 0.5 the middle, 1 the bottom. */
   anchorRatio: number;
 }
-
-const formatPx = (value: number) => `${Number(value.toFixed(2))}px`;
 
 export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
   initialCount,
@@ -297,7 +297,7 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
       {anchoring ? (
         <section
           aria-label="How anchoring works"
-          className="flex w-[480px] shrink-0 flex-col gap-2 text-xs text-neutral-500"
+          className="flex w-[640px] shrink-0 flex-col gap-2 text-xs text-neutral-500"
         >
           <h2 className="font-medium text-neutral-700 dark:text-neutral-300">
             The row at the reference line holds still
@@ -319,7 +319,7 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
       ) : (
         <section
           aria-label="Why the content jumps"
-          className="flex w-[480px] shrink-0 flex-col gap-2 text-xs text-neutral-500"
+          className="flex w-[640px] shrink-0 flex-col gap-2 text-xs text-neutral-500"
         >
           <h2 className="font-medium text-neutral-700 dark:text-neutral-300">
             Content jumping when rows above change size is expected
@@ -453,10 +453,8 @@ const stateFields = [
   ['render', 'Render'],
 ] as const;
 
-const signedPx = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${formatPx(Math.abs(value))}`;
-
 const describeRange = (range: VirtualRange | null) =>
-  range ? `${range.startIndex}…${range.endIndex} (${range.endIndex - range.startIndex + 1})` : '—';
+  range ? `${range.startIndex}...${range.endIndex} (${range.endIndex - range.startIndex + 1})` : '—';
 
 /** Text written by a painter, so the numbers follow every frame without React. */
 const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mountedCount: () => number }> = ({
@@ -470,9 +468,17 @@ const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mounted
     const panel = panelRef.current!;
     const field = (name: string) => panel.querySelector<HTMLElement>(`[data-field="${name}"]`)!;
     const outputs = new Map(
-      [...stateFields.map(([name]) => name), 'viewport', 'minimap', 'anchor', 'change', 'residual', 'scroll'].map(
-        (name) => [name, field(name)]
-      )
+      [
+        ...stateFields.map(([name]) => name),
+        'viewport',
+        'minimap',
+        'anchor',
+        'change',
+        'residual',
+        'scroll',
+        'quantization',
+        'step',
+      ].map((name) => [name, field(name)])
     );
     const write = (name: string, value: string) => {
       const output = outputs.get(name)!;
@@ -515,10 +521,9 @@ const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mounted
         `${last && last.domResidual !== null ? signedPx(last.domResidual) : '—'}, largest ${signedPx(model.maxDomResidual)}`
       );
       const { scrollTop, spacer, step, scrollStep, quantization } = model.presentation;
-      write(
-        'scroll',
-        `scrollTop ${formatPx(scrollTop)} + spacer ${formatPx(spacer)} on a ${formatPx(step)} step (browser ${formatPx(scrollStep)}), quantization ${signedPx(quantization)}, largest ${signedPx(model.maxQuantization)}`
-      );
+      write('scroll', `scrollTop ${formatPx(scrollTop)} + spacer ${formatPx(spacer)}`);
+      write('quantization', `${signedPx(quantization)}, largest ${signedPx(model.maxQuantization)}`);
+      write('step', `${formatPx(step)} (the browser's ${formatPx(scrollStep)}, widened to whole device pixels)`);
       write(
         'viewport',
         `${viewport ? `reading offset ${formatPx(viewport.offset)}, size ${formatPx(viewport.size)}` : '—'}, scrolling ${model.scroll.direction}`
@@ -530,32 +535,40 @@ const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mounted
     <section
       ref={panelRef}
       aria-label="Virtual core state"
-      className="flex w-[480px] shrink-0 flex-col gap-3 rounded-xl border border-neutral-500/30 p-3 font-mono text-xs"
+      className="flex w-[640px] shrink-0 flex-col gap-3 rounded-xl border border-neutral-500/30 p-3 font-mono text-xs"
     >
+      {/* Every field is one line, cut off rather than wrapped, so the panel keeps its height as
+          the numbers change length. */}
       <div className="grid grid-cols-2 gap-x-4 tabular-nums">
         {stateFields.map(([name, label]) => (
-          <span key={name}>
+          <span key={name} className="truncate">
             {label}: <span data-field={name} />
           </span>
         ))}
       </div>
-      <span className="tabular-nums">
+      <span className="truncate tabular-nums">
         Viewport: <span data-field="viewport" />
       </span>
-      <span className="tabular-nums">
+      <span className="truncate tabular-nums">
         Minimap: <span data-field="minimap" />
       </span>
-      <span className="tabular-nums">
+      <span className="truncate tabular-nums">
         Anchor: <span data-field="anchor" />
       </span>
-      <span className="tabular-nums">
+      <span className="truncate tabular-nums">
         Last change: <span data-field="change" />
       </span>
-      <span className="tabular-nums">
+      <span className="truncate tabular-nums">
         DOM residual: <span data-field="residual" />
       </span>
-      <span className="tabular-nums">
+      <span className="truncate tabular-nums">
         Presentation: <span data-field="scroll" />
+      </span>
+      <span className="truncate tabular-nums">
+        Quantization: <span data-field="quantization" />
+      </span>
+      <span className="truncate tabular-nums">
+        Scroll step: <span data-field="step" />
       </span>
       <ul className="flex flex-row flex-wrap gap-x-3 gap-y-1 text-neutral-500">
         <LegendItem className="bg-neutral-500/40">Measured</LegendItem>
