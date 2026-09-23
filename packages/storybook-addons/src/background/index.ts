@@ -152,12 +152,13 @@ export const globalTypes = {
       icon: 'photo',
       items: [
         // `right` is the grey hint shown next to each item in the dropdown; the toolbar button
-        // itself keeps the short title. Transparent's hint is a warning rather than a description,
-        // see its stylesheet comment above for what varies and why.
-        { value: 'unmodified', title: 'Unmodified', right: 'no override', icon: 'paintbrush' },
-        { value: 'solid', title: 'Solid', right: '#fff / #000', icon: 'circle' },
+        // itself keeps the short title. The hints say what happens to the canvas - the thing the
+        // viewer sees - while the tooltip above names the element written to. Transparent's hint
+        // is a warning rather than a description; see its stylesheet comment for what varies.
+        { value: 'unmodified', title: 'Unmodified', right: 'leaves canvas as-is', icon: 'paintbrush' },
+        { value: 'solid', title: 'Solid', right: 'fills canvas #fff / #000', icon: 'circle' },
         { value: 'transparent', title: 'Transparent', right: 'varies by host, use with caution', icon: 'eye' },
-        { value: 'grid', title: 'Grid', right: 'checkerboard · shows alpha', icon: 'grid' },
+        { value: 'grid', title: 'Grid', right: 'fills canvas with checkerboard', icon: 'grid' },
       ],
       dynamicTitle: true,
     },
