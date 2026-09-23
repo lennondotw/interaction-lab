@@ -258,6 +258,7 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
             painted a first frame at the 512 fallback and resized one frame later.
           */}
           <div
+            data-testid="sdf-surface"
             className={`
               relative aspect-square w-full overflow-hidden rounded-2xl bg-neutral-900/5
               dark:bg-neutral-800/50

@@ -1,7 +1,7 @@
 import { cn } from '@monorepo/utils';
 import { useIntervalEffect } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
-import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { buildPath2D, buildPathData } from '#src/components/meta-surface/sdf/contour-path.js';
 import { Ball, ContourTracer } from '#src/components/meta-surface/sdf/field.js';
@@ -111,6 +111,59 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
   const drawCanvas = renderer !== 'svg';
   const drawSvg = renderer !== 'canvas';
 
+  /** Draws the last traced contour on the canvas at `size`. Advances nothing and records no stats. */
+  const paint = (size: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const target = Math.round(size * dpr);
+    if (canvas.width !== target) {
+      canvas.width = target;
+      canvas.height = target;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const scale = size / VIEW;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, target, target);
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+    const px = 1 / scale;
+
+    if (drawCanvas) {
+      const path = buildPath2D(tracer, { smooth });
+      if (fill) {
+        ctx.fillStyle = COLORS.canvasFill;
+        ctx.fill(path, 'nonzero');
+      }
+      ctx.strokeStyle = COLORS.canvasStroke;
+      // Thick and translucent under the SVG's thin line when both are on: the
+      // SVG curve leaving this band is what a divergence would look like.
+      ctx.lineWidth = (renderer === 'both' ? 5 : 2) * px;
+      ctx.globalAlpha = renderer === 'both' ? 0.45 : 1;
+      ctx.lineJoin = 'round';
+      ctx.stroke(path);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.lineWidth = 1.5 * px;
+    let index = 0;
+    for (const ball of ballsRef.current) {
+      ctx.strokeStyle = index === activeBallRef.current ? COLORS.handleActive : COLORS.handle;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, RADIUS * 0.12, 0, Math.PI * 2);
+      ctx.stroke();
+      index++;
+    }
+  };
+
+  // A resize commits before its frame paints, but after that frame's rAF already
+  // drew at the old size. Repaint here so a stretched stale bitmap is never shown.
+  const repaint = useEffectEvent(paint);
+  useLayoutEffect(() => {
+    if (displaySize !== undefined) repaint(displaySize);
+  }, [displaySize]);
+
   useAnimationFrame((time) => {
     if (displaySize === undefined) return;
     if (autoplay && activeBallRef.current === null) orbitBalls(ballsRef.current, time);
@@ -151,48 +204,7 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
       loops: result.loopCount,
     };
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const target = Math.round(displaySize * dpr);
-    if (canvas.width !== target) {
-      canvas.width = target;
-      canvas.height = target;
-    }
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const scale = displaySize / VIEW;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, target, target);
-    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
-    const px = 1 / scale;
-
-    if (drawCanvas) {
-      const path = buildPath2D(tracer, { smooth });
-      if (fill) {
-        ctx.fillStyle = COLORS.canvasFill;
-        ctx.fill(path, 'nonzero');
-      }
-      ctx.strokeStyle = COLORS.canvasStroke;
-      // Thick and translucent under the SVG's thin line when both are on: the
-      // SVG curve leaving this band is what a divergence would look like.
-      ctx.lineWidth = (renderer === 'both' ? 5 : 2) * px;
-      ctx.globalAlpha = renderer === 'both' ? 0.45 : 1;
-      ctx.lineJoin = 'round';
-      ctx.stroke(path);
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.lineWidth = 1.5 * px;
-    let index = 0;
-    for (const ball of ballsRef.current) {
-      ctx.strokeStyle = index === activeBallRef.current ? COLORS.handleActive : COLORS.handle;
-      ctx.beginPath();
-      ctx.arc(ball.x, ball.y, RADIUS * 0.12, 0, Math.PI * 2);
-      ctx.stroke();
-      index++;
-    }
+    paint(displaySize);
   });
 
   useIntervalEffect(() => {
@@ -253,7 +265,12 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
                 element's own rect, which already accounts for the zoom transform
                 above, so dragging stays correct at every zoom level.
               */}
-              <canvas ref={canvasRef} {...handlers} className="absolute inset-0 size-full touch-none" />
+              <canvas
+                ref={canvasRef}
+                data-testid="sdf-surface"
+                {...handlers}
+                className="absolute inset-0 size-full touch-none"
+              />
               {/*
                 No handling needed for the overscan: geometry runs from -128 to
                 640 and the root clips at the viewBox, which is the same crop the
