@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "pnpm --filter @monorepo/lab dev",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --max-warnings=0",
@@ -12,12 +13,11 @@
     "smoke:stories": "node scripts/smoke-stories.mjs",
     "sort-package-json:check": "sort-package-json '**/package.json' --ignore '**/node_modules/' --ignore '**/dist/' --ignore '**/dist-*/' --check",
     "sort-package-json:sort": "sort-package-json '**/package.json' --ignore '**/node_modules/' --ignore '**/dist/' --ignore '**/dist-*/'",
+    "test": "pnpm --filter '*' --workspace-concurrency=-2 run test",
     "test:chat": "node scripts/run-chat-tests.mjs full",
     "test:chat:ci": "node scripts/run-chat-tests.mjs ci",
-    "test:packages": "pnpm --filter '*' --workspace-concurrency=-2 run test",
-    "test:update:packages": "pnpm --filter '*' --workspace-concurrency=-2 run test:update",
-    "tsc:build:packages": "pnpm --filter '*' --workspace-concurrency=-2 run tsc:build",
-    "tsc:build:root": "tsgo --build tsconfig.json"
+    "test:update": "pnpm --filter '*' --workspace-concurrency=-2 run test:update",
+    "typecheck": "tsgo --build"
   },
   "devDependencies": {
     "@mdx-js/language-service": "catalog:",

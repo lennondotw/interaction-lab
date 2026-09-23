@@ -35,14 +35,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # `:packages` fans out over the workspace; `:root` covers the files that
-      # belong to no package — oxfmt.config.ts and the rest of
-      # tsconfig.node.json. Without both, root-level config is never typechecked.
-      - name: Build & typecheck (packages)
-        run: pnpm -w --no-bail run tsc:build:packages
-
-      - name: Build & typecheck (root)
-        run: pnpm -w --no-bail run tsc:build:root
+      # The root solution tsconfig references every package and the root-level
+      # config (oxfmt.config.ts and the rest of tsconfig.node.json), so one
+      # build covers all of it.
+      - name: Build & typecheck
+        run: pnpm -w --no-bail run typecheck
 
       # oxlint scans the whole repo in one pass, so there is no per-package
       # variant to run. Type-aware is a superset of plain `lint`, so only this
@@ -78,10 +75,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build & typecheck
-        run: pnpm -w run tsc:build:packages
+        run: pnpm -w run typecheck
 
       - name: Run tests
-        run: pnpm -w run test:packages
+        run: pnpm -w run test
 
   chat-interactions:
     runs-on: ubuntu-latest
@@ -96,9 +93,8 @@ jobs:
         with:
           restore-key-prefix: 'chat-interactions'
       - run: pnpm install --frozen-lockfile
-      - name: Build workspace dependencies
-        run: pnpm run tsc:build:upstream
-        working-directory: lab
+      # No build step: `storybook dev` resolves workspace packages through their
+      # `development` export condition, straight to source.
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Run chat contracts
@@ -132,10 +128,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build workspace dependencies
-        run: pnpm run tsc:build:upstream
-        working-directory: lab
-
+      # lab's `build` runs `tsgo --build` first, which builds the referenced
+      # packages' `dist` that the production Storybook bundle resolves to.
       - name: Build storybook
         run: pnpm run build
         working-directory: lab

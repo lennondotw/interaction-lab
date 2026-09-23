@@ -7,17 +7,15 @@
     "#src/*": "./src/*"
   },
   "scripts": {
-    "build": "pnpm run tsc:build && storybook build",
+    "build": "tsgo --build && storybook build",
+    "clean": "tsgo --build --clean",
     "dev": "storybook dev --no-open --port 6009",
     "preview": "vite preview --outDir storybook-static",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:update": "vitest run --update",
     "test:watch": "vitest --watch",
-    "tsc:build": "tsgo --build tsconfig.json",
-    "tsc:build:clean": "tsgo --build tsconfig.json --clean",
-    "tsc:build:upstream": "pnpm --filter '{.}...' --workspace-concurrency=-2 run tsc:build",
-    "tsc:build:watch": "tsgo --build tsconfig.json --watch"
+    "typecheck": "tsgo --build"
   },
   "dependencies": {
     "@dicebear/core": "catalog:",
