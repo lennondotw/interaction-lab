@@ -125,10 +125,12 @@ try {
         'A resize during catch-up updates the target without snapping to bottom'
       );
     }
+    // Handoff precedes spring rest: after the flight releases, catch-up can still
+    // be finishing its sub-pixel tail at 0.1x. Sample the end once intent settles.
     await page.waitForFunction(
       () => {
         const state = window.readFlightComposer();
-        return !state.flying && !state.layout;
+        return !state.flying && !state.layout && state.mode !== 'animating';
       },
       undefined,
       { timeout: 20000 }
