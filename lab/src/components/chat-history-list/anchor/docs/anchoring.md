@@ -45,9 +45,14 @@ should be compensated.
 - **Batch a frame's changes.** Capture once, apply every change (viewport size, forgotten sizes,
   all measurements), resolve once, and write before the frame paints. Resolving after each
   measurement instead would compound rounding.
-- **Keep a logical offset.** Scroll positions snap to the device pixel grid. Keep the fractional
-  offset the anchor asked for, write the scroller only when that lands on a different device
-  pixel, and use the logical offset while the scroller still reads what was last written.
+- **Keep the reading offset as the source of truth.** Scroll positions snap to a grid the
+  browser chooses: the screen's device pixels in Chromium, whole pixels truncated toward zero
+  in Safari (measured in
+  [`archive/2026-09-scroll-offset-quantization`](../../../../../../archive/2026-09-scroll-offset-quantization/README.md)). Keep the fractional offset the anchor asked for as the reading offset, write the
+  scroller only when that lands on a different device pixel, and keep the reading offset while
+  the scroller still reads what was last written. Never read the snapped `scrollTop` back into
+  it, and never accumulate compensations: resolve each change afresh from its snapshot, so the
+  error stays within one quantization step instead of growing.
 - The result may need clamping to the scrollable range; a clamped result cannot hold the anchor.
 
 ## Decision: positions from the core, not the DOM
@@ -56,8 +61,9 @@ Anchoring reads positions from the core rather than measuring elements. It then 
 for rows in normal flow and for absolutely positioned rows, for rows that are not mounted, and
 in tests without a DOM. The cost is an invariant: at every paint, the DOM layout must equal the
 core's. The playground checks it by comparing the anchor row's element with the core's position
-for it after each change (the residual) and adds any difference to the scroll position, so a
-broken invariant shows in the state panel instead of as a jump.
+for it after each change (the DOM residual). It does not correct a residual: that would hide a
+bug in the scroll position. A residual of a layout unit (1/64px) or more is logged to the
+console and shown in the state panel.
 
 ## Tests
 

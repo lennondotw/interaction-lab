@@ -33,8 +33,9 @@ story explains whichever of the two is showing.
 - The state panel below lists counts, total size, both ranges, the viewport, and the
   minimap's view: fitted or zoomed, its scale, and the list offset at its top edge. It also
   shows the row anchoring would hold now and its distance from the line, the last change
-  (what ran, which row it held, how far it scrolled), and the DOM residual with the largest
-  seen since mount.
+  (what ran, which row it held, how far the reading offset moved), the DOM residual, and the
+  presentation: the scroller's `scrollTop` and its quantization error against the reading
+  offset. Both show the largest value seen since mount.
 - With anchoring on, the minimap fills the anchor row in purple and draws the reference line
   across the rows.
 - When a row's measured size changes, including its first measurement, the row is covered at
@@ -63,22 +64,39 @@ button, a story control, a ResizeObserver callback or a scroll that changes the 
 
 1. capture the anchor from the core while it still holds the old layout;
 2. apply the change;
-3. render synchronously, measure every mounted row, and write the offset that holds the anchor,
-   repeating while that mounts rows the core has not measured (more than 8 passes throws);
-4. compare the anchor row's element with the core's position for it and add any residual to
-   the offset;
+3. render synchronously, measure every mounted row, and set the reading offset that holds the
+   anchor, repeating while that mounts rows the core has not measured (more than 8 passes
+   throws);
+4. measure the DOM residual: the anchor row's element minus the core's position for it. It is
+   not corrected; one of a layout unit or more is logged as an error;
 5. flash the rows whose size changed and repaint the painters.
 
 A scroll reports its new offset first and runs a transaction only when the render range
 changes, so newly mounted rows are measured before they paint. Changes that arrive as story
 controls run in a microtask after React's commit, since a synchronous render cannot run inside
-one. The scroll position is kept as a logical offset and written only when it lands on a
-different device pixel; the echo of that write is recognised and not treated as a user scroll,
-and the scroll direction's reference point moves with each compensation.
+one. The echo of our own `scrollTop` write is recognised and not treated as a user scroll, and
+the scroll direction's reference point moves with each compensation.
+
+### State and its sources
+
+| Layer          | State                      | Set by                                                   |
+| -------------- | -------------------------- | -------------------------------------------------------- |
+| Content layout | the core's offsets         | measurements and window changes, never a compensation    |
+| Reading offset | the core's viewport offset | an anchor resolution, or a user scroll read back         |
+| Presentation   | the scroller's `scrollTop` | derived from the reading offset; never read back into it |
+
+The presentation is written only when the reading offset lands on a different device pixel.
+While the scroller still reads the value last written, the reading offset stands; any other
+value means the user scrolled or the browser clamped, and the reading offset follows it. The
+difference between the two is the quantization error. Each change's compensation is logged as
+a delta and never accumulated.
 
 Measured in Chromium at a device pixel ratio of 2, with two pulsing rows above the viewport for
 240 frames, the anchor point moved at most 0.25px, half a device pixel, in both layouts at
-ratios 0, 0.5 and 1, with no accumulation. The residual stayed at zero.
+ratios 0, 0.5 and 1, with no accumulation. That drift is the quantization error; the DOM
+residual stayed at zero. Chromium keeps `scrollTop` on a 0.5px grid and Safari on whole pixels,
+so the same error is up to a whole pixel in Safari, and in either browser it moves painted
+content between neighbouring device pixels from frame to frame.
 
 ## Scroll direction hysteresis
 
