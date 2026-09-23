@@ -1,0 +1,3 @@
+# Mirrors the hook `git lfs install` writes to .git/hooks, which core.hooksPath bypasses.
+command -v git-lfs >/dev/null 2>&1 || { echo >&2 "husky - pre-push: this repository stores binaries in Git LFS, but git-lfs is not on PATH. Install it from https://git-lfs.com"; exit 2; }
+git lfs pre-push "$@"
