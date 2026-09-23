@@ -47,8 +47,7 @@ try {
   // A zoomed browser can clamp scrollTop by half a CSS pixel while its integer
   // scrollHeight stays unchanged. This must remain a layout-owned scroll.
   const fractionalClamp = await page.evaluate(async () => {
-    const { createChatScrollController } =
-      await import('/src/components/chat-scroll-container/chat-scroll-controller.ts');
+    const { createScrollAnchorController } = await import('/src/components/scroll-anchor/scroll-anchor-controller.ts');
     const viewport = document.createElement('div');
     viewport.style.cssText =
       'position:fixed;inset:0 auto auto 0;width:100px;height:100px;overflow:auto;overflow-anchor:none;zoom:2';
@@ -57,7 +56,7 @@ try {
     viewport.append(content);
     document.body.append(viewport);
     const modes = [];
-    const controller = createChatScrollController(viewport, content, {
+    const controller = createScrollAnchorController(viewport, content, {
       threshold: 20,
       reducedMotion: false,
       animationSpeed: 1,
@@ -70,7 +69,7 @@ try {
       await flush();
       const before = { top: viewport.scrollTop, height: viewport.scrollHeight };
       content.style.height = '199.5px';
-      controller.contentChanged(false, { animatedLayout: true });
+      controller.layoutChanged({ animated: true });
       await flush();
       return { before, after: { top: viewport.scrollTop, height: viewport.scrollHeight }, modes };
     } finally {

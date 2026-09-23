@@ -33,7 +33,7 @@ Enter submits unless Shift is held or IME composition is active. Shift+Enter kee
 
 - Implementation: [composer composition and send timing](../chat-scroll-container.stories.tsx).
 - Space ownership: [measurement hook](../use-chat-composer-space.ts) and [release lifecycle](../chat-bottom-space.ts).
-- Related implementation: [textarea sizing](../../message-input/message-input.tsx) and [initial layout / resize policy](../chat-scroll-controller.ts).
+- Related implementation: [textarea sizing](../../message-input/message-input.tsx) and [initial layout / resize policy](../../scroll-anchor/scroll-anchor-controller.ts).
 - History: [cf8d1de](https://github.com/lennondotw/interaction-lab/commit/cf8d1de); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#scrolling-and-composer).
 

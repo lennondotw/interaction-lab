@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, type RefObject } from 'react';
 
 import { cloneWithoutChatDebug, registerChatDebugVisual } from '../chat-scroll-container/chat-item-debug.js';
 import { hasChatLayoutAnimation, projectedChatY } from '../chat-scroll-container/chat-layout.js';
-import { chatScrollInterrupted } from '../chat-scroll-container/chat-scroll-controller.js';
+import { scrollAnchorInterrupted } from '../scroll-anchor/scroll-anchor-controller.js';
 
 import './chat-send-flight.css';
 
@@ -248,11 +248,11 @@ export function useChatSendFlight(
     const preferenceChanged = () => {
       if (preference.matches) cancel();
     };
-    viewport?.addEventListener(chatScrollInterrupted, cancel);
+    viewport?.addEventListener(scrollAnchorInterrupted, cancel);
     preference.addEventListener('change', preferenceChanged);
     return () => {
       cancel();
-      viewport?.removeEventListener(chatScrollInterrupted, cancel);
+      viewport?.removeEventListener(scrollAnchorInterrupted, cancel);
       preference.removeEventListener('change', preferenceChanged);
     };
   }, [hostRef]);

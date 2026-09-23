@@ -1,14 +1,9 @@
 import { animate, motionValue } from 'motion/react';
 
+import { createReadingAnchorTracker, type ReadingAnchor } from '../scroll-anchor/reading-anchor.js';
 import { readChatItemGap } from './chat-items.js';
 import { registerChatLayout, type ChatLayoutEntry } from './chat-layout.js';
 import { chatLayoutSpring } from './chat-presence.js';
-
-export interface ReadingAnchor {
-  element: HTMLElement;
-  /** Body bottom relative to the viewport, independent of container translation. */
-  bottom: number;
-}
 
 interface Measurement {
   row: HTMLElement;
@@ -41,7 +36,6 @@ export function createChatInsertions(
   const unregister = registerChatLayout(viewport, entries);
   const measurements = new Map<HTMLElement, { body: HTMLElement; height?: number; gap: number }>();
   const active = new Map<HTMLElement, Insertion>();
-  let savedAnchor: (ReadingAnchor & { scrollTop: number }) | undefined;
   let typingSnapshot: { row: Element; height: number } | undefined;
   let speed = 1;
   let reduced = false;
@@ -61,33 +55,19 @@ export function createChatInsertions(
     return row.querySelector<HTMLElement>(':scope > [data-chat-item-id], :scope > [data-chat-item-body]') ?? row;
   }
 
-  function captureAnchor(): ReadingAnchor | undefined {
-    const top = viewport.getBoundingClientRect().top;
-    const rows = content.children;
-    // Row boxes are ordered and never overlap, even when their visuals overflow.
-    // Binary search avoids measuring an entire history on every animation tick.
-    let low = 0;
-    let high = rows.length;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if (rows[mid]!.getBoundingClientRect().bottom <= top) low = mid + 1;
-      else high = mid;
-    }
-    for (let index = low; index < rows.length; index++) {
-      const row = rows[index] as HTMLElement;
-      if (active.get(row)?.newItem) continue;
-      const element = readingElement(row);
-      // Preserve the edge that made this partially visible row eligible. Rewrap
-      // can shorten its body without moving that edge out of the reading viewport.
-      return { element, bottom: element.getBoundingClientRect().bottom - top };
-    }
-    return undefined;
-  }
+  // Anchor the existing body rather than a temporary slot, and never a row that is
+  // still entering. The scroll listener below refreshes the snapshot together with
+  // the typing footprint, so the tracker does not observe scrolling on its own.
+  const anchors = createReadingAnchorTracker(viewport, content, {
+    observeScroll: false,
+    readingElement,
+    skipRow: (row) => active.get(row)?.newItem === true,
+  });
+  const captureAnchor = () => anchors.capture();
 
   function remember() {
-    const anchor = captureAnchor();
-    savedAnchor = anchor && { ...anchor, scrollTop: viewport.scrollTop };
-    showAnchor(anchor?.element);
+    anchors.remember();
+    showAnchor(anchors.saved()?.element);
     const tail = content.lastElementChild;
     const last = tail?.getAttribute('data-slot') === 'chat-bottom-space' ? tail.previousElementSibling : tail;
     const typing = last?.querySelector<HTMLElement>(':scope > [data-chat-item-body]');
@@ -96,11 +76,7 @@ export function createChatInsertions(
     typingSnapshot = typing && last ? { row: last, height: last.getBoundingClientRect().height } : undefined;
   }
 
-  function anchorFromSnapshot(): ReadingAnchor | undefined {
-    return savedAnchor?.element.isConnected
-      ? { element: savedAnchor.element, bottom: savedAnchor.bottom + savedAnchor.scrollTop - viewport.scrollTop }
-      : captureAnchor();
-  }
+  const anchorFromSnapshot = () => anchors.fromSnapshot();
 
   function restore(entry: Insertion) {
     const { row, body } = entry.measurement;
@@ -219,7 +195,7 @@ export function createChatInsertions(
     // before ResizeObserver. It must not replace the pre-layout reading snapshot.
     // Real scrolling during a width change is accounted for by anchorFromSnapshot;
     // the resize callback compensates first and only then selects the next anchor.
-    if (savedAnchor?.scrollTop === viewport.scrollTop || viewport.clientWidth !== width) return;
+    if (anchors.saved()?.scrollTop === viewport.scrollTop || viewport.clientWidth !== width) return;
     remember();
   }
   viewport.addEventListener('scroll', onScroll, { passive: true });
@@ -358,7 +334,7 @@ export function createChatInsertions(
         anchorOverlay.dataset.slot = 'chat-reading-anchor-overlay';
         anchorOverlay.setAttribute('aria-hidden', 'true');
         // Show the manager's saved selection, without an independent geometry scan.
-        showAnchor(savedAnchor?.element);
+        showAnchor(anchors.saved()?.element);
       } else if (!enabled) {
         showAnchor();
         anchorOverlay = undefined;
@@ -369,6 +345,7 @@ export function createChatInsertions(
       anchorOverlay = undefined;
       bodyObserver.disconnect();
       viewport.removeEventListener('scroll', onScroll);
+      anchors.dispose();
       for (const entry of entries) {
         entry.animation?.stop();
         entry.size.destroy();

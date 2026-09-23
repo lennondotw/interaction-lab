@@ -10,6 +10,11 @@ import {
 } from 'react';
 
 import { MessageBubble, TypingBubble } from '../message-bubble/index.js';
+import {
+  createScrollAnchorController,
+  type ScrollAnchorController,
+  type ScrollAnchorState,
+} from '../scroll-anchor/scroll-anchor-controller.js';
 import { createChatBottomSpace, type ChatBottomSpace } from './chat-bottom-space.js';
 import { createChatInsertions } from './chat-insertions.js';
 import { createChatItemDebug } from './chat-item-debug.js';
@@ -23,12 +28,11 @@ import {
 } from './chat-items.js';
 import { ChatDateLabel, ChatStatusLabel } from './chat-list-labels.js';
 import { animateChatEntrance } from './chat-presence.js';
-import { createChatScrollController, type ChatScrollState } from './chat-scroll-controller.js';
 import { useTypingExit } from './use-typing-exit.js';
 
 import './chat-scroll-container.css';
 
-export type { ChatScrollState } from './chat-scroll-controller.js';
+export type ChatScrollState = ScrollAnchorState;
 
 export type { ChatMessage, ChatListItem, ChatContentItem, ChatDateItem, ChatStatusItem } from './chat-items.js';
 
@@ -84,7 +88,7 @@ export function ChatScrollContainer({
   const contentRef = useRef<HTMLOListElement>(null);
   const bottomSpaceRef = useRef<HTMLLIElement>(null);
   const bottomSpaceController = useRef<ReturnType<typeof createChatBottomSpace> | null>(null);
-  const controllerRef = useRef<ReturnType<typeof createChatScrollController> | null>(null);
+  const controllerRef = useRef<ScrollAnchorController | null>(null);
   const insertionsRef = useRef<ReturnType<typeof createChatInsertions> | null>(null);
   useImperativeHandle(
     ref,
@@ -109,7 +113,7 @@ export function ChatScrollContainer({
   const entranceAnimations = useRef(new Set<ReturnType<typeof animateChatEntrance>>());
   const reducedMotion = useReducedMotion();
   const typingLayoutChanged = useCallback(() => {
-    controllerRef.current?.contentChanged(false, { animatedLayout: true });
+    controllerRef.current?.layoutChanged({ animated: true });
     insertionsRef.current?.remember();
   }, []);
   const typing = useTypingExit(
@@ -123,14 +127,14 @@ export function ChatScrollContainer({
 
   useLayoutEffect(() => {
     if (!viewportRef.current || !contentRef.current) return;
-    const controller = createChatScrollController(viewportRef.current, contentRef.current, {
+    const controller = createScrollAnchorController(viewportRef.current, contentRef.current, {
       threshold: 2,
       reducedMotion: true,
       animationSpeed: 1,
     });
     controllerRef.current = controller;
     const insertions = createChatInsertions(viewportRef.current, contentRef.current, (localSend, anchor) => {
-      controller.contentChanged(localSend, { animatedLayout: true, anchor });
+      controller.layoutChanged({ follow: localSend, animated: true, anchor });
     });
     insertionsRef.current = insertions;
     const entrances = entranceAnimations.current;
@@ -174,7 +178,7 @@ export function ChatScrollContainer({
     const element = bottomSpaceRef.current;
     if (!viewport || !element) return;
     const space = createChatBottomSpace(viewport, element, (composerResize) => {
-      controllerRef.current?.contentChanged(false, { animatedLayout: true, composerResize });
+      controllerRef.current?.layoutChanged({ animated: true, clearance: composerResize });
       insertionsRef.current?.remember();
     });
     bottomSpaceController.current = space;
@@ -273,7 +277,7 @@ export function ChatScrollContainer({
         entranceAnimations.current.add(animation);
       }
     }
-    if (!itemsChanged && !typing.preparingEntry) controllerRef.current?.contentChanged();
+    if (!itemsChanged && !typing.preparingEntry) controllerRef.current?.layoutChanged();
     // Presentation copies must reflect committed grouping before the next paint.
     for (const animation of entranceAnimations.current) animation.sync();
     if (!typing.preparingEntry) insertionsRef.current?.remember();

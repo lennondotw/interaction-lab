@@ -1,6 +1,7 @@
 /** Run real-browser contracts serially so animation sampling does not compete across tests. */
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,7 @@ await mkdir(output, { recursive: true });
 const started = Date.now();
 const base = process.env.STORYBOOK_URL ?? `http://127.0.0.1:${process.env.CHAT_TEST_PORT ?? '6199'}`;
 const fullSuite = [
+  'scroll-anchor',
   'resize-window',
   'contracts',
   'item-debug',
@@ -33,7 +35,7 @@ const fullSuite = [
   'layout-transactions',
   'insertion',
 ];
-const ciSuite = ['contracts', 'item-debug', 'scroll', 'send-flight', 'typing-handoff'];
+const ciSuite = ['scroll-anchor', 'contracts', 'item-debug', 'scroll', 'send-flight', 'typing-handoff'];
 const suiteName = process.argv[2] ?? 'full';
 const suites = { full: fullSuite, ci: ciSuite };
 const names = suites[suiteName];
@@ -127,8 +129,12 @@ try {
     await readiness();
   }
   for (const name of names) {
-    console.log(`RUN chat-${name}`);
-    const { child, done } = launch(process.execPath, [`scripts/test-chat-${name}.mjs`], name);
+    console.log(`RUN ${name}`);
+    // Shared primitives keep their own script names; chat contracts carry the chat- prefix.
+    const script = existsSync(`${root}scripts/test-${name}.mjs`)
+      ? `scripts/test-${name}.mjs`
+      : `scripts/test-chat-${name}.mjs`;
+    const { child, done } = launch(process.execPath, [script], name);
     const timeout = setTimeout(() => stop(child), 180000);
     try {
       await done;
@@ -137,7 +143,7 @@ try {
       stop(child);
       children.delete(child);
     }
-    console.log(`PASS chat-${name}`);
+    console.log(`PASS ${name}`);
   }
   console.log(`Chat contracts passed (${Math.round((Date.now() - started) / 1000)}s). Logs: ${output}`);
 } finally {
