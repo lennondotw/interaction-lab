@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import { useIntervalEffect, useMeasure } from '@react-hookz/web';
+import { useIntervalEffect } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -11,6 +11,7 @@ import {
   effectiveTraversal,
 } from '#src/components/meta-surface/sdf/field.js';
 import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
+import { useElementSize } from '#src/utils/use-element-size.js';
 
 import {
   BLEND,
@@ -59,7 +60,9 @@ const EMPTY_STATS: LiveStats = {
 
 export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [measures, containerRef] = useMeasure<HTMLDivElement>(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // CSS sizes the canvas box; the measured width only sets its bitmap resolution.
+  const measures = useElementSize(containerRef);
 
   const tracer = useMemo(() => new ContourTracer(VIEW, OVERSCAN, MIN_CELL), []);
   const ballsRef = useRef<Ball[]>(createBalls(4));
@@ -93,11 +96,10 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
     ballsRef.current = createBalls(ballCount);
   }, [ballCount]);
 
-  const displaySize = Math.max(measures?.width ?? VIEW, 1);
-
   useAnimationFrame((time, delta) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !measures) return;
+    const displaySize = measures.width;
 
     const dpr = window.devicePixelRatio || 1;
     const targetWidth = Math.round(displaySize * dpr);
@@ -191,10 +193,9 @@ export const SdfOnCanvas: FC<{ className?: string }> = ({ className }) => {
         <div ref={containerRef} className="w-full max-w-[520px] shrink-0">
           <canvas
             ref={canvasRef}
-            style={{ width: displaySize, height: displaySize }}
             {...handlers}
             className={`
-              touch-none rounded-2xl bg-neutral-900/5
+              aspect-square w-full touch-none rounded-2xl bg-neutral-900/5
               dark:bg-neutral-800/50
             `}
           />
