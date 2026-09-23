@@ -1,5 +1,5 @@
 import { cn } from '@monorepo/utils';
-import { useIntervalEffect, useMeasure } from '@react-hookz/web';
+import { useIntervalEffect } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { FC, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -95,7 +95,6 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
   const cssClipId = `sdf-clip-css-${uid}`;
   const svgClipId = `sdf-clip-svg-${uid}`;
 
-  const [measures, containerRef] = useMeasure<HTMLDivElement>(true);
   const surfacePathRef = useRef<SVGPathElement>(null);
   const clipCssRef = useRef<SVGPathElement>(null);
   const clipSvgRef = useRef<SVGPathElement>(null);
@@ -140,7 +139,6 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
     ballsRef.current = createArrangement(arrangement, ballCount);
   }, [arrangement, ballCount]);
 
-  const displaySize = Math.max(measures?.width ?? VIEW, 1);
   const visibleBalls = arrangement === 'neck' ? 2 : ballCount;
   // The inset level is only worth tracing when a border is actually asking for it.
   const wantsInset = showBorder && borderMode === 'second-iso';
@@ -224,9 +222,6 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
 
   const fps = stats !== null && stats.frameMs > 0 ? 1000 / stats.frameMs : 0;
   const pinched = stats !== null && stats.insetLoops > stats.surfaceLoops;
-  // Domain units to the element's CSS px, so one `d` in domain space can drive a
-  // `clip-path` on an HTML box without being rebuilt in a second coordinate system.
-  const domainToCss = displaySize / VIEW;
 
   return (
     <div className={cn(`mx-auto flex w-full max-w-6xl touch-manipulation flex-col gap-6 px-4 py-6`, className)}>
@@ -257,17 +252,20 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
           lg:flex-row lg:items-start
         `}
       >
-        <div ref={containerRef} className="w-full max-w-[520px] shrink-0">
+        <div className="w-full max-w-[520px] shrink-0">
+          {/*
+            CSS owns the size: a square as wide as the column. Measuring it in JS
+            painted a first frame at the 512 fallback and resized one frame later.
+          */}
           <div
             className={`
-              relative overflow-hidden rounded-2xl bg-neutral-900/5
+              relative aspect-square w-full overflow-hidden rounded-2xl bg-neutral-900/5
               dark:bg-neutral-800/50
             `}
-            style={{ width: displaySize, height: displaySize }}
           >
             {/*
               The clipped subtree. `clip-path` is a paint-time property, so this box
-              keeps its full 512-square layout whatever the contour does — and the
+              keeps its full square layout whatever the contour does — and the
               per-frame invalidation lands here, on this content, not on the tracer.
             */}
             <div className="absolute inset-0" style={{ clipPath: clipContent ? `url(#${cssClipId})` : undefined }}>
@@ -281,11 +279,12 @@ export const SdfClipAndOutline: FC<{ className?: string }> = ({ className }) => 
                   space — it resolves against whatever user space the *referrer*
                   sits in, and the two referrers here disagree: the HTML box above
                   measures in CSS px from its border box, while the stroke below is
-                  in this viewBox's domain units. So the HTML one carries the
-                  domain-to-CSS scale and the SVG one carries none. Sharing a single
-                  clipPath between them would silently mis-scale one of the two.
+                  in this viewBox's domain units. The HTML one therefore uses
+                  `objectBoundingBox` and maps the domain onto 0–1, so it follows the
+                  box's CSS size without knowing it in px; the SVG one needs no
+                  scale. Sharing a single clipPath would mis-scale one of the two.
                 */}
-                <clipPath id={cssClipId} clipPathUnits="userSpaceOnUse" transform={`scale(${domainToCss})`}>
+                <clipPath id={cssClipId} clipPathUnits="objectBoundingBox" transform={`scale(${1 / VIEW})`}>
                   <path ref={clipCssRef} />
                 </clipPath>
                 <clipPath id={svgClipId} clipPathUnits="userSpaceOnUse">
