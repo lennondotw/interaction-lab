@@ -7,6 +7,10 @@
     "./background": {
       "import": "./dist/background/index.js",
       "default": null
+    },
+    "./theme": {
+      "import": "./dist/theme/index.js",
+      "default": null
     }
   },
   "scripts": {

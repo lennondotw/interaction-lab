@@ -47,7 +47,7 @@
    * --------------------------------
    * Storybook copies this file verbatim into the `<head>` of `iframe.html`, after its own inline
    * styles. It is plain HTML, so it applies from the very first frame; everything else in the
-   * preview (`global.css`, the theme decorator in `preview.tsx`) only runs once the JavaScript
+   * preview (`global.css`, the theme addon wired in `preview.tsx`) only runs once the JavaScript
    * bundle has loaded and executed.
    *
    * Load timeline without this block (dev server, system dark, toolbar "Always Dark"):
@@ -72,7 +72,7 @@
    * Deliberately not handled
    * ------------------------
    * - The toolbar's theme global is not readable here. When it forces a theme opposite to the
-   *   system's, the first frames follow the system until the theme decorator sets `data-theme`.
+   *   system's, the first frames follow the system until the theme addon sets `data-theme`.
    *   Fixing that would take a blocking script that parses the URL / storage before first paint,
    *   which is not worth it for a few hundred milliseconds.
    * - Docs pages show no loading indicator: rule 3 hides the whole skeleton, and the spinner
@@ -102,10 +102,11 @@
    * because the scheme is `light dark`.)
    *
    * The rule sits in `@layer preview-boot`. Because this is the first layer the document
-   * declares, it is the lowest-priority one, so Tailwind's `base`-layer rules on `:root` override
-   * it as soon as `global.css` loads - including the `color-scheme` and background they derive
-   * from `data-theme`, which is what makes "Always Light" / "Always Dark" work. Left unlayered,
-   * this rule would outrank every layered rule and pin the preview to the system theme forever.
+   * declares, it is the lowest-priority one, so later rules on `:root` override it: Tailwind's
+   * `base` layer (the page background and `color-scheme` from `data-theme`, once `global.css`
+   * loads) and the theme addon's unlayered `color-scheme` rule (once it has run). That is what
+   * makes "Always Light" / "Always Dark" work. Left unlayered, this rule would outrank every
+   * layered rule and pin the preview to the system theme forever.
    */
   @layer preview-boot {
     :root {
@@ -131,7 +132,7 @@
    * This rule must stay unlayered: Storybook's rule is unlayered, and any layered rule loses to
    * an unlayered one. With equal specificity it wins on source order, because the preview head is
    * emitted after Storybook's own styles. `light-dark()` resolves against the root's
-   * `color-scheme`, so once `global.css` has loaded the overlay follows `data-theme` too.
+   * `color-scheme`, so once the theme addon has run the overlay follows the toolbar theme too.
    */
   .sb-preparing-story,
   .sb-preparing-docs {
