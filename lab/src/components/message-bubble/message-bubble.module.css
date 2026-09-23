@@ -1,7 +1,14 @@
 @reference "../../../../packages/tailwindcss/tailwindcss.css";
 
+/*
+ * Message bubble styles, as module classes applied by `message-bubble.tsx`. The bubble keeps its
+ * `data-slot`, `data-variant` and `data-tail` attributes: runtime code and the browser contracts
+ * read them, and the entrance and flight copies toggle `data-tail`. The variant and tail rules
+ * key on those attributes, but only together with the module class.
+ */
+
 @layer components {
-  [data-slot='message-bubble'] {
+  .bubble {
     /* Tuned to 8px vertical insets and 14/17 typography (33px for one line).
        Horizontal insets follow the reference; the corner radius remains an
        optical approximation of the reference. */
@@ -29,7 +36,8 @@
     overflow-wrap: anywhere;
   }
 
-  [data-slot='message-bubble'] > [data-slot='message-bubble-content'] {
+  /* A direct child only: the send flight moves the content into its own clip. */
+  .bubble > .content {
     /* Center the intrinsic content box inside the minimum-width bubble,
        while wrapped text keeps its normal start alignment. */
     min-width: 0;
@@ -37,7 +45,7 @@
     min-height: 1lh;
   }
 
-  [data-slot='message-bubble'][data-variant='incoming'] {
+  .bubble[data-variant='incoming'] {
     --message-bubble-fill: #e5e5ea;
     color: #000;
 
@@ -48,7 +56,7 @@
     }
   }
 
-  [data-slot='message-bubble'][data-tail]::before {
+  .bubble[data-tail]::before {
     /* 19 × 14 tail, overlapping the body by 9px (5px visible below it).
        This curve is an optical reconstruction, not an exported Figma vector.
        A clipped fill needs no background-colored cutout, so the bubble can
@@ -65,7 +73,7 @@
     pointer-events: none;
   }
 
-  [data-slot='message-bubble'][data-variant='outgoing'][data-tail]::before {
+  .bubble[data-variant='outgoing'][data-tail]::before {
     right: 5px;
     left: auto;
     transform: scaleX(-1);
