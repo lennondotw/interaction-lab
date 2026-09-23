@@ -1,0 +1,59 @@
+/*
+ * A labelled frame whose label cuts a gap in the frame line. Opt in with the
+ * `data-edge-label-frame` attribute; like the lab's other hand-written CSS, it keys on a data
+ * attribute rather than a class so it does not read as an unknown Tailwind utility, and sits in
+ * the `components` layer so the element's `after:` utilities (colour, line style) win over it.
+ *
+ * The frames in these studies carry a small label sitting on their top edge. The label used
+ * to hide the line behind it with a background of the page colour, which only worked on a
+ * surface of that exact colour: the studies had to paint their own background, and the
+ * Background toolbar could not override it. Here the line itself has a hole where the label
+ * sits, so the label needs no background and the frame reads on any backdrop - the page, a
+ * solid override, or the checkerboard.
+ *
+ * How it is drawn
+ * ---------------
+ * The line is not the element's `outline` any more: an outline cannot be masked on its own,
+ * and masking the element would cut its content and the label too. It is an `::after` that
+ * covers the border box (`inset: 0`) with a 1px border, which draws exactly where the old
+ * `outline: 1px; outline-offset: -1px` did and, like an outline, takes no layout space. Colour
+ * and line style (solid or dashed, light and dark) stay Tailwind utilities on the element -
+ * `after:border-dashed after:border-sky-300 dark:after:border-sky-400/60` - so each frame keeps
+ * its palette where it is written.
+ *
+ * The hole is a mask: the full box, minus one small rectangle composited out with `exclude`.
+ * The rectangle starts where the label does (12px, the label's `left-3`), spans the top edge
+ * only (1px tall), and is exactly as wide as the label.
+ *
+ * The label's width without measuring it
+ * --------------------------------------
+ * Labels are set in the studies' monospace font, so a label is its character count times
+ * `1ch`, plus the label's own `px-1` (4px) on each side. The frame gets that count as
+ * `--label-ch` (see `edgeLabel()` in `edge-label.ts`, which derives it from the label text so
+ * the two cannot drift apart), and the mask computes the width with `calc()`. `ch` resolves
+ * against the pseudo-element's own font, which it inherits from the frame - the same font the
+ * label inherits - so the hole is as wide as the text without any script or layout read.
+ * If a label ever stops being monospace, this breaks: switch to measuring it instead.
+ */
+
+@layer components {
+  [data-edge-label-frame]::after {
+    --edge-label-gap: calc(var(--label-ch, 0) * 1ch + 8px);
+
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-width: 1px;
+    pointer-events: none;
+
+    mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+    mask-size:
+      100% 100%,
+      var(--edge-label-gap) 1px;
+    mask-position:
+      0 0,
+      12px 0;
+    mask-repeat: no-repeat;
+    mask-composite: exclude;
+  }
+}

@@ -1,9 +1,19 @@
 import { animate, type AnimationPlaybackControlsWithThen, useMotionValue, useMotionValueEvent } from 'motion/react';
 import { type CSSProperties, type FC, type PointerEvent, useEffect, useLayoutEffect, useRef } from 'react';
 
+import { EDGE_LABEL_CLASS, edgeLabel } from '../edge-label.js';
+
 export interface BufferedSplitLayoutLiveCommitDemoProps {
   initialLeadingRatio?: number;
 }
+
+// Edge labels, each with the frame style its gap needs (see `../edge-label.ts`).
+const LABEL_LEFT_PANE = edgeLabel('left-pane');
+const LABEL_LEFT_CONTENT_LAYER = edgeLabel('left-content-layer');
+const LABEL_LEFT_REAL_CONTENT = edgeLabel('left-real-content');
+const LABEL_RIGHT_PANE = edgeLabel('right-pane');
+const LABEL_RIGHT_CONTENT_LAYER = edgeLabel('right-content-layer');
+const LABEL_RIGHT_REAL_CONTENT = edgeLabel('right-real-content');
 
 const MIN_LEADING_PX = 360;
 const MIN_TRAILING_PX = 360;
@@ -59,11 +69,6 @@ const DIVIDER_SPRING = {
   stiffness: DIVIDER_SPRING_STIFFNESS,
   type: 'spring',
 } as const;
-
-// The knockout background has to match the surface behind it, or the dashed
-// outline the label sits on shows through the text.
-const EDGE_LABEL_CLASS =
-  'pointer-events-none absolute top-0 left-3 z-20 -translate-y-1/2 bg-white px-1 leading-none dark:bg-neutral-950';
 
 /**
  * The retarget flash is written as an inline style rather than swapped as a
@@ -558,22 +563,21 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
       // it can measure the real story instead of a copy of it.
       data-testid="stage"
       style={rootStyle}
-      // Deliberate exception to "no story-owned background" (Story conventions, rule 1): this
-      // surface paints its own flat colour on purpose, and the Background toolbar does not reach
-      // under it. The edge labels knock the dashed outlines out with a background of this exact
-      // colour, so the labels only read cleanly on a surface of a known colour. Moving it to
-      // `<html>` would let the toolbar replace it and leave the knockouts as opaque boxes on the
-      // override. To drop the exception, stop knocking out the outlines instead (leave a gap in
-      // the dash, or outline the text) and then remove this background.
       className={`
-        relative h-dvh min-h-[620px] w-full overflow-hidden bg-white font-mono text-[12px] text-slate-500
-        dark:bg-neutral-950 dark:text-neutral-400
+        relative h-dvh min-h-[620px] w-full overflow-hidden font-mono text-[12px] text-slate-500
+        dark:text-neutral-400
       `}
     >
+      {/*
+        A badge, not a knockout: it sits across the right frame's top line, and the outline and
+        fill make it read as a chip on any backdrop, including the Background toolbar's
+        overrides. Same palette as the toggle button in the other buffered-split studies.
+      */}
       <span
         className={`
-          pointer-events-none absolute top-2 right-3 z-40 flex items-center gap-2 bg-white px-1
-          dark:bg-neutral-950
+          pointer-events-none absolute top-2 right-3 z-40 flex items-center gap-2 bg-white px-1.5 py-0.5
+          outline-[1px] -outline-offset-1 outline-slate-400
+          dark:bg-neutral-900 dark:outline-neutral-600
         `}
       >
         <span ref={counterTextRef} data-demo-resize-counter>
@@ -591,33 +595,38 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
 
       <section
         data-demo-left-pane
-        style={leftPaneStyle}
+        style={{ ...leftPaneStyle, ...LABEL_LEFT_PANE.frameStyle }}
+        data-edge-label-frame
         className={`
-          absolute inset-y-4 z-10 outline-[1px] -outline-offset-1 outline-slate-300 contain-[layout]
-          dark:outline-neutral-700
+          absolute inset-y-4 z-10 after:border-slate-300 contain-[layout]
+          dark:after:border-neutral-700
         `}
       >
-        <span className={EDGE_LABEL_CLASS}>left-pane</span>
+        <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_PANE.text}</span>
         <div className="absolute inset-0 overflow-hidden">
           <div
             data-demo-left-content-layer
+            data-edge-label-frame
+            style={LABEL_LEFT_CONTENT_LAYER.frameStyle}
             className={`
-              absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2 outline-[1px]
-              -outline-offset-1 outline-sky-300 contain-[layout] outline-dashed
-              dark:outline-sky-400/60
+              absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2
+              after:border-sky-300 contain-[layout] after:border-dashed
+              dark:after:border-sky-400/60
             `}
           >
-            <span className={EDGE_LABEL_CLASS}>left-content-layer</span>
+            <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_CONTENT_LAYER.text}</span>
             <div data-demo-left-content-layer-scroll className="absolute inset-0 overflow-y-auto">
               <div
                 data-demo-left-content
+                data-edge-label-frame
+                style={LABEL_LEFT_REAL_CONTENT.frameStyle}
                 className={`
                   relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
-                  -translate-x-1/2 outline-[1px] -outline-offset-1 outline-sky-300 outline-dashed
-                  dark:outline-sky-400/60
+                  -translate-x-1/2 after:border-sky-300 after:border-dashed
+                  dark:after:border-sky-400/60
                 `}
               >
-                <span className={EDGE_LABEL_CLASS}>left-real-content</span>
+                <span className={EDGE_LABEL_CLASS}>{LABEL_LEFT_REAL_CONTENT.text}</span>
                 <div className="p-4 pt-8 text-center">
                   {LEFT_PARAGRAPHS.map((text) => (
                     <p
@@ -649,33 +658,38 @@ export const BufferedSplitLayoutLiveCommitDemo: FC<BufferedSplitLayoutLiveCommit
 
       <section
         data-demo-right-pane
-        style={rightPaneStyle}
+        style={{ ...rightPaneStyle, ...LABEL_RIGHT_PANE.frameStyle }}
+        data-edge-label-frame
         className={`
-          absolute inset-y-4 z-10 outline-[1px] -outline-offset-1 outline-slate-300 contain-[layout]
-          dark:outline-neutral-700
+          absolute inset-y-4 z-10 after:border-slate-300 contain-[layout]
+          dark:after:border-neutral-700
         `}
       >
-        <span className={EDGE_LABEL_CLASS}>right-pane</span>
+        <span className={EDGE_LABEL_CLASS}>{LABEL_RIGHT_PANE.text}</span>
         <div className="absolute inset-0 overflow-hidden">
           <div
             data-demo-right-content-layer
+            data-edge-label-frame
+            style={LABEL_RIGHT_CONTENT_LAYER.frameStyle}
             className={`
-              absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2 outline-[1px]
-              -outline-offset-1 outline-emerald-300 contain-[layout] outline-dashed
-              dark:outline-emerald-400/60
+              absolute inset-y-7 left-1/2 w-[max(0px,calc(100%-40px))] -translate-x-1/2
+              after:border-emerald-300 contain-[layout] after:border-dashed
+              dark:after:border-emerald-400/60
             `}
           >
-            <span className={EDGE_LABEL_CLASS}>right-content-layer</span>
+            <span className={EDGE_LABEL_CLASS}>{LABEL_RIGHT_CONTENT_LAYER.text}</span>
             <div data-demo-right-content-layer-scroll className="absolute inset-0 overflow-y-auto">
               <div
                 data-demo-right-content
+                data-edge-label-frame
+                style={LABEL_RIGHT_REAL_CONTENT.frameStyle}
                 className={`
                   relative left-1/2 my-7 min-h-[calc(100%-56px)] w-[max(0px,calc(100%-40px))] max-w-[640px]
-                  -translate-x-1/2 outline-[1px] -outline-offset-1 outline-emerald-300 outline-dashed
-                  dark:outline-emerald-400/60
+                  -translate-x-1/2 after:border-emerald-300 after:border-dashed
+                  dark:after:border-emerald-400/60
                 `}
               >
-                <span className={EDGE_LABEL_CLASS}>right-real-content</span>
+                <span className={EDGE_LABEL_CLASS}>{LABEL_RIGHT_REAL_CONTENT.text}</span>
                 <div className="p-4 pt-8 text-center">
                   {RIGHT_PARAGRAPHS.map((text) => (
                     <p
