@@ -1,6 +1,7 @@
+import { cn } from '@monorepo/utils';
 import type { ComponentPropsWithoutRef } from 'react';
 
-import './message-bubble.css';
+import styles from './message-bubble.module.css';
 
 export interface MessageBubbleProps extends ComponentPropsWithoutRef<'div'> {
   /** Outgoing blue or incoming neutral; positioning belongs to the parent. */
@@ -23,9 +24,9 @@ export function MessageBubble({
       data-slot="message-bubble"
       data-variant={variant}
       data-tail={tail || undefined}
-      className={className}
+      className={cn(styles.bubble, className)}
     >
-      <div data-slot="message-bubble-content">
+      <div data-slot="message-bubble-content" className={styles.content}>
         {children}
         {/* A final newline needs a line box to preserve its trailing empty line. */}
         {typeof children === 'string' && children.endsWith('\n') && <br aria-hidden="true" />}

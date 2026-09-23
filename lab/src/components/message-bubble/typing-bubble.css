@@ -9,7 +9,7 @@
     --typing-stagger: 0.2s;
     /* Rounded from the supplied 2x reference. The 28px body leaves 5px below.
        Keep this layout height in sync with padding-block × 2 + line-height
-       of [data-slot='message-bubble'] in ./message-bubble.css (currently 33px). */
+       of .bubble in ./message-bubble.module.css (currently 33px). */
     display: flex;
     flex: none;
     align-items: flex-start;
