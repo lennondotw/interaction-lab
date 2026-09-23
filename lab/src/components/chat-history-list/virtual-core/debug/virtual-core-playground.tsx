@@ -62,6 +62,7 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
   const [model] = useState(() => new PlaygroundModel(initialCount, estimateSize, seed));
   const [jittering, setJittering] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
   const rowElements = useRef(new Map<Element, string>());
   const driverRef = useRef<PlaygroundDriver>(null);
 
@@ -115,18 +116,33 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
     const scroller = scrollerRef.current!;
     const driver = new PlaygroundDriver(model, {
       scroller,
+      spacer: spacerRef.current!,
       rows: rowElements.current,
       commit: () => flushSync(refresh),
       flash: flashRows,
     });
     driverRef.current = driver;
-    model.setViewport({ offset: scroller.scrollTop, size: scroller.clientHeight });
+    model.setViewport({ offset: scroller.scrollTop - model.presentation.spacer, size: scroller.clientHeight });
     const onScroll = () => driver.onScroll();
     resizeObserver.observe(scroller);
     scroller.addEventListener('scroll', onScroll, { passive: true });
+
+    // The step `scrollTop` is kept on depends on the device pixel ratio, which browser zoom or a
+    // move to another screen changes. A resolution query matches only the current ratio, so it
+    // fires once when the ratio changes and is then replaced by one for the new ratio.
+    let resolution = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    const onResolution = () => {
+      driver.measureStep();
+      driver.transact('pixel ratio');
+      resolution.removeEventListener('change', onResolution);
+      resolution = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      resolution.addEventListener('change', onResolution);
+    };
+    resolution.addEventListener('change', onResolution);
     return () => {
       resizeObserver.unobserve(scroller);
       scroller.removeEventListener('scroll', onScroll);
+      resolution.removeEventListener('change', onResolution);
     };
   }, [model, refresh, flashRows, resizeObserver]);
 
@@ -252,6 +268,8 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
               [overflow-anchor:none]
             `}
           >
+            {/* Carries the fraction of the reading offset that scrollTop cannot; the driver sets its height. */}
+            <div ref={spacerRef} aria-hidden="true" />
             {layout === 'absolute' ? (
               <div className="relative" style={{ height: core.totalSize() }}>
                 {rows}
@@ -496,10 +514,10 @@ const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mounted
         'residual',
         `${last && last.domResidual !== null ? signedPx(last.domResidual) : '—'}, largest ${signedPx(model.maxDomResidual)}`
       );
-      const { scrollTop, quantization } = model.presentation;
+      const { scrollTop, spacer, step, scrollStep, quantization } = model.presentation;
       write(
         'scroll',
-        `scrollTop ${formatPx(scrollTop)}, quantization ${signedPx(quantization)}, largest ${signedPx(model.maxQuantization)}`
+        `scrollTop ${formatPx(scrollTop)} + spacer ${formatPx(spacer)} on a ${formatPx(step)} step (browser ${formatPx(scrollStep)}), quantization ${signedPx(quantization)}, largest ${signedPx(model.maxQuantization)}`
       );
       write(
         'viewport',

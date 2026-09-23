@@ -1,9 +1,15 @@
 import { captureAnchor, resolveAnchor } from '../../anchor/anchor.js';
+import { alignedScrollStep, measureScrollStep, presentReadingOffset } from '../../anchor/presentation.js';
 import type { VirtualRange } from '../virtual-core.js';
 import { nextScrollDirection, type PlaygroundModel } from './playground-model.js';
 
 export interface PlaygroundDriverHost {
   scroller: HTMLElement;
+  /**
+   * The first child of the scroller, above the list, whose height carries the fraction of the
+   * reading offset that `scrollTop` cannot. The driver owns its inline height.
+   */
+  spacer: HTMLElement;
   /** Mounted row elements and their keys. */
   rows: ReadonlyMap<Element, string>;
   /** Render synchronously, so the DOM shows the core's current layout and render range. */
@@ -39,13 +45,19 @@ const layoutUnit = 1 / 64;
  * - Reading offset: the core's viewport offset, in the same coordinates. Only two things set it:
  *   an anchor resolution, and a user scroll read back from the scroller. Each compensation is
  *   logged as a delta but never accumulated; every change resolves afresh from its snapshot.
- * - Presentation: the scroller's `scrollTop`, derived from the reading offset. The browser keeps
- *   it on a grid of its own (measured: the screen's device pixels in headed Chromium, whole
- *   pixels truncated in Safari; see archive/2026-09-scroll-offset-quantization), so it differs from the reading offset by the quantization error. It
- *   is written only when the reading offset lands on a different device pixel.
+ * - Presentation: the scroller's `scrollTop` and the spacer above the list, derived from the
+ *   reading offset and never read back into it except as a user scroll. The browser keeps
+ *   `scrollTop` on a grid of its own (the screen's device pixels in Chromium, whole pixels
+ *   truncated in Safari), and content written straight onto that grid hops between device
+ *   pixels. So `scrollTop` is the reading offset rounded up to a step that is on the grid and a
+ *   whole number of device pixels, and the spacer takes the remainder: content sits exactly at
+ *   the reading offset, on the same device pixel whatever the split. See
+ *   archive/2026-09-scroll-offset-quantization.
  *
  * While the scroller still reads the value last written, the reading offset stands; any other
- * value means the user scrolled (or the browser clamped), and the reading offset follows it.
+ * value means the user scrolled (or the browser clamped), and the reading offset is what that
+ * `scrollTop` shows under the current spacer. The spacer changes only with a compensation,
+ * since changing it alone would move the content.
  *
  * The DOM residual is not corrected. It is zero whenever the DOM layout equals the core's, which
  * both layouts guarantee; a non-zero residual is a bug, reported in the state panel and the
@@ -62,27 +74,46 @@ export class PlaygroundDriver {
   constructor(
     private readonly model: PlaygroundModel,
     private readonly host: PlaygroundDriverHost
-  ) {}
+  ) {
+    this.measureStep();
+  }
+
+  /**
+   * Measure the browser's scroll step and widen it to whole device pixels. Call again when the
+   * device pixel ratio changes (browser zoom, or a move to another screen).
+   */
+  measureStep() {
+    const scrollStep = measureScrollStep(document);
+    this.model.presentation = {
+      ...this.model.presentation,
+      scrollStep,
+      step: alignedScrollStep(scrollStep, window.devicePixelRatio),
+    };
+  }
 
   /** The reading offset as the scroller now implies it: ours while it shows our last write. */
   private readReadingOffset() {
     const { scrollTop } = this.host.scroller;
     if (this.lastWrite?.scrollTop === scrollTop) return this.lastWrite.readingOffset;
     this.lastWrite = null;
-    return scrollTop;
+    return scrollTop - this.model.presentation.spacer;
   }
 
+  /**
+   * Record what the scroller shows for the reading offset. Only for a settled state: between
+   * passes of a transaction the DOM can still have the previous scroll range, and a scrollTop
+   * clamped to it is rewritten by the next pass before anything paints.
+   */
   private recordPresentation(readingOffset: number) {
     const { scrollTop } = this.host.scroller;
-    const quantization = scrollTop - readingOffset;
-    this.model.presentation = { scrollTop, quantization };
+    const quantization = scrollTop - this.model.presentation.spacer - readingOffset;
+    this.model.presentation = { ...this.model.presentation, scrollTop, quantization };
     if (Math.abs(quantization) > Math.abs(this.model.maxQuantization)) this.model.maxQuantization = quantization;
   }
 
   /** Take the reading offset from the scroller and report it with the viewport size. */
   private report() {
     const readingOffset = this.readReadingOffset();
-    this.recordPresentation(readingOffset);
     this.model.setViewport({ offset: readingOffset, size: this.host.scroller.clientHeight });
   }
 
@@ -92,10 +123,14 @@ export class PlaygroundDriver {
     const { core } = this.model;
     const { size, offset: previous } = core.viewport!;
     const readingOffset = Math.min(Math.max(0, core.totalSize() - size), Math.max(0, target));
-    const dpr = window.devicePixelRatio;
-    if (Math.round(readingOffset * dpr) !== Math.round(scroller.scrollTop * dpr)) scroller.scrollTop = readingOffset;
+    const { scrollTop, spacer } = presentReadingOffset(readingOffset, this.model.presentation.step);
+    // The spacer first: it extends the scroll range the new scrollTop may need.
+    if (spacer !== this.model.presentation.spacer) {
+      this.host.spacer.style.height = `${spacer}px`;
+      this.model.presentation = { ...this.model.presentation, spacer };
+    }
+    if (scrollTop !== scroller.scrollTop) scroller.scrollTop = scrollTop;
     this.lastWrite = { scrollTop: scroller.scrollTop, readingOffset };
-    this.recordPresentation(readingOffset);
     // A compensation is not the user scrolling: move the direction's reference point with it.
     this.model.scroll = { ...this.model.scroll, extreme: this.model.scroll.extreme + readingOffset - previous };
     this.model.setViewport({ offset: readingOffset, size });
@@ -125,8 +160,8 @@ export class PlaygroundDriver {
     const element = [...this.host.rows].find(([, rowKey]) => rowKey === key)?.[0];
     // An anchor outside the render range has no element to compare.
     if (!element) return null;
-    const { scroller } = this.host;
-    const contentTop = scroller.getBoundingClientRect().top + scroller.clientTop - scroller.scrollTop;
+    // The list starts where the spacer ends.
+    const contentTop = this.host.spacer.getBoundingClientRect().bottom;
     const { core } = this.model;
     return element.getBoundingClientRect().top - contentTop - core.item(core.indexOf(key)!).start;
   }
@@ -158,6 +193,7 @@ export class PlaygroundDriver {
     if (domResidual !== null && Math.abs(domResidual) > Math.abs(this.model.maxDomResidual)) {
       this.model.maxDomResidual = domResidual;
     }
+    this.recordPresentation(core.viewport!.offset);
     this.model.lastChange = { reason, key, delta: core.viewport!.offset - before, domResidual };
     this.host.flash(updates);
     // Paint now: from a ResizeObserver callback, this frame's animation callbacks already ran.
@@ -170,6 +206,7 @@ export class PlaygroundDriver {
     if (this.lastWrite?.scrollTop === read) return;
     this.model.scroll = nextScrollDirection(this.model.scroll, read);
     this.report();
+    this.recordPresentation(this.model.core.viewport!.offset);
     this.model.invalidate();
     if (!sameRange(this.model.core.renderRange(), this.committed)) this.transact('mount');
   }

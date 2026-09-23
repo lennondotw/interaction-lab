@@ -79,24 +79,28 @@ the scroll direction's reference point moves with each compensation.
 
 ### State and its sources
 
-| Layer          | State                      | Set by                                                   |
-| -------------- | -------------------------- | -------------------------------------------------------- |
-| Content layout | the core's offsets         | measurements and window changes, never a compensation    |
-| Reading offset | the core's viewport offset | an anchor resolution, or a user scroll read back         |
-| Presentation   | the scroller's `scrollTop` | derived from the reading offset; never read back into it |
+| Layer          | State                                                  | Set by                                                   |
+| -------------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| Content layout | the core's offsets                                     | measurements and window changes, never a compensation    |
+| Reading offset | the core's viewport offset                             | an anchor resolution, or a user scroll read back         |
+| Presentation   | the scroller's `scrollTop` and a spacer above the list | derived from the reading offset; never read back into it |
 
-The presentation is written only when the reading offset lands on a different device pixel.
-While the scroller still reads the value last written, the reading offset stands; any other
-value means the user scrolled or the browser clamped, and the reading offset follows it. The
-difference between the two is the quantization error. Each change's compensation is logged as
-a delta and never accumulated.
+The presentation follows [Presenting a fractional offset](../../anchor/docs/anchoring.md#presenting-a-fractional-offset):
+`scrollTop` is the reading offset rounded up to the measured, device-aligned step, and the
+spacer, the scroller's first child, takes the remainder. The step is measured when the driver
+is created and again when the device pixel ratio changes. While the scroller still reads the
+value last written, the reading offset stands; any other value means the user scrolled or the
+browser clamped, and the reading offset is `scrollTop` minus the spacer. The quantization error,
+`scrollTop - spacer` minus the reading offset, is recorded only for settled states: between
+passes of a transaction the DOM can still have the old scroll range. Each change's compensation
+is logged as a delta and never accumulated.
 
-Measured in Chromium at a device pixel ratio of 2, with two pulsing rows above the viewport for
-240 frames, the anchor point moved at most 0.25px, half a device pixel, in both layouts at
-ratios 0, 0.5 and 1, with no accumulation. That drift is the quantization error; the DOM
-residual stayed at zero. Chromium keeps `scrollTop` on a 0.5px grid and Safari on whole pixels,
-so the same error is up to a whole pixel in Safari, and in either browser it moves painted
-content between neighbouring device pixels from frame to frame.
+With two pulsing rows above the viewport, the anchor point did not move at all, to the layout's
+precision, in both layouts at ratios 0, 0.5 and 1: in headed Chrome at 2x (240 frames, 0.5px
+step), Safari Technology Preview at 2x and iOS 27 Simulator Safari at 3x (120 frames each, 1px
+step). Screenshots of the anchor row in Chrome differ between frames by at most one colour
+level, which is capture noise, not movement. Before the spacer the same test moved the anchor
+by up to 0.25px in Chrome, on the device pixel grid, and by nearly a whole pixel in Safari.
 
 ## Scroll direction hysteresis
 

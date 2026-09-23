@@ -45,15 +45,36 @@ should be compensated.
 - **Batch a frame's changes.** Capture once, apply every change (viewport size, forgotten sizes,
   all measurements), resolve once, and write before the frame paints. Resolving after each
   measurement instead would compound rounding.
-- **Keep the reading offset as the source of truth.** Scroll positions snap to a grid the
-  browser chooses: the screen's device pixels in Chromium, whole pixels truncated toward zero
-  in Safari (measured in
-  [`archive/2026-09-scroll-offset-quantization`](../../../../../../archive/2026-09-scroll-offset-quantization/README.md)). Keep the fractional offset the anchor asked for as the reading offset, write the
-  scroller only when that lands on a different device pixel, and keep the reading offset while
-  the scroller still reads what was last written. Never read the snapped `scrollTop` back into
-  it, and never accumulate compensations: resolve each change afresh from its snapshot, so the
-  error stays within one quantization step instead of growing.
+- **Keep the reading offset as the source of truth.** Keep the fractional offset the anchor
+  asked for, never read a snapped `scrollTop` back into it, and never accumulate compensations:
+  resolve each change afresh from its snapshot. How the offset is then shown is the next
+  section.
 - The result may need clamping to the scrollable range; a clamped result cannot hold the anchor.
+
+## Presenting a fractional offset
+
+Browsers keep `scrollTop` on a grid of their own: the screen's device pixels in Chromium, and
+whole CSS pixels, truncated, in Safari on macOS and iOS. Content written straight onto that grid
+hops between device pixels from one change to the next, by up to four on an iPhone.
+[`presentation.ts`](../presentation.ts) avoids the grid instead of fighting it:
+
+- `measureScrollStep(document)` writes fractional offsets to a hidden scroller and reads back
+  what the browser kept.
+- `alignedScrollStep(scrollStep, devicePixelRatio)` widens that step to the smallest multiple
+  that is also a whole number of device pixels: 0.5px on a 2x screen in Chromium, 1px in Safari,
+  4px for Chromium at 1.25x.
+- `presentReadingOffset(readingOffset, step)` rounds the reading offset up to that step for
+  `scrollTop` and returns the remainder for a spacer above the content, so content sits exactly
+  at the reading offset: `scrollTop - spacer`. Rounding up keeps the spacer non-negative.
+
+A caller measures the step once, and again when the device pixel ratio changes. A user scroll
+changes `scrollTop` but not the spacer, so the reading offset it implies is `scrollTop - spacer`;
+changing the spacer alone would move the content, so it changes only with a compensation. At the
+very top the reading offset can then be slightly negative, by less than a step, which the core
+accepts. Measured in
+[`archive/2026-09-scroll-offset-quantization`](../../../../../../archive/2026-09-scroll-offset-quantization/README.md):
+of writing the fraction, a `translateY` of it, and the spacer, only the spacer holds content on
+one device pixel, and only on the aligned step.
 
 ## Decision: positions from the core, not the DOM
 
@@ -74,5 +95,9 @@ console and shown in the state panel.
   at ratios 0, 0.5 and 1 through upward steps over unmeasured rows, random jumps, prepends,
   forgotten measurements, removal of the anchor row and viewport resizes, each with zero drift;
   plus window replacement, which must not compensate.
+- [`presentation.test.ts`](../__tests__/presentation.test.ts): aligned steps for the ratios and
+  scroll steps browsers use, measured steps with error, the split into `scrollTop` and spacer,
+  exactness over many offsets, the spacer's bounds, rounding errors at a step boundary, and a
+  reading offset just below zero.
 
 [Index](../../README.md)

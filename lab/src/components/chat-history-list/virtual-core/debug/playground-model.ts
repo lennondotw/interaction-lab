@@ -100,10 +100,12 @@ export class PlaygroundModel {
   /** Largest DOM residual seen since mount, by magnitude. */
   maxDomResidual = 0;
   /**
-   * The scroller's `scrollTop` and its quantization error: `scrollTop` minus the reading offset,
-   * which is the core's viewport offset. Presentation only; never read back into the offset.
+   * How the reading offset (the core's viewport offset) is shown: the browser's measured scroll
+   * step, the step widened to whole device pixels that `scrollTop` is kept on, the scroller's
+   * `scrollTop`, the spacer above the list, and the quantization error, `scrollTop - spacer`
+   * minus the reading offset. Presentation only; never read back into the offset.
    */
-  presentation = { scrollTop: 0, quantization: 0 };
+  presentation = { scrollStep: 1, step: 1, scrollTop: 0, spacer: 0, quantization: 0 };
   /** Largest quantization error seen since mount, by magnitude. */
   maxQuantization = 0;
   private readonly painters = new Set<() => void>();

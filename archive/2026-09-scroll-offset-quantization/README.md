@@ -1,6 +1,6 @@
 # scroll offset quantization: how to hold anchored content still to the device pixel
 
-**Date:** 2026-09 · **Status:** measured; the spacer is not implemented yet · **Applies to:**
+**Date:** 2026-09 · **Status:** implemented as `anchor/presentation.ts` in the chat history list · **Applies to:**
 Chromium 153 and Chrome Dev 156 (headed), Safari Technology Preview (Safari 27), iOS 27
 Safari in the Simulator
 
