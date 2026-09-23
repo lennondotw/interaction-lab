@@ -29,7 +29,7 @@ Reduced motion skips flights and entrances and completes layout transitions. Typ
 ## Evidence
 
 - Implementation: [bidirectional parameter conversion](../../../../../packages/utils/src/spring-parameters.ts).
-- Current parameters: [flight and compensation](../../chat-send-flight/chat-send-flight.ts), [scrolling](../../scroll-anchor/scroll-anchor-controller.ts), [presence and layout](../chat-presence.ts), and [dot loop](../../message-bubble/typing-bubble.css).
+- Current parameters: [flight and compensation](../../chat-send-flight/chat-send-flight.ts), [scrolling](../../scroll-anchor/scroll-anchor-controller.ts), [presence and layout](../chat-presence.ts), and [dot loop](../../message-bubble/typing-bubble.module.css).
 - History: [0979bae](https://github.com/lennondotw/interaction-lab/commit/0979bae); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#parameters).
 

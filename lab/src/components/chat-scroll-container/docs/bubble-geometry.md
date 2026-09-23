@@ -13,7 +13,7 @@ The composer has 9px vertical padding and a 35px single-line height by design. I
 ## Evidence
 
 - Implementation: [bubble styles](../../message-bubble/message-bubble.module.css).
-- Related implementation: [typing geometry](../../message-bubble/typing-bubble.css) and [composer geometry](../../message-input/message-input.css).
+- Related implementation: [typing geometry](../../message-bubble/typing-bubble.module.css) and [composer geometry](../../message-input/message-input.css).
 - History: [044754b](https://github.com/lennondotw/interaction-lab/commit/044754b); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#geometry-and-flight).
 
