@@ -23,7 +23,7 @@
  */
 
 import { cn } from '@monorepo/utils';
-import { useIntervalEffect, useMeasure } from '@react-hookz/web';
+import { useIntervalEffect } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 
@@ -37,6 +37,7 @@ import {
 } from '#src/components/meta-surface/sdf/field.js';
 import { ShapeRegistry, useRegisteredRect } from '#src/components/meta-surface/sdf/rect-registry.js';
 import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
+import { useElementSize } from '#src/utils/use-element-size.js';
 
 import { timeBatched } from '../bench-timing.js';
 import { CELL_SIZES, RollingMedian } from '../shape.js';
@@ -99,7 +100,9 @@ interface LiveStats {
 
 export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [measures, containerRef] = useMeasure<HTMLDivElement>(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Measured before first paint, so the overlay never shows a frame without a size.
+  const measures = useElementSize(containerRef);
 
   const registry = useMemo(() => new ShapeRegistry(), []);
   const samples = useMemo(() => new RollingMedian(STAT_WINDOW), []);

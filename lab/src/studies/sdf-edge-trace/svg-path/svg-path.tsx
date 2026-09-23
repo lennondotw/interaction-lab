@@ -1,11 +1,12 @@
 import { cn } from '@monorepo/utils';
-import { useIntervalEffect, useMeasure } from '@react-hookz/web';
+import { useIntervalEffect } from '@react-hookz/web';
 import { useAnimationFrame } from 'motion/react';
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { buildPath2D, buildPathData } from '#src/components/meta-surface/sdf/contour-path.js';
 import { Ball, ContourTracer } from '#src/components/meta-surface/sdf/field.js';
 import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
+import { useElementSize } from '#src/utils/use-element-size.js';
 
 import {
   BLEND,
@@ -70,7 +71,9 @@ interface LiveStats {
 export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
-  const [measures, containerRef] = useMeasure<HTMLDivElement>(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // CSS sizes the surfaces; the measured width sets canvas resolution and px conversions.
+  const measures = useElementSize(containerRef);
 
   const tracer = useMemo(() => new ContourTracer(VIEW, OVERSCAN, MIN_CELL), []);
   const ballsRef = useRef<Ball[]>(createBalls(4));
@@ -104,11 +107,12 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
     ballsRef.current = createBalls(ballCount);
   }, [ballCount]);
 
-  const displaySize = Math.max(measures?.width ?? VIEW, 1);
+  const displaySize = measures?.width;
   const drawCanvas = renderer !== 'svg';
   const drawSvg = renderer !== 'canvas';
 
   useAnimationFrame((time) => {
+    if (displaySize === undefined) return;
     if (autoplay && activeBallRef.current === null) orbitBalls(ballsRef.current, time);
 
     const traceStart = performance.now();
@@ -230,10 +234,9 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
         <div ref={containerRef} className="w-full max-w-[520px] shrink-0">
           <div
             className={`
-              relative overflow-hidden rounded-2xl bg-neutral-900/5
+              relative aspect-square w-full overflow-hidden rounded-2xl bg-neutral-900/5
               dark:bg-neutral-800/50
             `}
-            style={{ width: displaySize, height: displaySize }}
           >
             {/*
               Both surfaces are stacked in one square and scaled together, so the
@@ -250,12 +253,7 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
                 element's own rect, which already accounts for the zoom transform
                 above, so dragging stays correct at every zoom level.
               */}
-              <canvas
-                ref={canvasRef}
-                style={{ width: displaySize, height: displaySize }}
-                {...handlers}
-                className="absolute inset-0 touch-none"
-              />
+              <canvas ref={canvasRef} {...handlers} className="absolute inset-0 size-full touch-none" />
               {/*
                 No handling needed for the overscan: geometry runs from -128 to
                 640 and the root clips at the viewBox, which is the same crop the
@@ -277,7 +275,7 @@ export const SdfSvgPath: FC<{ className?: string }> = ({ className }) => {
                   // In viewBox user units: one unit renders as `displaySize / VIEW`
                   // px before the CSS zoom multiplies it, so undo both to hold the
                   // line at a constant on-screen width at every zoom level.
-                  strokeWidth={((renderer === 'both' ? 1.25 : 2) * (VIEW / displaySize)) / zoom}
+                  strokeWidth={displaySize && ((renderer === 'both' ? 1.25 : 2) * (VIEW / displaySize)) / zoom}
                   strokeLinejoin="round"
                 />
               </svg>
