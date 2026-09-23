@@ -3,6 +3,8 @@ import { animate, cancelFrame, frame } from 'motion/react';
 
 import { cloneWithoutChatDebug, registerChatDebugVisual } from './chat-item-debug.js';
 
+import styles from './chat-scroll-container.module.css';
+
 export const chatPresenceSpring = {
   type: 'spring',
   ...toSpringPhysics({ angularFrequency: 22, dampingRatio: 1 }),
@@ -33,6 +35,7 @@ export function animateChatEntrance(
   const host = element.closest<HTMLElement>('[data-slot="chat-scroll-container"]')!;
   const layer = document.createElement('div');
   layer.dataset.slot = 'chat-entrance-layer';
+  layer.className = styles.entranceLayer!;
   layer.setAttribute('aria-hidden', 'true');
   layer.inert = true;
   const visual = cloneWithoutChatDebug(element);
@@ -40,6 +43,7 @@ export function animateChatEntrance(
   visual.removeAttribute('data-chat-item-id');
   visual.removeAttribute('id');
   visual.dataset.chatEntrance = '';
+  visual.classList.add(styles.entrance!);
   visual.style.marginTop = '0px';
   layer.append(visual);
   host.append(layer);
