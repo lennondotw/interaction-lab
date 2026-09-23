@@ -8,14 +8,16 @@ import { ResizableWindow } from '#src/instruments/resizable-window/resizable-win
 
 import type { VirtualItem, VirtualRange } from '../virtual-core.js';
 import { minimapScale } from './minimap-view.js';
+import { PlaygroundDriver } from './playground-driver.js';
 import {
   flashDuration,
   flashEasing,
   maxLines,
   minLines,
-  nextScrollDirection,
   PlaygroundModel,
+  pulseHeight,
   toOverscan,
+  type PlaygroundLayout,
   type PlaygroundOverscanKind,
 } from './playground-model.js';
 import { VirtualCoreMinimap } from './virtual-core-minimap.js';
@@ -31,12 +33,18 @@ export interface VirtualCorePlaygroundProps {
   overscanAfter: number;
   /** Seed for the initial row heights. */
   seed: number;
+  /**
+   * `flow`: mounted rows in normal flow between spacers sized from the core. `absolute`: each
+   * row positioned at the core's offset for it.
+   */
+  layout: PlaygroundLayout;
+  /** Hold the reading position still across layout changes. */
+  anchoring: boolean;
+  /** Where the reference line sits in the viewport: 0 is the top, 0.5 the middle, 1 the bottom. */
+  anchorRatio: number;
 }
 
 const formatPx = (value: number) => `${Number(value.toFixed(2))}px`;
-
-const sameRange = (a: VirtualRange | null, b: VirtualRange | null) =>
-  a === b || (a !== null && b !== null && a.startIndex === b.startIndex && a.endIndex === b.endIndex);
 
 export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
   initialCount,
@@ -45,6 +53,9 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
   overscanBefore,
   overscanAfter,
   seed,
+  layout,
+  anchoring,
+  anchorRatio,
 }) => {
   const [, setVersion] = useState(0);
   const refresh = useCallback(() => setVersion((version) => version + 1), []);
@@ -52,21 +63,7 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
   const [jittering, setJittering] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const rowElements = useRef(new Map<Element, string>());
-  /** The render range React last committed; scrolling within it needs no React work. */
-  const committedRange = useRef<VirtualRange | null>(null);
-
-  /** Report a size to the core; returns a description when the layout changed. */
-  const measureRow = useCallback(
-    (key: string, size: number) => {
-      const index = model.core.indexOf(key);
-      const previous = index === undefined ? null : model.core.item(index);
-      if (!model.core.measure(key, size) || !previous) return null;
-      if (!previous.measured) return `≈${formatPx(previous.size)} → ${formatPx(size)}`;
-      const delta = size - previous.size;
-      return `${formatPx(previous.size)} → ${formatPx(size)} (${delta > 0 ? '+' : '−'}${formatPx(Math.abs(delta))})`;
-    },
-    [model]
-  );
+  const driverRef = useRef<PlaygroundDriver>(null);
 
   /** Highlight updated rows: the overlay and its label appear at once, then fade out together. */
   const flashRows = useCallback(
@@ -91,102 +88,82 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
     [model]
   );
 
-  // Created during render so rows can register in their own layout effects, which run before
-  // this component's. StrictMode's simulated remount disconnects it; rows then observe again.
-  const [rowObserver] = useState(
-    () =>
-      new ResizeObserver((entries) => {
-        const updates: [string, string][] = [];
-        for (const entry of entries) {
-          // An entry can be delivered after its row unmounted; there is nothing to measure.
-          const key = rowElements.current.get(entry.target);
-          if (key === undefined) continue;
-          const description = measureRow(key, entry.borderBoxSize[0]!.blockSize);
-          if (description) updates.push([key, description]);
-        }
-        if (updates.length === 0) return;
-        // Commit before paint so a row never shows at its estimated position.
-        flushSync(refresh);
-        flashRows(updates);
-        model.flush();
-      })
-  );
+  // One observer for the scroller and every row, so all size changes in a frame are delivered
+  // together and handled as one change. Created during render so rows can register in their own
+  // layout effects, which run before this component's; its callbacks run after layout, by which
+  // time the driver exists. StrictMode's simulated remount disconnects it; rows observe again.
+  const [resizeObserver] = useState(() => new ResizeObserver((entries) => driverRef.current!.onResize(entries)));
 
   const registerRow = useCallback(
     (element: HTMLElement, key: string) => {
       rowElements.current.set(element, key);
-      rowObserver.observe(element);
+      resizeObserver.observe(element);
       return () => {
-        rowObserver.unobserve(element);
+        resizeObserver.unobserve(element);
         rowElements.current.delete(element);
       };
     },
-    [rowObserver]
+    [resizeObserver]
   );
 
   const mountedCount = useCallback(() => rowElements.current.size, []);
 
-  useLayoutEffect(() => () => rowObserver.disconnect(), [rowObserver]);
+  useLayoutEffect(() => () => resizeObserver.disconnect(), [resizeObserver]);
   useLayoutEffect(() => () => model.dispose(), [model]);
 
   useLayoutEffect(() => {
-    committedRange.current = model.core.renderRange();
-  });
-
-  useLayoutEffect(() => {
     const scroller = scrollerRef.current!;
-    const report = () => model.setViewport({ offset: scroller.scrollTop, size: scroller.clientHeight });
-    report();
-    refresh();
-    const observer = new ResizeObserver(() => {
-      report();
-      flushSync(refresh);
-      model.flush();
+    const driver = new PlaygroundDriver(model, {
+      scroller,
+      rows: rowElements.current,
+      commit: () => flushSync(refresh),
+      flash: flashRows,
     });
-    // Painters follow every scroll frame. React commits only when the render range changes,
-    // and then inside the scroll event, so new rows are measured before the frame paints.
-    const onScroll = () => {
-      model.scroll = nextScrollDirection(model.scroll, scroller.scrollTop);
-      report();
-      model.invalidate();
-      if (!sameRange(model.core.renderRange(), committedRange.current)) flushSync(refresh);
-    };
-    observer.observe(scroller);
+    driverRef.current = driver;
+    model.setViewport({ offset: scroller.scrollTop, size: scroller.clientHeight });
+    const onScroll = () => driver.onScroll();
+    resizeObserver.observe(scroller);
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      observer.disconnect();
+      resizeObserver.unobserve(scroller);
       scroller.removeEventListener('scroll', onScroll);
     };
-  }, [model, refresh]);
+  }, [model, refresh, flashRows, resizeObserver]);
 
   useLayoutEffect(() => {
-    model.core.setOverscan(toOverscan(overscanKind, overscanBefore, overscanAfter, model));
-    refresh();
+    model.anchoring = { enabled: anchoring, ratio: anchorRatio };
     model.invalidate();
-  }, [model, overscanKind, overscanBefore, overscanAfter, refresh]);
+  }, [model, anchoring, anchorRatio]);
+
+  // Props arrive during React's commit, where a transaction cannot render synchronously
+  // (flushSync is ignored inside lifecycle methods). A microtask runs right after the commit
+  // and still before the frame paints.
+  const transactAfterCommit = useCallback((reason: string, change?: () => void) => {
+    queueMicrotask(() => driverRef.current!.transact(reason, change));
+  }, []);
+
+  useLayoutEffect(() => {
+    transactAfterCommit('overscan', () =>
+      model.core.setOverscan(toOverscan(overscanKind, overscanBefore, overscanAfter, model))
+    );
+  }, [model, overscanKind, overscanBefore, overscanAfter, transactAfterCommit]);
+
+  // The new layout already rendered; the transaction measures it and holds the anchor.
+  useLayoutEffect(() => transactAfterCommit('layout'), [layout, transactAfterCommit]);
 
   const mountedKeys = () => new Set(rowElements.current.values());
 
-  const act = (change: () => void) => () => {
-    change();
-    refresh();
-    model.invalidate();
-  };
+  const act = (reason: string, change: () => void) => () => driverRef.current!.transact(reason, change);
 
   useIntervalEffect(
-    act(() => model.jitter([...mountedKeys()])),
+    act('jitter', () => model.jitter([...mountedKeys()])),
     jittering ? 350 : undefined
   );
 
-  const forgetSizes = act(() => {
+  const forgetSizes = act('forget', () => {
+    // Mounted rows did not change size, so the observer stays silent; the transaction
+    // measures them again.
     for (const key of model.core.measuredKeys()) model.core.forget(key);
-    // Mounted rows did not change size, so their observers stay silent: measure them now.
-    const updates: [string, string][] = [];
-    for (const [element, key] of rowElements.current) {
-      const description = measureRow(key, element.getBoundingClientRect().height);
-      if (description) updates.push([key, description]);
-    }
-    flashRows(updates);
   });
 
   const seek = useCallback((offset: number) => {
@@ -197,23 +174,36 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
   const { core } = model;
   const renderRange = core.renderRange();
   const rendered = renderRange ? core.items(renderRange) : [];
+  const rows = rendered.map((item) => (
+    <PlaygroundRow
+      key={item.key}
+      item={item}
+      positioned={layout === 'absolute'}
+      pulseSince={model.pulses.get(item.key) ?? null}
+      lines={model.lines.get(item.key)!}
+      register={registerRow}
+      onGrow={act('row content', () => model.resize(item.key, 1))}
+      onShrink={act('row content', () => model.resize(item.key, -1))}
+      onRemove={act('remove', () => model.remove(item.key))}
+    />
+  ));
 
   return (
     <div className="flex min-h-svh flex-col items-start gap-3 p-8">
       <div className="flex max-w-3xl flex-row flex-wrap gap-2">
-        <Button size="sm" onClick={act(() => model.prepend(10))}>
+        <Button size="sm" onClick={act('prepend', () => model.prepend(10))}>
           Prepend 10
         </Button>
-        <Button size="sm" onClick={act(() => model.append(10))}>
+        <Button size="sm" onClick={act('append', () => model.append(10))}>
           Append 10
         </Button>
-        <Button size="sm" color="red" onClick={act(() => model.removeFirst(10))}>
+        <Button size="sm" color="red" onClick={act('remove', () => model.removeFirst(10))}>
           Remove 10 from top
         </Button>
-        <Button size="sm" color="red" onClick={act(() => model.removeLast(10))}>
+        <Button size="sm" color="red" onClick={act('remove', () => model.removeLast(10))}>
           Remove 10 from bottom
         </Button>
-        <Button size="sm" onClick={act(() => model.resizeAll(mountedKeys()))}>
+        <Button size="sm" onClick={act('resize all', () => model.resizeAll(mountedKeys()))}>
           Resize all rows
         </Button>
         <Button size="sm" color="yellow" onClick={forgetSizes}>
@@ -226,6 +216,19 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
           allPossibleContents={['Stop jitter', 'Jitter mounted rows']}
         >
           {jittering ? 'Stop jitter' : 'Jitter mounted rows'}
+        </Button>
+        <Button
+          size="sm"
+          color="blue"
+          onClick={act('insert pulsing', () => {
+            const visible = core.visibleRange();
+            if (visible) model.insertPulsing(core.item(visible.startIndex).key, performance.now());
+          })}
+        >
+          Insert pulsing row above
+        </Button>
+        <Button size="sm" color="yellow" onClick={act('stop pulsing', () => model.pulses.clear())}>
+          Stop pulsing
         </Button>
         <Button size="sm" onClick={() => seek(0)}>
           Scroll to top
@@ -249,65 +252,115 @@ export const VirtualCorePlayground: FC<VirtualCorePlaygroundProps> = ({
               [overflow-anchor:none]
             `}
           >
-            <div className="relative" style={{ height: core.totalSize() }}>
-              {rendered.map((item) => (
-                <PlaygroundRow
-                  key={item.key}
-                  item={item}
-                  lines={model.lines.get(item.key)!}
-                  register={registerRow}
-                  onGrow={act(() => model.resize(item.key, 1))}
-                  onShrink={act(() => model.resize(item.key, -1))}
-                  onRemove={act(() => model.remove(item.key))}
-                />
-              ))}
-            </div>
+            {layout === 'absolute' ? (
+              <div className="relative" style={{ height: core.totalSize() }}>
+                {rows}
+              </div>
+            ) : (
+              // Rows in normal flow; the padding stands for the rows above and below the render
+              // range, at the core's sizes for them.
+              <div
+                style={{
+                  paddingTop: rendered[0]?.start ?? 0,
+                  paddingBottom: core.totalSize() - (rendered.at(-1)?.end ?? 0),
+                }}
+              >
+                {rows}
+              </div>
+            )}
           </div>
         </ResizableWindow>
 
         <VirtualCoreMinimap model={model} onSeek={seek} />
       </div>
 
-      <StatePanel model={model} mountedCount={mountedCount} />
+      <StatePanel model={model} layout={layout} mountedCount={mountedCount} />
 
-      <section
-        aria-label="Why the content jumps"
-        className="flex w-[480px] shrink-0 flex-col gap-2 text-xs text-neutral-500"
-      >
-        <h2 className="font-medium text-neutral-700 dark:text-neutral-300">
-          Content jumping when rows above change size is expected
-        </h2>
-        <p>
-          When a row above the viewport changes size, every row below it moves by the same amount while the scroll
-          position stays where it was, so the visible content jumps. You see it most when scrolling up into rows that
-          have never been measured, when a row above is given new content, and when rows are prepended. Changes below
-          the viewport move nothing you can see.
-        </p>
-        <p>
-          This is by design. The virtual core only computes positions; it never writes the scroll position, and this
-          playground turns off the browser&apos;s <code>overflow-anchor</code> so it shows the core&apos;s raw layout.
-          Keeping the reading position still is the job of the scroll controller that will sit on top of the core:
-          before a layout change it remembers anchor rows, and after the change, before the frame paints, it corrects
-          the scroll position by how far they moved.
-        </p>
-      </section>
+      {anchoring ? (
+        <section
+          aria-label="How anchoring works"
+          className="flex w-[480px] shrink-0 flex-col gap-2 text-xs text-neutral-500"
+        >
+          <h2 className="font-medium text-neutral-700 dark:text-neutral-300">
+            The row at the reference line holds still
+          </h2>
+          <p>
+            The purple line in the minimap is the reference line, at {anchorRatio} of the viewport height, and the
+            purple row is the one it holds. Before every layout change (a measurement, new content, prepended or removed
+            rows, a new window size) the playground records the rows near the line from the core. After the change,
+            before the frame paints, it scrolls so the best of them that still exists keeps its distance from the line.
+            Rows below the line can grow without moving anything above it; at ratio 1 the bottom edge holds, as a chat
+            list does.
+          </p>
+          <p>
+            Positions come from the core, not the DOM, so the {layout === 'flow' ? 'flow' : 'absolute'} layout only has
+            to match the core. The state panel shows the residual: where the anchor row&apos;s element is minus where
+            the core says it is. It should stay at zero in both layouts.
+          </p>
+        </section>
+      ) : (
+        <section
+          aria-label="Why the content jumps"
+          className="flex w-[480px] shrink-0 flex-col gap-2 text-xs text-neutral-500"
+        >
+          <h2 className="font-medium text-neutral-700 dark:text-neutral-300">
+            Content jumping when rows above change size is expected
+          </h2>
+          <p>
+            When a row above the viewport changes size, every row below it moves by the same amount while the scroll
+            position stays where it was, so the visible content jumps. You see it most when scrolling up into rows that
+            have never been measured, when a row above is given new content, and when rows are prepended. Changes below
+            the viewport move nothing you can see.
+          </p>
+          <p>
+            Anchoring is off, and this playground turns off the browser&apos;s <code>overflow-anchor</code>, so what you
+            see is the core&apos;s raw layout. The core only computes positions and never writes the scroll position;
+            turn anchoring on to hold the reading position still.
+          </p>
+        </section>
+      )}
     </div>
   );
 };
 
 const PlaygroundRow: FC<{
   item: VirtualItem;
+  /** Placed at the core's offset rather than in normal flow. */
+  positioned: boolean;
+  /** When the row started pulsing, or null for a row whose height changes only with its lines. */
+  pulseSince: number | null;
   lines: number;
   register: (element: HTMLElement, key: string) => () => void;
   onGrow: () => void;
   onShrink: () => void;
   onRemove: () => void;
-}> = ({ item, lines, register, onGrow, onShrink, onRemove }) => {
+}> = ({ item, positioned, pulseSince, lines, register, onGrow, onShrink, onRemove }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const pulseRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => register(ref.current!, item.key), [register, item.key]);
 
+  // Sized from the clock in an animation callback, before layout, so the shared ResizeObserver
+  // reports the new size in the same frame and the anchor is held before it paints. The height
+  // is a function of time, so a row that unmounts and mounts again resumes where it would be.
+  useLayoutEffect(() => {
+    if (pulseSince === null) return;
+    const pulse = pulseRef.current!;
+    let frame = 0;
+    const tick = (now: number) => {
+      pulse.style.height = `${pulseHeight(now - pulseSince)}px`;
+      frame = requestAnimationFrame(tick);
+    };
+    pulse.style.height = `${pulseHeight(performance.now() - pulseSince)}px`;
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [pulseSince]);
+
   return (
-    <div ref={ref} className="absolute inset-x-0 px-2 pt-2" style={{ top: item.start }}>
+    <div
+      ref={ref}
+      className={cn('px-2 pt-2', positioned && 'absolute inset-x-0')}
+      style={positioned ? { top: item.start } : undefined}
+    >
       <div
         className={cn(
           `
@@ -327,6 +380,18 @@ const PlaygroundRow: FC<{
             {formatPx(item.size)} @ {formatPx(item.start)}
           </span>
         </div>
+        {pulseSince !== null && (
+          <div
+            ref={pulseRef}
+            className={`
+              flex items-end overflow-hidden rounded-sm bg-[repeating-linear-gradient(135deg,rgb(244_63_94/0.18)_0_6px,transparent_6px_12px)]
+              text-[10px] text-rose-600
+              dark:text-rose-300
+            `}
+          >
+            pulsing
+          </div>
+        )}
         {Array.from({ length: lines }, (_, line) => (
           <div
             key={line}
@@ -370,18 +435,27 @@ const stateFields = [
   ['render', 'Render'],
 ] as const;
 
+const signedPx = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : ''}${formatPx(Math.abs(value))}`;
+
 const describeRange = (range: VirtualRange | null) =>
   range ? `${range.startIndex}…${range.endIndex} (${range.endIndex - range.startIndex + 1})` : '—';
 
 /** Text written by a painter, so the numbers follow every frame without React. */
-const StatePanel: FC<{ model: PlaygroundModel; mountedCount: () => number }> = ({ model, mountedCount }) => {
+const StatePanel: FC<{ model: PlaygroundModel; layout: PlaygroundLayout; mountedCount: () => number }> = ({
+  model,
+  layout,
+  mountedCount,
+}) => {
   const panelRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
     const panel = panelRef.current!;
     const field = (name: string) => panel.querySelector<HTMLElement>(`[data-field="${name}"]`)!;
     const outputs = new Map(
-      [...stateFields.map(([name]) => name), 'viewport', 'minimap'].map((name) => [name, field(name)])
+      [...stateFields.map(([name]) => name), 'viewport', 'minimap', 'anchor', 'change', 'residual'].map((name) => [
+        name,
+        field(name),
+      ])
     );
     const write = (name: string, value: string) => {
       const output = outputs.get(name)!;
@@ -407,12 +481,28 @@ const StatePanel: FC<{ model: PlaygroundModel; mountedCount: () => number }> = (
           ? '—'
           : `${view.zoomedScale === null ? 'fitted' : 'zoomed'} at 1:${Math.round(1 / scale)}, top at ${formatPx(view.top)}`
       );
+      const anchor = model.currentAnchor();
+      write(
+        'anchor',
+        model.anchoring.enabled
+          ? `${anchor ? `${anchor.key}, ${signedPx(anchor.fromLine)} from the line` : '—'} at ratio ${model.anchoring.ratio} (${layout} layout)`
+          : `off (${layout} layout)`
+      );
+      const last = model.lastAnchor;
+      write(
+        'change',
+        last ? `${last.reason}: ${last.key ? `held ${last.key}, ` : ''}scrolled ${signedPx(last.delta)}` : '—'
+      );
+      write(
+        'residual',
+        `${last && last.residual !== null ? signedPx(last.residual) : '—'}, largest ${signedPx(model.maxResidual)}`
+      );
       write(
         'viewport',
         `${viewport ? `${formatPx(viewport.offset)} + ${formatPx(viewport.size)}` : '—'}, scrolling ${model.scroll.direction}`
       );
     });
-  }, [model, mountedCount]);
+  }, [model, layout, mountedCount]);
 
   return (
     <section
@@ -433,6 +523,15 @@ const StatePanel: FC<{ model: PlaygroundModel; mountedCount: () => number }> = (
       <span className="tabular-nums">
         Minimap: <span data-field="minimap" />
       </span>
+      <span className="tabular-nums">
+        Anchor: <span data-field="anchor" />
+      </span>
+      <span className="tabular-nums">
+        Last change: <span data-field="change" />
+      </span>
+      <span className="tabular-nums">
+        DOM residual: <span data-field="residual" />
+      </span>
       <ul className="flex flex-row flex-wrap gap-x-3 gap-y-1 text-neutral-500">
         <LegendItem className="bg-neutral-500/40">Measured</LegendItem>
         <LegendItem className="bg-amber-500/50">Estimated</LegendItem>
@@ -441,6 +540,7 @@ const StatePanel: FC<{ model: PlaygroundModel; mountedCount: () => number }> = (
         <LegendItem className="border border-red-500">Viewport</LegendItem>
         <LegendItem className="bg-slate-300/60">Scroll start and end</LegendItem>
         <LegendItem className="bg-cyan-400/70">Size update</LegendItem>
+        <LegendItem className="bg-purple-500/75">Anchor row and reference line</LegendItem>
       </ul>
     </section>
   );

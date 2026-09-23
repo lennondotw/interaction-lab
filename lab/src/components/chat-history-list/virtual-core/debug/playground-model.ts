@@ -1,3 +1,4 @@
+import { captureAnchor } from '../../anchor/anchor.js';
 import { seededRandom } from '../../seeded-random.js';
 import { createVirtualCore, type VirtualCore, type VirtualOverscan, type VirtualViewport } from '../virtual-core.js';
 import { initialMinimapView, type MinimapView } from './minimap-view.js';
@@ -26,6 +27,40 @@ export function nextScrollDirection(state: ScrollDirection, offset: number): Scr
   return { direction: state.direction === 'down' ? 'up' : 'down', extreme: offset };
 }
 
+/** How the playground places mounted rows. */
+export type PlaygroundLayout = 'flow' | 'absolute';
+
+/** What the last layout change did to the reading position, for the state panel. */
+export interface AnchorStatus {
+  /** The change that ran, such as `prepend` or `row size`. */
+  reason: string;
+  /** The row held still, or null when anchoring was off or no candidate survived. */
+  key: string | null;
+  /** How far the scroll position moved to hold it. */
+  delta: number;
+  /**
+   * Where the anchor row's element actually is minus where the core puts it, after the
+   * correction was written. Non-zero means the DOM and the core disagree about the layout.
+   */
+  residual: number | null;
+}
+
+/** Height of a pulsing row's striped block at rest, in pixels. */
+export const pulseBaseHeight = 16;
+/** How much the striped block grows at its peak, in pixels. */
+export const pulseAmplitude = 160;
+/** One full grow-and-shrink cycle of a pulsing row, in milliseconds. */
+export const pulsePeriod = 1600;
+
+/**
+ * Height of a pulsing row's striped block `elapsed` milliseconds after it started: the base
+ * height plus a raised cosine that rises to the amplitude and falls back, so it starts at rest
+ * and changes size on every frame without ever collapsing.
+ */
+export function pulseHeight(elapsed: number) {
+  return pulseBaseHeight + (pulseAmplitude * (1 - Math.cos((2 * Math.PI * elapsed) / pulsePeriod))) / 2;
+}
+
 export const minLines = 1;
 export const maxLines = 10;
 /** How long a size update stays highlighted, in the list and in the minimap. */
@@ -51,12 +86,19 @@ export class PlaygroundModel {
   scroll: ScrollDirection = { direction: 'down', extreme: 0 };
   /** When each row's size last changed; the minimap fades its highlight from this time. */
   readonly flashes = new Map<string, number>();
+  /** Rows whose height follows `pulseHeight`, with the time each started. */
+  readonly pulses = new Map<string, number>();
   private readonly random: () => number;
   /**
    * The minimap's view and canvas height. Kept here rather than inside the minimap so the state
    * panel can show it: it is state of its own, not something derived from the list.
    */
   minimap: { view: MinimapView; height: number } = { view: initialMinimapView, height: 0 };
+  /** Anchoring settings from the story; the driver reads them at every change. */
+  anchoring: { enabled: boolean; ratio: number } = { enabled: true, ratio: 0 };
+  lastAnchor: AnchorStatus | null = null;
+  /** Largest residual seen since mount, by magnitude. */
+  maxResidual = 0;
   private readonly painters = new Set<() => void>();
   private readonly viewportListeners = new Set<(viewport: VirtualViewport) => void>();
   private frame = 0;
@@ -97,6 +139,20 @@ export class PlaygroundModel {
     this.commit();
   }
 
+  /**
+   * Insert a row before `key` whose height changes on every frame, to test anchoring against
+   * a size animation. Inserted next to the viewport rather than at the start of the list, where
+   * it would not be mounted unless the list were scrolled to the top.
+   */
+  insertPulsing(key: string, now: number) {
+    const inserted = this.create(this.nextId++);
+    this.lines.set(inserted, minLines);
+    this.pulses.set(inserted, now);
+    const index = this.order.indexOf(key);
+    this.order = [...this.order.slice(0, index), inserted, ...this.order.slice(index)];
+    this.commit();
+  }
+
   removeFirst(count: number) {
     this.order = this.order.slice(count);
     this.commit();
@@ -125,6 +181,14 @@ export class PlaygroundModel {
   resizeAll(mounted: ReadonlySet<string>) {
     for (const key of this.order) this.lines.set(key, this.randomLines());
     for (const key of this.core.measuredKeys()) if (!mounted.has(key)) this.core.forget(key);
+  }
+
+  /** The row a change would hold still right now, or null with anchoring off. */
+  currentAnchor() {
+    const { viewport } = this.core;
+    if (!this.anchoring.enabled || !viewport) return null;
+    // The best candidate always intersects the viewport when any row does, so no margin.
+    return captureAnchor(this.core, viewport, this.anchoring.ratio, 0).candidates[0] ?? null;
   }
 
   /** Report the list's viewport to the core, and tell listeners when it actually moved. */

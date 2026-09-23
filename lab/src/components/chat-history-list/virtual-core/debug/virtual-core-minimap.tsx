@@ -65,6 +65,9 @@ export const VirtualCoreMinimap: FC<{ model: PlaygroundModel; onSeek: (offset: n
         flashDuration,
         flashEase,
         now,
+        anchor: model.anchoring.enabled
+          ? { ratio: model.anchoring.ratio, key: model.currentAnchor()?.key ?? null }
+          : null,
       });
       renderMinimap(context, scene.shapes, { width, height, dpr });
       if (scene.animating) model.invalidate();

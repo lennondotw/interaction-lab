@@ -23,6 +23,7 @@ export const minimapColors = {
   viewport: 'rgb(239 68 68)',
   bounds: 'rgb(203 213 225 / 0.55)',
   flash: (alpha: number) => `rgb(34 211 238 / ${0.85 * alpha})`,
+  anchor: 'rgb(168 85 247 / 0.75)',
   label: 'rgb(115 115 115)',
 };
 
@@ -43,6 +44,8 @@ export interface MinimapSceneInput {
   /** Maps fade progress 0..1 to eased progress; the highlight's opacity is 1 minus it. */
   flashEase: (progress: number) => number;
   now: number;
+  /** The reference line's ratio and the row anchoring would hold now; null when anchoring is off. */
+  anchor: { ratio: number; key: string | null } | null;
 }
 
 export interface MinimapScene {
@@ -52,8 +55,9 @@ export interface MinimapScene {
 }
 
 /**
- * Layers, bottom to top: rows, fading size updates, render and visible range strips, the
- * scroll start and end lines, the viewport frame, and the scale label.
+ * Layers, bottom to top: rows, the anchor row, fading size updates, render and visible range
+ * strips, the scroll start and end lines, the viewport frame, the reference line, and the
+ * scale label.
  */
 export function buildMinimapScene({
   core,
@@ -64,6 +68,7 @@ export function buildMinimapScene({
   flashDuration,
   flashEase,
   now,
+  anchor,
 }: MinimapSceneInput): MinimapScene {
   const shapes: MinimapShape[] = [];
   const scale = minimapScale(view, { height, total: core.totalSize() });
@@ -85,6 +90,19 @@ export function buildMinimapScene({
         color: (item.measured ? minimapColors.measured : minimapColors.estimated)[index % 2]!,
       });
     }
+  }
+
+  const anchorIndex = anchor && anchor.key !== null ? core.indexOf(anchor.key) : undefined;
+  if (anchorIndex !== undefined) {
+    const item = core.item(anchorIndex);
+    shapes.push({
+      kind: 'fill',
+      x: minimapInset,
+      y: y(item.start),
+      width: rowsWidth,
+      height: Math.max(minimumFlashHeight, item.size * scale),
+      color: minimapColors.anchor,
+    });
   }
 
   // Size updates fade on the list overlay's curve.
@@ -130,6 +148,17 @@ export function buildMinimapScene({
       bottom: y(viewport.offset + viewport.size),
       color: minimapColors.viewport,
     });
+    if (anchor) {
+      // Across the rows only, so the frame's own edges stay visible at ratios 0 and 1.
+      shapes.push({
+        kind: 'edge',
+        x: minimapInset,
+        y: y(viewport.offset + anchor.ratio * viewport.size),
+        width: rowsWidth,
+        side: anchor.ratio < 1 ? 'below' : 'above',
+        color: minimapColors.anchor,
+      });
+    }
   }
 
   shapes.push({
