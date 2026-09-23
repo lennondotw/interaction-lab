@@ -30,8 +30,9 @@ export const DigitalCrown: FC = () => {
   useEffect(() => {
     // Set color-scheme
     document.documentElement.style.colorScheme = 'dark';
+    // The watch face is black whatever the page theme. Painted on the root element, which is
+    // the canvas background, so it covers the whole preview; `<body>` needs nothing of its own.
     document.documentElement.style.backgroundColor = '#000';
-    document.body.style.backgroundColor = '#000';
 
     // Disable body scroll
     document.documentElement.style.overflow = 'clip';
@@ -50,7 +51,6 @@ export const DigitalCrown: FC = () => {
       // Cleanup on unmount
       document.documentElement.style.colorScheme = '';
       document.documentElement.style.backgroundColor = '';
-      document.body.style.backgroundColor = '';
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
     };

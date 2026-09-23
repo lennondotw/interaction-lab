@@ -41,12 +41,7 @@ const AllPrecisionsDemo: FC = () => {
 };
 
 const Stage: FC<{ children: ReactNode }> = ({ children }) => (
-  <div
-    className={`
-      flex min-h-screen items-center justify-center bg-neutral-100 p-8
-      dark:bg-neutral-950
-    `}
-  >
+  <div className="flex min-h-screen items-center justify-center p-8">
     <div
       className={`
         min-w-64 rounded-2xl border border-black/5 bg-white px-8 py-6 text-center font-mono text-2xl text-neutral-700

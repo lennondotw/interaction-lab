@@ -28,12 +28,7 @@ export const SelfDisplay: Story = {
     },
   },
   render: (args) => (
-    <div
-      className={`
-        w-full bg-neutral-50 py-20 text-neutral-950
-        dark:bg-neutral-950 dark:text-neutral-50
-      `}
-    >
+    <div className="w-full py-20">
       <OrbitTrack {...args} scrollLinked={false} />
     </div>
   ),

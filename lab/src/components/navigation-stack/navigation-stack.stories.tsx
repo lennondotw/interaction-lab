@@ -176,15 +176,31 @@ const EdgeToEdgeContent: FC<{ view: NavigationView }> = ({ view }) => {
   // code units are all this needs, and the ids are ASCII paths anyway.
   let hue = 0;
   for (let i = 0; i < view.id.length; i++) hue = (hue + view.id.charCodeAt(i) * 7) % 360;
+  // Tinted rather than coloured: low chroma, and lightness kept near the page's own in each
+  // theme, so the surface reads as a hue passing under the chrome without shouting. Each stop
+  // is a `light-dark()` pair resolved against the root's `color-scheme`.
+  const from = hue;
+  const to = (hue + 70) % 360;
   const surface = {
-    background: `linear-gradient(160deg, oklch(0.68 0.17 ${hue}), oklch(0.4 0.13 ${(hue + 70) % 360}))`,
+    background: `linear-gradient(
+      160deg,
+      light-dark(oklch(0.95 0.035 ${from}), oklch(0.3 0.045 ${from})),
+      light-dark(oklch(0.89 0.05 ${to}), oklch(0.22 0.05 ${to}))
+    )`,
   };
 
   if (children.length === 0) {
     return (
       <div className="h-full" style={surface}>
         <NavigationCenteredContent>
-          <span className="text-sm text-white/80">{view.title}</span>
+          <span
+            className={`
+              text-sm text-black/60
+              dark:text-white/70
+            `}
+          >
+            {view.title}
+          </span>
         </NavigationCenteredContent>
       </div>
     );
@@ -199,19 +215,31 @@ const EdgeToEdgeContent: FC<{ view: NavigationView }> = ({ view }) => {
             type="button"
             onClick={() => push({ id: node.id, title: node.title })}
             className={`
-              flex h-12 w-full cursor-pointer items-center justify-between border-b border-white/15 px-4 text-left
-              text-sm text-white
-              hover:bg-white/10
+              flex h-12 w-full cursor-pointer items-center justify-between border-b border-black/10 px-4 text-left
+              text-sm
+              hover:bg-black/5
+              dark:border-white/10
+              dark:hover:bg-white/5
             `}
           >
             <span className="truncate">{node.title}</span>
-            <ChevronRight className="size-4 shrink-0 text-white/50" />
+            <ChevronRight
+              className={`
+                size-4 shrink-0 text-black/30
+                dark:text-white/30
+              `}
+            />
           </button>
         ))}
         {/* Enough copy to make the scroller actually scroll, so the claim
             above it — that rows pass under the blur rather than stopping at
             it — is something you can check rather than take on trust. */}
-        <p className="px-4 py-6 text-xs/6 text-white/70">
+        <p
+          className={`
+            px-4 py-6 text-xs/6 text-black/55
+            dark:text-white/55
+          `}
+        >
           The surface behind the bar reaches the top of the frame; these rows do not, because the scroller insets itself
           by <code className="font-mono">var(--nav-safe-top)</code>. Scroll and the rows travel up under the blur — the
           inset is padding inside the scroller, not a shorter scroller. Take the breadcrumb away and the bar gets
@@ -400,9 +428,12 @@ const WithTabs: FC = () => {
 
   return (
     <div
+      // Same frame and inner stroke as `NavigationContainer`, since this story assembles its own.
       className={cn(`
-        flex h-full flex-col overflow-hidden rounded-2xl bg-neutral-200
-        dark:bg-neutral-900
+        relative flex h-full flex-col overflow-hidden rounded-2xl bg-neutral-200
+        after:pointer-events-none after:absolute after:inset-0 after:z-1000 after:rounded-[inherit]
+        after:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)]
+        dark:bg-neutral-900 dark:after:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]
       `)}
     >
       {/* `relative` so the panels can stack; `min-h-0` so a tall tab is
@@ -524,16 +555,11 @@ const TwoStacks: FC = () => (
   </div>
 );
 
-// The stage has to sit apart from the card on both themes, otherwise the
-// rounded frame dissolves into the page — in dark that means going
-// LIGHTER than the views, which are near-black.
+// Centers the card and nothing more. It paints no background: the frame's own inner stroke is
+// what keeps the card's edge visible, so the page background (and the Background toolbar) stay
+// in charge of what is behind it.
 const Stage: FC<{ children: ReactNode }> = ({ children }) => (
-  <div
-    className={`
-      flex min-h-screen w-full items-center justify-center bg-neutral-300 p-8
-      dark:bg-neutral-800
-    `}
-  >
+  <div className="flex min-h-screen w-full items-center justify-center p-8">
     <div className="size-100">{children}</div>
   </div>
 );
