@@ -1,4 +1,5 @@
 import '#src/global.css';
+import * as background from '@monorepo/storybook-addons/background';
 import type { Preview } from '@storybook/react-vite';
 import { useEffect, useRef, useState } from 'react';
 import { Toaster } from 'sonner';
@@ -10,6 +11,7 @@ import { resolveTheme, THEME_STORAGE_KEY } from './preview-utils/theme.js';
 
 const preview: Preview = {
   parameters: {
+    ...background.parameters,
     layout: 'fullscreen',
     docs: {
       container: CustomDocsContainer,
@@ -28,6 +30,7 @@ const preview: Preview = {
     },
   },
   globalTypes: {
+    ...background.globalTypes,
     theme: {
       description: 'Global color theme',
       toolbar: {
@@ -42,6 +45,7 @@ const preview: Preview = {
     },
   },
   initialGlobals: {
+    ...background.initialGlobals,
     theme: 'system',
   },
   decorators: [
@@ -84,6 +88,7 @@ const preview: Preview = {
         </ThemeProvider>
       );
     },
+    ...background.decorators,
   ],
 };
 
