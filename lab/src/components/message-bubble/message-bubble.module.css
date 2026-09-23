@@ -21,7 +21,7 @@
     min-width: 38px;
     max-width: 100%;
     /* Keep padding-block × 2 + line-height in sync with the layout height of
-       [data-slot='typing-bubble'] in ./typing-bubble.css (currently 33px). */
+       .bubble in ./typing-bubble.module.css (currently 33px). */
     padding: 8px 13px;
     border-radius: 18px;
     background: var(--message-bubble-fill);
