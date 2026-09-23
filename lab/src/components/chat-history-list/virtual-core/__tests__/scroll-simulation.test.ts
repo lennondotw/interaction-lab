@@ -215,10 +215,8 @@ describe('window changes', () => {
     sim.scrollTo(6000);
     const anchor = sim.core.item(sim.visibleRange()!.startIndex);
     const screenTop = anchor.start - sim.scrollTop;
-    const before = anchor.start;
-    sim.core.setKeys(keys.slice(300));
-    sim.write(sim.scrollTop + sim.core.offsetOf(anchor.key)! - before);
-    sim.layout();
+    const result = sim.change(() => sim.core.setKeys(keys.slice(300)));
+    expect(result.anchor?.key).toBe(anchor.key);
     expect(sim.core.offsetOf(anchor.key)! - sim.scrollTop).toBe(screenTop);
     expect(sim.viewportIsMeasured()).toBe(true);
   });

@@ -3,6 +3,7 @@
  * a simulated viewport that mounts, measures and compensates the way the real list will.
  */
 
+import { type AnchorSnapshot, captureAnchor, resolveAnchor } from '../../anchor/anchor.js';
 import { seededRandom } from '../../seeded-random.js';
 import { createVirtualCore, type VirtualCore, type VirtualOverscan, type VirtualRange } from '../virtual-core.js';
 
@@ -38,17 +39,24 @@ export function stepCriticallyDamped(state: SpringState, target: number, omega: 
   };
 }
 
-/** How far the anchor moved on screen, or null when it could not be held (clamped or gone). */
+/**
+ * How far the anchor moved relative to the reference line, or null when it could not be held
+ * (clamped or gone).
+ */
 export function anchorDrift(result: LayoutResult) {
   if (!result.anchor || result.clamped) return null;
-  return result.anchor.screenTopAfter - result.anchor.screenTopBefore;
+  return result.anchor.fromLineAfter - result.anchor.fromLineBefore;
 }
 
 export interface LayoutResult {
   passes: number;
   /** The scroll position had to be clamped, so the anchor could not keep its place. */
   clamped: boolean;
-  anchor: { key: string; screenTopBefore: number; screenTopAfter: number } | null;
+  /**
+   * The row that held the reading position, with its anchor point's distance below the
+   * reference line before and after. Null when no candidate survived the change.
+   */
+  anchor: { key: string; fromLineBefore: number; fromLineAfter: number } | null;
 }
 
 interface SimulationOptions {
@@ -61,16 +69,20 @@ interface SimulationOptions {
   paddingStart?: number;
   paddingEnd?: number;
   maxPasses?: number;
+  /** Where the reference line sits in the viewport, 0 (top) to 1 (bottom). Defaults to 0. */
+  anchorRatio?: number;
 }
 
 /**
  * One scroll container. `layout()` stands for one frame of browser work: mount the range
- * around the viewport, measure what mounted, and keep the first visible item where it was.
+ * around the viewport, measure what mounted, and hold the reading anchor. `change()` does the
+ * same around a change to the window or the viewport, capturing the anchor just before it.
  */
 export class ListSimulation {
   readonly core: VirtualCore;
   readonly heights: ReadonlyMap<string, number>;
-  readonly viewportHeight: number;
+  viewportHeight: number;
+  anchorRatio: number;
   readonly maxPasses: number;
   scrollTop = 0;
   mounted: VirtualRange | null = null;
@@ -80,6 +92,7 @@ export class ListSimulation {
     this.heights = options.heights;
     this.viewportHeight = options.viewportHeight ?? 800;
     this.maxPasses = options.maxPasses ?? 32;
+    this.anchorRatio = options.anchorRatio ?? 0;
     this.core = createVirtualCore({
       estimateSize: () => estimate,
       paddingStart: options.paddingStart ?? 0,
@@ -109,17 +122,18 @@ export class ListSimulation {
     return this.core.visibleRange();
   }
 
-  /** First item intersecting the viewport, with its position relative to the viewport top. */
-  private readAnchor() {
-    const range = this.visibleRange();
-    if (!range) return null;
-    const item = this.core.item(range.startIndex);
-    return { key: item.key, screenTop: item.start - this.scrollTop };
+  layout(): LayoutResult {
+    return this.change(() => {});
   }
 
-  layout(): LayoutResult {
-    const anchor = this.readAnchor();
-    let clamped = false;
+  /**
+   * Capture the anchor from the layout as it is, apply `mutate` (new keys, a new viewport height,
+   * forgotten sizes), then lay out until measurements settle, restoring the anchor every pass.
+   */
+  change(mutate: () => void): LayoutResult {
+    const snapshot = captureAnchor(this.core, this.core.viewport!, this.anchorRatio);
+    mutate();
+    let clamped = this.write(this.scrollTop);
     for (let pass = 1; pass <= this.maxPasses; pass++) {
       const range = this.core.renderRange();
       this.mounted = range;
@@ -129,25 +143,26 @@ export class ListSimulation {
           changed = this.core.measure(item.key, this.heights.get(item.key)!) || changed;
         }
       }
-      const anchorTop = anchor ? this.core.offsetOf(anchor.key) : undefined;
-      if (anchor && anchorTop !== undefined) {
-        clamped = this.write(anchorTop - anchor.screenTop) || clamped;
-      } else {
-        clamped = this.write(this.scrollTop) || clamped;
-      }
-      if (!changed) {
-        const after = anchor ? this.core.offsetOf(anchor.key) : undefined;
-        return {
-          passes: pass,
-          clamped,
-          anchor:
-            anchor && after !== undefined
-              ? { key: anchor.key, screenTopBefore: anchor.screenTop, screenTopAfter: after - this.scrollTop }
-              : null,
-        };
-      }
+      const resolved = resolveAnchor(snapshot, this.core, this.viewportHeight);
+      if (resolved) clamped = this.write(resolved.offset) || clamped;
+      if (!changed) return { passes: pass, clamped, anchor: this.anchorResult(snapshot, resolved?.key) };
     }
     throw new Error(`Layout did not settle within ${this.maxPasses} passes.`);
+  }
+
+  /** Resize the viewport, holding the anchor's distance from the reference line. */
+  resize(viewportHeight: number) {
+    return this.change(() => {
+      this.viewportHeight = viewportHeight;
+    });
+  }
+
+  private anchorResult(snapshot: AnchorSnapshot, key: string | undefined): LayoutResult['anchor'] {
+    if (key === undefined) return null;
+    const before = snapshot.candidates.find((candidate) => candidate.key === key)!;
+    const item = this.core.item(this.core.indexOf(key)!);
+    const line = this.scrollTop + snapshot.ratio * this.viewportHeight;
+    return { key, fromLineBefore: before.fromLine, fromLineAfter: item.start + snapshot.ratio * item.size - line };
   }
 
   scrollTo(top: number) {

@@ -18,13 +18,14 @@ function sceneFor(
   offset: number,
   view: MinimapView = initialMinimapView,
   flashes = new Map<string, number>(),
-  now = 0
+  now = 0,
+  anchor: { ratio: number; key: string | null } | null = null
 ) {
   const core = createVirtualCore({ estimateSize: () => 100 });
   core.setKeys(Array.from({ length: 200 }, (_, index) => `m${index}`));
   core.setViewport({ offset, size: 500 });
   const settled = followViewport(view, { height, total: core.totalSize() }, core.viewport!);
-  return buildMinimapScene({ core, view: settled, width, height, flashes, flashDuration: 600, flashEase, now });
+  return buildMinimapScene({ core, view: settled, width, height, flashes, flashDuration: 600, flashEase, now, anchor });
 }
 
 const ofKind = <Kind extends MinimapShape['kind']>(shapes: readonly MinimapShape[], kind: Kind) =>
@@ -112,5 +113,35 @@ describe('scale label', () => {
   it('reports content pixels per minimap pixel', () => {
     const [label] = ofKind(sceneFor(0).shapes, 'text');
     expect(label?.text).toBe(`1:${Math.round(20_000 / (height - 2 * minimapSafeMargin))}`);
+  });
+});
+
+describe('anchor', () => {
+  const anchorShapes = (shapes: readonly MinimapShape[]) =>
+    shapes.filter((shape) => 'color' in shape && shape.color === minimapColors.anchor);
+
+  it('draws nothing when anchoring is off', () => {
+    expect(anchorShapes(sceneFor(5000).shapes)).toEqual([]);
+  });
+
+  it('fills the anchor row and draws the reference line at its ratio of the viewport', () => {
+    const scene = sceneFor(5000, initialMinimapView, new Map(), 0, { ratio: 0.5, key: 'm52' });
+    const [row] = ofKind(anchorShapes(scene.shapes), 'fill');
+    const [line] = ofKind(anchorShapes(scene.shapes), 'edge');
+    const [frame] = ofKind(scene.shapes, 'frame');
+    const scale = (frame!.bottom - frame!.top) / 500;
+    expect(row!.y).toBeCloseTo(frame!.top + (5200 - 5000) * scale, 9);
+    expect(row!.height).toBeCloseTo(100 * scale, 9);
+    expect(line).toMatchObject({ side: 'below' });
+    expect(line!.y).toBeCloseTo(frame!.top + 250 * scale, 9);
+  });
+
+  it('puts the line above the bottom edge at ratio 1, and draws only the line without a key', () => {
+    const scene = sceneFor(5000, initialMinimapView, new Map(), 0, { ratio: 1, key: null });
+    const shapes = anchorShapes(scene.shapes);
+    expect(shapes).toHaveLength(1);
+    const [frame] = ofKind(scene.shapes, 'frame');
+    expect(shapes[0]).toMatchObject({ kind: 'edge', side: 'above' });
+    expect((shapes[0] as { y: number }).y).toBeCloseTo(frame!.bottom, 9);
   });
 });
