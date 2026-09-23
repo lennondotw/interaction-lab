@@ -13,8 +13,7 @@ try {
   await page.goto(url);
   await page.locator('[data-slot="chat-scroll-viewport"]').waitFor();
   const results = await page.evaluate(async () => {
-    const { createChatScrollController } =
-      await import('/src/components/chat-scroll-container/chat-scroll-controller.ts');
+    const { createScrollAnchorController } = await import('/src/components/scroll-anchor/scroll-anchor-controller.ts');
     const flush = async (n = 3) => {
       for (let i = 0; i < n; i++) await new Promise(requestAnimationFrame);
     };
@@ -32,7 +31,7 @@ try {
       v.append(content);
       document.body.append(v);
       let state;
-      const c = createChatScrollController(v, content, {
+      const c = createScrollAnchorController(v, content, {
         threshold: 2,
         reducedMotion,
         animationSpeed: 1,
@@ -144,14 +143,14 @@ try {
         f.arm();
         // A concurrent layout update must not bypass the pending takeover.
         f.content.style.height = '2100px';
-        f.c.contentChanged();
+        f.c.layoutChanged();
         if (action === 'touch') f.touch('touchstart');
         if (action.startsWith('wheel'))
           f.v.dispatchEvent(new WheelEvent('wheel', { deltaY: action === 'wheel-up' ? -1 : 1 }));
         if (action === 'key') f.v.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp' }));
         if (action === 'dispose') f.c.dispose();
         if (action === 'supersede') f.c.scrollToBottom();
-        if (action === 'send') f.c.contentChanged(true);
+        if (action === 'send') f.c.layoutChanged({ follow: true });
         if (action === 'late-scroll' || action === 'pen-scroll') {
           await flush(3);
           if (action === 'pen-scroll') f.v.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'pen' }));
@@ -280,7 +279,7 @@ try {
           );
           unregister();
           f.content.style.height = '2030px';
-          f.c.contentChanged();
+          f.c.layoutChanged();
           const deadline = performance.now() + 3000;
           do {
             await flush(1);

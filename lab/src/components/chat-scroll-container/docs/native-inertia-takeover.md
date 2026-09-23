@@ -1,7 +1,7 @@
 # Programmatic takeover of native inertia
 
 This is the browser workaround used by explicit bottom commands in
-[the scroll controller](../chat-scroll-controller.ts). [Input ownership](./input-and-inertia-ownership.md)
+[the scroll controller](../../scroll-anchor/scroll-anchor-controller.ts). [Input ownership](./input-and-inertia-ownership.md)
 defines the behavior it must preserve. Research records contain the underlying measurements, not an
 additional runtime protocol.
 

@@ -1,30 +1,55 @@
 import { toSpringPhysics } from '@monorepo/utils';
 import { animate, motionValue } from 'motion/react';
 
-import type { ReadingAnchor } from './chat-insertions.js';
-import { finalChatBottom } from './chat-layout.js';
+import { finalScrollBottom } from './pending-layout.js';
+import type { ReadingAnchor, ReadingAnchorSource } from './reading-anchor.js';
 
-export const chatScrollInterrupted = 'chat-scroll-interrupted';
+/** Dispatched on the viewport when user input takes scrolling away from the controller. */
+export const scrollAnchorInterrupted = 'scroll-anchor-interrupted';
 
-export type ChatScrollMode = 'following' | 'animating' | 'detached';
+export type ScrollAnchorMode = 'following' | 'animating' | 'detached';
 
-export interface ChatScrollState {
-  mode: ChatScrollMode;
+export interface ScrollAnchorState {
+  mode: ScrollAnchorMode;
+  /** Pixels between the current position and the current bottom. */
   distance: number;
   nearBottom: boolean;
   threshold: number;
   scrollTop: number;
+  /** The projected final bottom, including pending layout. */
   target: number;
   velocity: number;
+  /** The last intent transition, for debugging. */
   reason: string;
 }
 
-interface Options {
+export interface ScrollAnchorControllerOptions {
+  /** Bottom zone in pixels. Being inside it is eligibility, not automatic reattachment. */
   threshold: number;
+  /** Detach on mouse press. Touch contact interrupts active catch-up regardless; upward movement always detaches. */
   interruptOnMouseDown?: boolean;
   reducedMotion: boolean;
+  /** Playback rate for programmatic scrolling. Native gestures are never slowed. */
   animationSpeed: number;
-  onStateChange?: (state: ChatScrollState) => void;
+  onStateChange?: (state: ScrollAnchorState) => void;
+  /** Override the projected final bottom; defaults to content height plus pending layout. */
+  projectBottom?: () => number;
+  /**
+   * Compensate layout changes the host did not report, such as reflow or loaded media,
+   * the same way as a reported change. Hosts that report every change omit it.
+   */
+  readingAnchor?: ReadingAnchorSource;
+}
+
+export interface LayoutChange {
+  /** Request bottom catch-up regardless of current intent, as for the viewer's own new content. */
+  follow?: boolean;
+  /** One tick of an animated layout sequence; reconciled even when integer geometry looks unchanged. */
+  animated?: boolean;
+  /** Trailing clearance changed, e.g. a composer grew; reconciled even when content height is unchanged. */
+  clearance?: boolean;
+  /** Where a detached reader was before this change, so the change can be compensated. */
+  anchor?: ReadingAnchor;
 }
 
 const spring = {
@@ -35,10 +60,18 @@ const spring = {
 } as const;
 const positionTolerance = 0.5;
 
-/** Owns programmatic scrolling; input handlers never prevent native default actions. */
-export function createChatScrollController(viewport: HTMLElement, content: HTMLElement, initialOptions: Options) {
+/**
+ * Owns programmatic scrolling; input handlers never prevent native default
+ * actions. Following is explicit intent, not a boolean recomputed from
+ * proximity on every scroll event.
+ */
+export function createScrollAnchorController(
+  viewport: HTMLElement,
+  content: HTMLElement,
+  initialOptions: ScrollAnchorControllerOptions
+) {
   let options = initialOptions;
-  let mode: ChatScrollMode = 'following';
+  let mode: ScrollAnchorMode = 'following';
   let reason = 'Initial position';
   let generation = 0;
   let reportFrame = 0;
@@ -63,6 +96,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   const position = motionValue(viewport.scrollTop);
   const bottom = () => Math.max(0, viewport.scrollHeight - viewport.clientHeight);
   const distance = () => Math.max(0, bottom() - viewport.scrollTop);
+  const projectedBottom = () => options.projectBottom?.() ?? finalScrollBottom(viewport, content);
 
   function readScrollPosition() {
     return {
@@ -86,7 +120,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     // A browser clamp can precede either the layout callback or the scroll event.
     // Consume both through ONE position cursor, independently of the layout cache
     // below. Advancing previousHeight alone loses the evidence of a shrink before
-    // its queued scroll arrives (e.g. typing replacement during a send flight).
+    // its queued scroll arrives.
     // Only movement to the new lower boundary is a clamp. A layout change does
     // not grant a blanket exemption to user scrolling elsewhere in the viewport.
     // scrollHeight/clientHeight are integers; the actual boundary can differ by
@@ -122,7 +156,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
         nearBottom: distance() <= options.threshold,
         threshold: options.threshold,
         scrollTop: viewport.scrollTop,
-        target: finalChatBottom(viewport),
+        target: projectedBottom(),
         velocity: mode === 'animating' ? position.getVelocity() : 0,
         reason,
       });
@@ -146,9 +180,9 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     position.jump(viewport.scrollTop);
     observedScroll = readScrollPosition();
     reason = cause;
-    // Flight and scroll share interruption ownership, including real upward movement
+    // Dependent visuals share interruption ownership, including real upward movement
     // after a non-blocking pointer press. Layout clamps never reach this branch.
-    viewport.dispatchEvent(new Event(chatScrollInterrupted));
+    viewport.dispatchEvent(new Event(scrollAnchorInterrupted));
     report();
   }
 
@@ -176,7 +210,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       mode = 'following';
     }
     const current = readScrollPosition();
-    const target = finalChatBottom(viewport);
+    const target = projectedBottom();
     // A satisfied command grants follow intent without changing native geometry.
     // Clamp positive overscroll: bounce cannot satisfy an unexpanded future target.
     if (Math.abs(target - Math.min(current.top, current.bottom)) <= positionTolerance) {
@@ -236,7 +270,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   }
 
   function scrollToBottom(cause: string, { instant = false } = {}) {
-    const target = instant ? bottom() : finalChatBottom(viewport);
+    const target = instant ? bottom() : projectedBottom();
     if (
       mode === 'animating' &&
       Math.abs(target - animationTarget) <= positionTolerance &&
@@ -277,35 +311,29 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     if (mode === 'animating') write(top);
   });
 
-  function contentChanged(
-    localSend = false,
-    {
-      animatedLayout = false,
-      composerResize = false,
-      anchor,
-    }: { animatedLayout?: boolean; composerResize?: boolean; anchor?: ReadingAnchor } = {}
-  ) {
-    // Wait for the complete initial layout, including composer clearance.
+  /** Reconcile with the DOM after a layout change. Call after the change has been applied. */
+  function layoutChanged({ follow = false, animated = false, clearance = false, anchor }: LayoutChange = {}) {
+    // Wait for the complete initial layout, including any trailing clearance.
     if (!initialLayoutMeasured) return;
     // Reconcile before any early return or layout-cache update, even while a spring
     // is animating. Native clamps are observations, not new user intent or writes.
     observeScroll();
     const bottomPadding = Number.parseFloat(getComputedStyle(content).paddingBottom);
     const paddingDelta = bottomPadding - previousBottomPadding;
-    const clearanceChanged = composerResize || paddingDelta !== 0;
-    // ResizeObserver can report a frame already applied by an insertion callback.
+    const clearanceChanged = clearance || paddingDelta !== 0;
+    // ResizeObserver can report a frame already applied by a layout callback.
     // Do not process that notification as a second layout change.
     // Explicit layout ticks must run even when integer scrollHeight is unchanged:
     // fractional shrinkage can still clamp scrollTop and needs to be recorded
     // as layout-owned scrolling before the native scroll event arrives.
     if (
-      !localSend &&
-      !animatedLayout &&
+      !follow &&
+      !animated &&
       !anchor &&
       paddingDelta === 0 &&
       previousHeight === viewport.scrollHeight &&
       previousViewportHeight === viewport.clientHeight &&
-      (mode !== 'animating' || Math.abs(finalChatBottom(viewport) - animationTarget) <= positionTolerance)
+      (mode !== 'animating' || Math.abs(projectedBottom() - animationTarget) <= positionTolerance)
     ) {
       report();
       return;
@@ -313,7 +341,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     previousBottomPadding = bottomPadding;
     previousHeight = viewport.scrollHeight;
     previousViewportHeight = viewport.clientHeight;
-    if (!localSend && mode === 'detached' && anchor?.element.isConnected) {
+    if (!follow && mode === 'detached' && anchor?.element.isConnected) {
       const currentBottom = anchor.element.getBoundingClientRect().bottom - viewport.getBoundingClientRect().top;
       const requestedTop = viewport.scrollTop + currentBottom - anchor.bottom + anchorRemainder;
       write(requestedTop);
@@ -321,10 +349,10 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       // into the next layout tick instead of accumulating visible reading drift.
       anchorRemainder = Math.max(-1, Math.min(1, requestedTop - viewport.scrollTop));
     }
-    if (localSend) {
-      requestBottom('Local message sent', mode === 'following');
+    if (follow) {
+      requestBottom('Followed new content', mode === 'following');
     } else if (!takeover && mode !== 'detached') {
-      scrollToBottom(clearanceChanged ? 'Composer resized' : 'Content resized', {
+      scrollToBottom(clearanceChanged ? 'Clearance resized' : 'Content resized', {
         // Follow intent owns the current bottom across ALL layout changes, including
         // natural reflow. No resize-cause inference or second spring is needed.
         // Reconcile user movement above first; detached readers keep their anchor,
@@ -416,7 +444,7 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
   window.addEventListener('touchend', onTouchEnd, { passive: true });
   window.addEventListener('touchcancel', onTouchEnd, { passive: true });
   const observer = new ResizeObserver(() => {
-    // The first delivery includes parent layout effects, such as measuring the composer.
+    // The first delivery includes parent layout effects, such as measuring clearance.
     // Complete initial positioning before paint; only subsequent changes should animate.
     if (!initialLayoutMeasured) {
       previousHeight = viewport.scrollHeight;
@@ -425,21 +453,24 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
       if (mode !== 'detached') write(bottom());
       initialLayoutMeasured = true;
     } else {
-      contentChanged();
+      const source = options.readingAnchor;
+      layoutChanged({ anchor: source && mode === 'detached' ? source.fromSnapshot() : undefined });
+      source?.remember();
     }
   });
-  // Observe both row/spacer geometry and legacy padding-based clearance.
+  // Observe both row geometry and padding-based clearance.
   // Content-box observation alone would miss padding-only changes.
   observer.observe(content, { box: 'border-box' });
   observer.observe(viewport);
 
   return {
-    contentChanged,
+    layoutChanged,
+    /** Animate to the projected bottom and follow afterwards, under the same interruption rules. */
     scrollToBottom() {
       anchorRemainder = 0;
       requestBottom('Scroll to bottom');
     },
-    updateOptions(next: Options) {
+    updateOptions(next: ScrollAnchorControllerOptions) {
       const needsReport = options.threshold !== next.threshold || (!options.onStateChange && next.onStateChange);
       options = next;
       if (animation) animation.speed = options.animationSpeed;
@@ -468,3 +499,5 @@ export function createChatScrollController(viewport: HTMLElement, content: HTMLE
     },
   };
 }
+
+export type ScrollAnchorController = ReturnType<typeof createScrollAnchorController>;

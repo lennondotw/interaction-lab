@@ -11,8 +11,7 @@ try {
   );
   await page.locator('[data-slot="chat-scroll-viewport"]').waitFor();
   const results = await page.evaluate(async () => {
-    const { createChatScrollController } =
-      await import('/src/components/chat-scroll-container/chat-scroll-controller.ts');
+    const { createScrollAnchorController } = await import('/src/components/scroll-anchor/scroll-anchor-controller.ts');
     const results = [];
     for (const speed of [0.25, 1]) {
       const viewport = document.createElement('div');
@@ -23,7 +22,7 @@ try {
       viewport.append(content);
       document.body.append(viewport);
       let state;
-      const controller = createChatScrollController(viewport, content, {
+      const controller = createScrollAnchorController(viewport, content, {
         threshold: 2,
         reducedMotion: false,
         animationSpeed: speed,
@@ -43,7 +42,7 @@ try {
         viewport.scrollTop -= 200;
         viewport.dispatchEvent(new Event('scroll'));
         const origin = viewport.scrollTop;
-        controller.contentChanged(true);
+        controller.layoutChanged({ follow: true });
         const timeout = performance.now() + 5000;
         while (viewport.scrollTop < origin + 70 || !(state.velocity > 0)) {
           if (performance.now() > timeout) throw new Error('The first spring did not advance');
@@ -51,7 +50,7 @@ try {
         }
         const velocity = state.velocity;
         content.style.height = '4200px';
-        controller.contentChanged(true);
+        controller.layoutChanged({ follow: true });
         // stop() may advance the old spring; the new spring starts at this actual position.
         const startTop = viewport.scrollTop,
           start = performance.now();

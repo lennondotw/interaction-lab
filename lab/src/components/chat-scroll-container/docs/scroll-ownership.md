@@ -16,7 +16,7 @@ Repeated observer notifications for already-applied geometry should not start a 
 
 ## Evidence
 
-- Implementation: [observeScroll, write, and contentChanged](../chat-scroll-controller.ts).
+- Implementation: [observeScroll, write, and layoutChanged](../../scroll-anchor/scroll-anchor-controller.ts).
 - History: [3a0587f](https://github.com/lennondotw/interaction-lab/commit/3a0587f); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#scrolling-and-composer).
 

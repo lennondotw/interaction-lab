@@ -50,7 +50,7 @@ try {
           window.events.push({ ...read('write'), requested: value });
         },
       });
-      for (const type of ['touchstart', 'touchend', 'pointercancel', 'scroll', 'chat-scroll-interrupted'])
+      for (const type of ['touchstart', 'touchend', 'pointercancel', 'scroll', 'scroll-anchor-interrupted'])
         v.addEventListener(type, () => window.events.push(read(type)), { passive: true });
       button.addEventListener('click', () => window.events.push(read('button-click')));
       v.addEventListener(

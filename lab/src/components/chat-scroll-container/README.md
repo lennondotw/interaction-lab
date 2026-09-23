@@ -10,7 +10,7 @@ history; they are not transcripts of every design discussion or claims that all 
 | ------------------------------------------------------------------- | --------------------------------------------- |
 | Conversation order, item identity, grouping, and target gaps        | List model and committed React items          |
 | Current item footprint and pending layout height                    | Insertion manager and typing lifecycle        |
-| Current scroll position, following intent, and reading compensation | Scroll controller                             |
+| Current scroll position, following intent, and reading compensation | Headless scroll anchor (shared primitive)     |
 | Visible entrance and composer-to-bubble movement                    | Transient visuals and flight hook             |
 | Draft, composer clearance, departure capture, and reply scheduling  | Host composition; demonstrated by the stories |
 
@@ -18,9 +18,11 @@ The logical conversation updates immediately. Temporary layout and visual animat
 state continuously. These are separate responsibilities: a tail can change immediately while its row's
 spacing still animates, and a flight can finish its shape while waiting for the real row to arrive.
 
-`ChatScrollContainer` supplies the list and scrolling. `MessageInput` and `useChatSendFlight` are separate;
-the story explicitly composes them. A 35px single-line composer and 33px message/typing boxes are intentional.
-Their geometry is measured independently; equal height is not an integration requirement.
+`ChatScrollContainer` supplies the list and drives the [scroll anchor](../scroll-anchor/README.md), a headless
+primitive that owns following intent, catch-up, clamp disambiguation, and reading-anchor compensation
+for any list. `MessageInput` and `useChatSendFlight` are separate; the story explicitly composes them.
+A 35px single-line composer and 33px message/typing boxes are intentional. Their geometry is measured
+independently; equal height is not an integration requirement.
 
 ## Sending sequence
 

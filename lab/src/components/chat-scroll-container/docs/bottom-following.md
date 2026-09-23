@@ -52,7 +52,7 @@ needed, it completes that handoff first.
 
 ## Evidence
 
-- Implementation: [state transitions and input handlers](../chat-scroll-controller.ts).
+- Implementation: [state transitions and input handlers](../../scroll-anchor/scroll-anchor-controller.ts).
 - History: [cf8d1de](https://github.com/lennondotw/interaction-lab/commit/cf8d1de); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#scrolling-and-composer).
 

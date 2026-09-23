@@ -43,6 +43,6 @@ These finite cases do not prove every possible timing or strict velocity continu
 
 - Related: [follow intent](./bottom-following.md), [destination compensation](./destination-compensation.md),
   and [flight handoff](./flight-handoff.md).
-- Implementation: [scroll controller](../chat-scroll-controller.ts) and [final geometry](../chat-layout.ts).
+- Implementation: [scroll controller](../../scroll-anchor/scroll-anchor-controller.ts) and [final geometry](../../scroll-anchor/pending-layout.ts) via [chat layout](../chat-layout.ts).
 
 [Architecture index](../README.md)

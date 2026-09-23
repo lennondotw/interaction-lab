@@ -241,8 +241,7 @@ try {
   // the real controller and projection registry with analytically expanded content.
   // The slow layout deliberately makes the scroll spring hit the current boundary.
   const boundaryResults = await page.evaluate(async () => {
-    const { createChatScrollController } =
-      await import('/src/components/chat-scroll-container/chat-scroll-controller.ts');
+    const { createScrollAnchorController } = await import('/src/components/scroll-anchor/scroll-anchor-controller.ts');
     const { registerChatTransition, finalChatBottom } =
       await import('/src/components/chat-scroll-container/chat-layout.ts');
     const results = [];
@@ -257,7 +256,7 @@ try {
         document.body.append(viewport);
         let state;
         const states = [];
-        const controller = createChatScrollController(viewport, content, {
+        const controller = createScrollAnchorController(viewport, content, {
           threshold: 20,
           reducedMotion: false,
           animationSpeed: 1,
@@ -276,7 +275,7 @@ try {
           const entry = { row: content, remaining: 36, gapRemaining: 0 };
           release = registerChatTransition(viewport, entry);
           states.length = 0;
-          controller.contentChanged(true, { animatedLayout: true });
+          controller.layoutChanged({ follow: true, animated: true });
           const starts = [performance.now()];
           const frames = [];
           await new Promise((resolve, reject) => {
@@ -292,7 +291,7 @@ try {
               }, 0);
               content.style.height = `${remaining < 0.001 ? target : target - remaining}px`;
               entry.remaining = target - content.getBoundingClientRect().height;
-              controller.contentChanged(send, { animatedLayout: true });
+              controller.layoutChanged({ follow: send, animated: true });
               frames.push({
                 time: now,
                 top: viewport.scrollTop,

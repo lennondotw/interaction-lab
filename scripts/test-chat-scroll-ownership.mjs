@@ -15,8 +15,7 @@ try {
   );
   await page.getByRole('textbox', { name: 'Message', exact: true }).waitFor();
   const results = await page.evaluate(async () => {
-    const { createChatScrollController } =
-      await import('/src/components/chat-scroll-container/chat-scroll-controller.ts');
+    const { createScrollAnchorController } = await import('/src/components/scroll-anchor/scroll-anchor-controller.ts');
     const { registerChatTransition } = await import('/src/components/chat-scroll-container/chat-layout.ts');
     const flush = async () => {
       for (let frame = 0; frame < 3; frame++) await new Promise(requestAnimationFrame);
@@ -32,7 +31,7 @@ try {
         viewport.append(content);
         document.body.append(viewport);
         const states = [];
-        const controller = createChatScrollController(viewport, content, {
+        const controller = createScrollAnchorController(viewport, content, {
           threshold: 20,
           reducedMotion: false,
           animationSpeed: 0.25,
@@ -50,7 +49,7 @@ try {
           const before = { top: viewport.scrollTop, height: viewport.scrollHeight };
           content.style.height = fractional ? '499.5px' : '450px';
           const clamped = { top: viewport.scrollTop, height: viewport.scrollHeight };
-          const layout = () => controller.contentChanged(false, { animatedLayout: true });
+          const layout = () => controller.layoutChanged({ animated: true });
           const scroll = () => viewport.dispatchEvent(new Event('scroll'));
           if (order === 'layout-first') {
             layout();
@@ -83,7 +82,7 @@ try {
 
           // A subpixel upward movement away from the boundary is still user
           // movement even if the content shrinks in the same turn.
-          controller.contentChanged(true);
+          controller.layoutChanged({ follow: true });
           content.style.height = fractional ? '479.5px' : '439.5px';
           viewport.scrollTop -= 0.5;
           layout();
@@ -92,7 +91,7 @@ try {
           const afterTinyMovement = states.at(-1);
 
           // Even a one-pixel upward wheel interrupts an active spring immediately.
-          controller.contentChanged(true);
+          controller.layoutChanged({ follow: true });
           viewport.dispatchEvent(new WheelEvent('wheel', { deltaY: -1 }));
           await flush();
           const afterWheel = states.at(-1);

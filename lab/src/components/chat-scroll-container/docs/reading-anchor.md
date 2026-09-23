@@ -40,8 +40,8 @@ insertion below leaves it unchanged. A real wheel scroll must still select a new
 
 ## Evidence
 
-- Implementation: [captureAnchor, remember, and anchorFromSnapshot](../chat-insertions.ts).
-- Related implementation: [scroll compensation and rounding remainder](../chat-scroll-controller.ts).
+- Implementation: [captureReadingAnchor and the snapshot tracker](../../scroll-anchor/reading-anchor.ts), configured by [chat insertions](../chat-insertions.ts) to skip entering rows and anchor bodies.
+- Related implementation: [scroll compensation and rounding remainder](../../scroll-anchor/scroll-anchor-controller.ts).
 - History: [7539e98](https://github.com/lennondotw/interaction-lab/commit/7539e98); later changes are reflected in the current implementation.
 - Validation: [relevant checks](./verification.md#layout-and-typing).
 
