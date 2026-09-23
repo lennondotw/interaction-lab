@@ -1,9 +1,9 @@
 {
   "**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}": [
-    "oxfmt --write",
+    "oxfmt --write --no-error-on-unmatched-pattern",
     "oxlint --fix --max-warnings=0 --no-error-on-unmatched-pattern"
   ],
-  "!(package).json": "oxfmt --write",
-  "**/*.{md,mdx,jsonc,yaml,yml,css,html}": "oxfmt --write",
+  "!(package).json": "oxfmt --write --no-error-on-unmatched-pattern",
+  "**/*.{md,mdx,jsonc,yaml,yml,css,html}": "oxfmt --write --no-error-on-unmatched-pattern",
   "**/package.json": "sort-package-json"
 }
