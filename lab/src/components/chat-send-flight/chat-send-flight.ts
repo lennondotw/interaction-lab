@@ -71,7 +71,6 @@ function startFlight(
   carrier.removeAttribute('id');
   carrier.style.margin = '0';
   carrier.dataset.chatSendFlight = '';
-  carrier.classList.add(styles.carrier!);
   const content = carrier.querySelector<HTMLElement>('[data-slot="message-bubble-content"]')!;
   const targetContent = target.querySelector<HTMLElement>('[data-slot="message-bubble-content"]')!;
   // Final bubble wrapping may need more lines than the wider composer. Clip
