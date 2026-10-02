@@ -1,49 +1,113 @@
+import { cn } from '@monorepo/utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useCallback, useEffect, useMemo, useState, type FC } from 'react';
 
-import { LiveScope, type LiveScopeSample } from './live-scope.js';
+import { ResizableWindow } from '#src/instruments/resizable-window/resizable-window.js';
+
+import { LiveScope, type LiveScopeProps, type LiveScopeSample } from './live-scope.js';
+import { SampleHistory } from './sample-history.js';
 
 /**
- * The component ships styleless — no border, no background, no radius, no height. Every story
- * below supplies its own chrome through `className`, which is how a consumer is meant to use
- * it, and the last one removes the chrome entirely to get a sparkline out of the same code.
+ * Every story below supplies its plot background through `plotClassName` and its size
+ * through `className`. Hiding the axes also hides the frame for a plain sparkline.
  */
-const meta: Meta = {
+type ScopeStoryArgs = Omit<LiveScopeProps, 'read' | 'formatTick'>;
+
+const CHROME = `
+  bg-neutral-50
+  dark:bg-neutral-900/50
+`;
+const SAMPLE_INTERVAL_MS = 16;
+const SAMPLE_RATE = 1000 / SAMPLE_INTERVAL_MS;
+
+const meta: Meta<ScopeStoryArgs> = {
   title: 'Instruments/Live scope',
+  args: {
+    pixelsPerSecond: 120,
+    sampleRate: SAMPLE_RATE,
+    minScale: 0.5,
+    headroom: 1.15,
+    ticks: 4,
+    threshold: 16.7,
+    axisWidth: 40,
+    colors: {},
+    className: '',
+    plotClassName: CHROME,
+  },
+  argTypes: {
+    pixelsPerSecond: {
+      description: 'Horizontal speed in CSS px/s. Wider plots reveal more history at the same speed.',
+      control: { type: 'range', min: 30, max: 600, step: 10 },
+      table: { defaultValue: { summary: '120' } },
+    },
+    sampleRate: {
+      description: 'Expected sampling frequency in Hz; sets bar width. The demo producer stays at 62.5 Hz.',
+      control: { type: 'range', min: 1, max: 240, step: 0.5 },
+    },
+    minScale: {
+      description: 'Minimum y-axis top, even when the visible samples are smaller.',
+      control: { type: 'number', min: 0.01, step: 0.1 },
+      table: { defaultValue: { summary: '1' } },
+    },
+    headroom: {
+      description: 'Multiplier applied to the visible peak before the y-axis spring follows it.',
+      control: { type: 'range', min: 1, max: 3, step: 0.05 },
+      table: { defaultValue: { summary: '1.15' } },
+    },
+    ticks: {
+      description: 'Y-axis divisions. The frame supplies the top and bottom rules.',
+      control: { type: 'range', min: 0, max: 10, step: 1 },
+      table: { defaultValue: { summary: '4' } },
+    },
+    threshold: {
+      description: 'Samples at or above this value use barOverThreshold.',
+      control: { type: 'number', step: 0.1 },
+    },
+    axisWidth: {
+      description: 'Axis gutter in CSS px. Zero hides the labels and frame; captions follow the plot edge.',
+      control: { type: 'range', min: 0, max: 100, step: 1 },
+      table: { defaultValue: { summary: '40' } },
+    },
+    colors: {
+      description:
+        'Overrides for grid, axis, label, bar, and barOverThreshold. Keep axis opaque; frame opacity applies to the whole layer.',
+      control: 'object',
+    },
+    className: {
+      description: 'Classes added to the scope, including sizing overrides.',
+      control: 'text',
+    },
+    plotClassName: {
+      description: 'Plot background classes, excluding the axis gutter.',
+      control: 'text',
+    },
+  },
   parameters: { layout: 'centered' },
 };
 
 export default meta;
+
+type Story = StoryObj<ScopeStoryArgs>;
 
 /**
  * Somewhere to keep samples that is not React state, because `read` runs at refresh rate and
  * a producer at 60Hz would otherwise mean a re-render per sample.
  */
 class Series {
-  private readonly buffer: LiveScopeSample[] = [];
+  private readonly history = new SampleHistory<LiveScopeSample>();
 
   push(value: number): void {
-    this.buffer.push({ at: performance.now(), value });
-    if (this.buffer.length > 800) this.buffer.shift();
+    this.history.push({ at: performance.now(), value });
   }
 
   since(fromAt: number): LiveScopeSample[] {
-    // A linear scan from the front is fine at this size; a deeper buffer would binary-search
-    // the cutoff instead.
-    let start = 0;
-    while (start < this.buffer.length && (this.buffer[start]?.at ?? 0) < fromAt) start++;
-    return this.buffer.slice(start);
+    return this.history.since(fromAt);
   }
 
   get size(): number {
-    return this.buffer.length;
+    return this.history.size;
   }
 }
-
-const CHROME = `
-  h-24 w-[36rem] rounded-lg border border-neutral-200 bg-neutral-50
-  dark:border-neutral-800 dark:bg-neutral-900/50
-`;
 
 /**
  * The shape of the *producer* is what the scope exists to show, so each mode is a different
@@ -56,10 +120,17 @@ const NOTES: Record<Mode, string> = {
   steady: 'A sample every frame — the one case where sample index and wall-clock time would look alike.',
   bursty: 'Twelve frames of four samples, then twenty-eight of nothing. Indexing by sample would close the silence up.',
   'idle-then-busy': 'One second producing, one second stopped. The gaps are the information.',
-  spiky: 'A rare spike far above the baseline. Watch the axis stretch, then ease back once it scrolls out.',
+  spiky: 'A rare spike far above the baseline. Watch the axis stretch, then spring back once it scrolls out.',
 };
 
-const Harness: FC<{ mode: Mode }> = ({ mode }) => {
+const Harness: FC<ScopeStoryArgs & { mode: Mode; fill?: boolean; caption?: string }> = ({
+  mode,
+  fill = false,
+  caption,
+  axisWidth = 40,
+  className,
+  ...scopeArgs
+}) => {
   const series = useMemo(() => new Series(), []);
   const read = useCallback((fromAt: number) => series.since(fromAt), [series]);
   const [retained, setRetained] = useState(0);
@@ -79,7 +150,7 @@ const Harness: FC<{ mode: Mode }> = ({ mode }) => {
       } else if (Math.floor(tick / 60) % 2 === 1) {
         series.push(0.5 + Math.random() * 0.6);
       }
-    }, 16);
+    }, SAMPLE_INTERVAL_MS);
     // The count is text, so it updates on a human timescale rather than once per sample.
     const label = setInterval(() => setRetained(series.size), 250);
     return () => {
@@ -89,33 +160,65 @@ const Harness: FC<{ mode: Mode }> = ({ mode }) => {
   }, [mode, series]);
 
   return (
-    <div className="flex w-xl flex-col gap-2">
-      <div className="flex flex-row items-baseline justify-between font-mono text-[10px] text-neutral-400">
+    <div className={cn('flex flex-col gap-2', fill ? 'size-full' : 'w-xl')}>
+      <div
+        className="flex shrink-0 flex-row items-baseline justify-between font-mono text-[10px] text-neutral-400"
+        style={{ paddingLeft: axisWidth }}
+      >
         <span>{mode}</span>
         <span>{retained} samples retained</span>
       </div>
-      <LiveScope read={read} minScale={0.5} threshold={16.7} className={CHROME} />
-      <p className="max-w-prose text-xs/relaxed text-neutral-500">{NOTES[mode]}</p>
+      <LiveScope
+        {...scopeArgs}
+        read={read}
+        axisWidth={axisWidth}
+        className={cn('w-full', fill ? 'min-h-0 flex-1' : 'h-24', className)}
+      />
+      <p className="max-w-prose shrink-0 text-xs/relaxed text-neutral-500" style={{ marginLeft: axisWidth }}>
+        {caption ?? NOTES[mode]}
+      </p>
     </div>
   );
 };
 
-export const Steady: StoryObj = { render: () => <Harness mode="steady" /> };
+export const Steady: Story = { render: (args) => <Harness {...args} mode="steady" /> };
 
-export const Bursty: StoryObj = { render: () => <Harness mode="bursty" /> };
+export const Bursty: Story = { render: (args) => <Harness {...args} mode="bursty" /> };
 
-export const IdleThenBusy: StoryObj = { render: () => <Harness mode="idle-then-busy" /> };
+export const IdleThenBusy: Story = { render: (args) => <Harness {...args} mode="idle-then-busy" /> };
 
 /**
- * The y axis is zero-based and its top follows the tallest sample *currently visible*, eased
- * rather than snapped. A spike stretches it; once the spike scrolls out of the window the axis
+ * The y axis is zero-based and its top follows the tallest sample *currently visible* with a
+ * spring. A spike stretches it; once the spike scrolls out of the window the axis
  * comes back down instead of staying stretched by a peak nobody can see.
  */
-export const DynamicAxis: StoryObj = { render: () => <Harness mode="spiky" /> };
+export const DynamicAxis: Story = { render: (args) => <Harness {...args} mode="spiky" /> };
+
+export const Resizable: Story = {
+  parameters: { layout: 'fullscreen' },
+  render: (args) => (
+    <div className="flex min-h-svh items-start p-8">
+      <ResizableWindow
+        title="Live scope"
+        label="Resizable live scope"
+        initialSize={{ width: 640, height: 280 }}
+        minimumSize={{ width: 280, height: 200 }}
+      >
+        <Harness
+          {...args}
+          mode="steady"
+          fill
+          caption={`Drag the edges: ${args.pixelsPerSecond}px/s stays fixed; a wider plot reveals older samples.`}
+        />
+      </ResizableWindow>
+    </div>
+  ),
+};
 
 /** No gutter, no ticks, no chrome: the same component as a sparkline. */
-export const Sparkline: StoryObj = {
-  render: () => {
+export const Sparkline: Story = {
+  args: { pixelsPerSecond: 60, axisWidth: 0, ticks: 0, plotClassName: '' },
+  render: (args) => {
     const series = useMemo(() => new Series(), []);
     const read = useCallback((fromAt: number) => series.since(fromAt), [series]);
 
@@ -124,10 +227,10 @@ export const Sparkline: StoryObj = {
       const id = setInterval(() => {
         tick++;
         series.push(0.4 + 0.3 * Math.sin(tick / 9) + Math.random() * 0.1);
-      }, 16);
+      }, SAMPLE_INTERVAL_MS);
       return () => clearInterval(id);
     }, [series]);
 
-    return <LiveScope read={read} axisWidth={0} ticks={0} barWidth={1} minScale={0.5} className="h-8 w-64" />;
+    return <LiveScope {...args} read={read} className={cn('h-8 w-64', args.className)} />;
   },
 };

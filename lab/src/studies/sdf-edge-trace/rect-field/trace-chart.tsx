@@ -1,8 +1,8 @@
 /**
  * The story's own chrome around a `LiveScope`.
  *
- * The scope itself is styleless and knows nothing about tracing — it plots a numeric series
- * against time. Everything specific to *this* readout lives here: the border and radius, the
+ * The scope knows nothing about tracing — it plots a numeric series
+ * against time. Everything specific to *this* readout lives here: the background, the
  * idle-versus-tracing badge, the totals, and the frame-budget comparison.
  *
  * The split is by how fast things change, not by what they are about. Motion is on the
@@ -26,25 +26,30 @@ import { LiveScope } from '#src/instruments/live-scope/live-scope.js';
 
 import { IDLE_AFTER_MS, statusOf, type TraceHistory, type TraceLog } from './trace-log.js';
 
-/** Window plotted, in ms. */
-const SPAN_MS = 4000;
+const AXIS_WIDTH = 40;
+const PIXELS_PER_SECOND = 120;
 /** The 60Hz frame budget. Bars reaching it are painted as over-budget. */
 const BUDGET_MS = 16.7;
 
 export const TraceChart: FC<{
   log: TraceLog;
   history: TraceHistory;
+  /** Nominal frequency of the external rAF-driven producer. */
+  sampleRate: number;
   /** Pushed by `useTraceStatus` rather than derived from `history`, so the badge is live. */
   tracing: boolean;
   className?: string;
-}> = ({ log, history, tracing, className }) => {
+}> = ({ log, history, sampleRate, tracing, className }) => {
   const read = useCallback((fromAt: number) => log.since(fromAt), [log]);
   const status = statusOf(history, tracing);
   const budgetShare = (history.peakMs / BUDGET_MS) * 100;
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <div className="flex flex-row items-baseline justify-between gap-3 font-mono text-[10px] text-neutral-400">
+      <div
+        className="flex flex-row items-baseline justify-between gap-3 font-mono text-[10px] text-neutral-400"
+        style={{ paddingLeft: AXIS_WIDTH }}
+      >
         <span className="flex shrink-0 flex-row items-center gap-1.5 whitespace-nowrap" data-testid="trace-status">
           <span
             className={cn(
@@ -77,19 +82,22 @@ export const TraceChart: FC<{
           )}
         </span>
         <span className="truncate" data-testid="trace-axis">
-          ms · {SPAN_MS / 1000}s window · axis follows peak
+          ms · {(history.windowMs / 1000).toFixed(1)}s window · {PIXELS_PER_SECOND}px/s
         </span>
       </div>
 
       <div className="relative" data-testid="trace-chart">
         <LiveScope
           read={read}
-          spanMs={SPAN_MS}
+          pixelsPerSecond={PIXELS_PER_SECOND}
+          sampleRate={sampleRate}
+          axisWidth={AXIS_WIDTH}
           minScale={0.2}
           threshold={BUDGET_MS}
-          className={`
-            h-24 w-full rounded-lg border border-neutral-200 bg-neutral-50
-            dark:border-neutral-800 dark:bg-neutral-900/50
+          className="h-24 w-full"
+          plotClassName={`
+            bg-neutral-50
+            dark:bg-neutral-900/50
           `}
         />
         {status !== 'tracing' && (
@@ -105,7 +113,10 @@ export const TraceChart: FC<{
         )}
       </div>
 
-      <div className="flex flex-row justify-between gap-3 font-mono text-[10px] text-neutral-400">
+      <div
+        className="flex flex-row justify-between gap-3 font-mono text-[10px] text-neutral-400"
+        style={{ paddingLeft: AXIS_WIDTH }}
+      >
         <span className="shrink-0 whitespace-nowrap">
           {history.total} traces
           {history.samples.length > 0 &&

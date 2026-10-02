@@ -47,6 +47,7 @@ import {
 } from '#src/components/meta-surface/sdf/field.js';
 import { ShapeRegistry, useRegisteredRect } from '#src/components/meta-surface/sdf/rect-registry.js';
 import { Field, Segmented, Stat, Toggle } from '#src/instruments/controls/controls.js';
+import { useDisplaySampleRate } from '#src/utils/use-display-sample-rate.js';
 import { useElementSize } from '#src/utils/use-element-size.js';
 
 import { timeBatched } from '../bench-timing.js';
@@ -109,6 +110,7 @@ interface LiveStats {
 }
 
 export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
+  const displaySampleRate = useDisplaySampleRate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Measured before first paint, so the overlay never shows a frame without a size.
@@ -483,7 +485,7 @@ export const SdfRectField: FC<{ className?: string }> = ({ className }) => {
             </Button>
           </div>
 
-          <TraceChart log={traceLog} history={history} tracing={tracing} />
+          <TraceChart log={traceLog} history={history} tracing={tracing} sampleRate={displaySampleRate} />
 
           <div
             className={`

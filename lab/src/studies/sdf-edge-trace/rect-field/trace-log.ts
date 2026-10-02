@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { LiveScopeSample } from '#src/instruments/live-scope/live-scope.js';
+import { SampleHistory } from '#src/instruments/live-scope/sample-history.js';
 
 /**
  * No trace for this long and the surface is considered settled.
@@ -28,14 +29,6 @@ import type { LiveScopeSample } from '#src/instruments/live-scope/live-scope.js'
  * for a poll to notice.
  */
 export const IDLE_AFTER_MS = 150;
-/**
- * Traces retained for the chart.
- *
- * Sized against the observed rate, not picked round: a continuously animating layout drives
- * ~85 traces/s, so 120 samples covered only 1.4s of the chart's 4s window and every bar
- * piled up against the right edge. 400 covers the window with headroom.
- */
-const CAPACITY = 400;
 
 export interface TraceSample {
   /** `performance.now()` when the trace finished. */
@@ -45,6 +38,8 @@ export interface TraceSample {
 }
 
 export interface TraceHistory {
+  /** Visible duration reported by the scope's latest read, excluding overscan. */
+  windowMs: number;
   /**
    * When this snapshot was taken.
    *
@@ -58,20 +53,22 @@ export interface TraceHistory {
   total: number;
   /** ms since the most recent trace, or null when there has never been one. */
   sinceLast: number | null;
-  /** Median of the retained window — meaningful only once a burst has filled it. */
+  /** Median of the visible window, excluding overscan. */
   medianMs: number;
   peakMs: number;
-  /** Traces per second over the retained window, or 0 when settled. */
+  /** Traces per second over the visible window, or 0 when it is empty. */
   rate: number;
 }
 
 export class TraceLog {
-  private readonly buffer: TraceSample[] = [];
+  private readonly history = new SampleHistory<TraceSample>();
   private count = 0;
+  private last: TraceSample | null = null;
 
   push(ms: number, fieldEvals: number): void {
-    this.buffer.push({ at: performance.now(), ms, fieldEvals });
-    if (this.buffer.length > CAPACITY) this.buffer.shift();
+    const sample = { at: performance.now(), ms, fieldEvals };
+    this.history.push(sample);
+    this.last = sample;
     this.count++;
   }
 
@@ -83,34 +80,35 @@ export class TraceLog {
    * called at refresh rate and must not compute anything it is not asked for.
    */
   since(fromAt: number): LiveScopeSample[] {
-    let start = 0;
-    while (start < this.buffer.length && (this.buffer[start]?.at ?? 0) < fromAt) start++;
-    return this.buffer.slice(start).map((sample) => ({ at: sample.at, value: sample.ms }));
+    return this.history.since(fromAt).map((sample) => ({ at: sample.at, value: sample.ms }));
   }
 
   clear(): void {
-    this.buffer.length = 0;
+    this.history.clear();
     this.count = 0;
+    this.last = null;
   }
 
   read(): TraceHistory {
     const readAt = performance.now();
-    const samples = [...this.buffer];
-    const last = samples.at(-1);
+    const samples = this.history.visible(readAt);
+    // Keep the last event even after its bar expires: an idle chart is still measured.
+    const last = this.last;
     const first = samples[0];
     const sorted = samples.map((s) => s.ms).sort((a, b) => a - b);
 
     let rate = 0;
-    if (first !== undefined && last !== undefined && samples.length > 1) {
+    if (first !== undefined && last !== null && samples.length > 1) {
       const span = last.at - first.at;
       if (span > 0) rate = ((samples.length - 1) / span) * 1000;
     }
 
     return {
+      windowMs: this.history.visibleMs,
       readAt,
       samples,
       total: this.count,
-      sinceLast: last === undefined ? null : readAt - last.at,
+      sinceLast: last === null ? null : readAt - last.at,
       medianMs: sorted.length > 0 ? (sorted[sorted.length >> 1] ?? 0) : 0,
       peakMs: sorted.length > 0 ? (sorted[sorted.length - 1] ?? 0) : 0,
       rate,

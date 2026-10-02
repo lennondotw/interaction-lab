@@ -18,6 +18,8 @@ import {
   type BenchTargets,
 } from './run-bench.js';
 
+const SCOPE_AXIS_WIDTH = 40;
+
 const SIZES = [
   { value: 256, label: '256' },
   { value: 384, label: '384' },
@@ -325,7 +327,7 @@ export const BitmapHandoffCost: FC = () => {
           dark:border-neutral-800
         `}
       >
-        <div className="flex flex-row flex-wrap items-end gap-x-6 gap-y-3">
+        <div className="flex flex-row flex-wrap items-end gap-x-6 gap-y-3" style={{ paddingLeft: SCOPE_AXIS_WIDTH }}>
           <Field label="live handoff" hint="continuous, unmeasured" allPossibleHints={['continuous, unmeasured']}>
             <select
               value={liveProducerId}
@@ -363,11 +365,12 @@ export const BitmapHandoffCost: FC = () => {
         </div>
         <LiveScope
           read={readLive}
-          spanMs={4000}
+          sampleRate={displayPeriod === null ? 60 : 1000 / displayPeriod}
+          axisWidth={SCOPE_AXIS_WIDTH}
           minScale={period > 0 ? period * 2 : 20}
           threshold={period > 0 ? period * 1.5 : 25}
           ticks={3}
-          formatTick={(value) => value.toFixed(1)}
+          formatTick={(value) => (value === 0 ? '0' : value.toFixed(1))}
           className="h-24 w-full"
         />
       </div>
