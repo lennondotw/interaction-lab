@@ -52,6 +52,34 @@ const handles = [
   },
 ] as const;
 
+/**
+ * Keep the handle focused for arrow-key resizing, while choosing the ring for
+ * the input that actually owns the interaction. After a page reload, focus()
+ * from pointerdown can match :focus-visible because the browser has no previous
+ * mouse-focus history; focusVisible: false makes pointer intent explicit.
+ *
+ * Chromium returns early from focus() when the element is already focused, so
+ * calling it again with different options does not update the ring. Moreover,
+ * an explicit false takes precedence over its usual keyboard heuristic: simply
+ * pressing an arrow key will not restore the ring. When its appearance must
+ * change, blur first so the next focus applies the new options. This is needed
+ * in both directions (pointer -> keyboard and keyboard -> pointer).
+ * https://chromium.googlesource.com/chromium/src/+/refs/heads/main/third_party/blink/renderer/core/dom/element.cc
+ *
+ * Skip the transition when focus and ring already match. Repeated drag presses
+ * or arrow-key repeats should not emit needless blur/focus events. Native Tab
+ * navigation remains untouched, and preventScroll keeps refocusing from moving
+ * the viewport during a resize.
+ */
+function focusHandle(target: HTMLButtonElement, focusVisible: boolean) {
+  const focused = target.matches(':focus');
+  if (focused && target.matches(':focus-visible') === focusVisible) return;
+  if (focused) target.blur();
+  // focusVisible is a native FocusOptions member, not yet declared by our DOM lib.
+  const options = { preventScroll: true, focusVisible };
+  target.focus(options);
+}
+
 function ResizeGrip({
   axis,
   hoveredAxis,
@@ -200,7 +228,7 @@ export function ResizableWindow({
               // the press alive outside the handle until release, cancellation or Escape.
               activeAxis.set(axis);
               event.currentTarget.setPointerCapture(event.pointerId);
-              event.currentTarget.focus({ preventScroll: true });
+              focusHandle(event.currentTarget, false);
               event.preventDefault();
             }}
             onPointerMove={move}
@@ -217,6 +245,7 @@ export function ResizableWindow({
               const dx = axis !== 'height' ? Number(event.key === 'ArrowRight') - Number(event.key === 'ArrowLeft') : 0;
               const dy = axis !== 'width' ? Number(event.key === 'ArrowDown') - Number(event.key === 'ArrowUp') : 0;
               if (!dx && !dy) return;
+              focusHandle(event.currentTarget, true);
               event.preventDefault();
               const step = event.shiftKey ? 10 : 1;
               setSize((previous) => ({
