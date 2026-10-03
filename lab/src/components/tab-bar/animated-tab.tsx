@@ -17,7 +17,7 @@ interface AnimatedTabProps {
 }
 
 export const AnimatedTab: FC<AnimatedTabProps> = ({ tab, active, onSelect, onClose, footprints }) => {
-  const { elementRef, width, gap, isPresent } = useTabFootprint(tab.id, footprints);
+  const { elementRef, closeRef, width, gap, isPresent } = useTabFootprint(tab.id, footprints);
 
   return (
     <motion.div
@@ -27,7 +27,7 @@ export const AnimatedTab: FC<AnimatedTabProps> = ({ tab, active, onSelect, onClo
       inert={!isPresent}
       style={{ width, marginLeft: gap }}
       className={cn(
-        'flex h-9 min-w-0 shrink-0 items-center overflow-hidden',
+        'flex h-9 min-w-0 shrink-0 items-center justify-end overflow-hidden',
         active ? WIREFRAME_SELECTED : WIREFRAME_ITEM
       )}
     >
@@ -47,11 +47,16 @@ export const AnimatedTab: FC<AnimatedTabProps> = ({ tab, active, onSelect, onClo
         <TabTitle title={tab.title} />
       </button>
       <button
+        ref={closeRef}
         type="button"
         aria-label={`Close ${tab.title}`}
         aria-keyshortcuts={active ? 'Shift+W' : undefined}
         onClick={() => onClose(tab.id)}
-        className={cn('flex h-full w-7 min-w-0 shrink items-center justify-center', WIREFRAME_CONTROL, WIREFRAME_FOCUS)}
+        className={cn(
+          'flex h-full min-w-0 shrink basis-7 items-center justify-center',
+          WIREFRAME_CONTROL,
+          WIREFRAME_FOCUS
+        )}
       >
         <X aria-hidden="true" size={14} strokeWidth={1.5} className="shrink-0" />
       </button>

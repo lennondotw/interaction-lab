@@ -3,12 +3,14 @@ import { useLayoutEffect, useRef, useState } from 'react';
 
 import type { TabFootprint } from './tab-bar.types.js';
 import { createTabSpring } from './tab-spring.js';
+import { useTabCloseLayout } from './use-tab-close-layout.js';
 
 export function useTabFootprint(id: string, footprints: Map<string, TabFootprint>) {
   const [isPresent, safeToRemove] = usePresence();
   const elementRef = useRef<HTMLDivElement>(null);
   const width = useMotionValue(0);
   const gap = useMotionValue(0);
+  const { closeRef, setTarget: setCloseTarget } = useTabCloseLayout(isPresent, width);
   const [widthSpring] = useState(() => createTabSpring(width));
   const [gapSpring] = useState(() => createTabSpring(gap));
 
@@ -20,6 +22,7 @@ export function useTabFootprint(id: string, footprints: Map<string, TabFootprint
         gapSpring.setSpeed(speed);
       },
       set(nextWidth, nextGap, immediate) {
+        setCloseTarget(nextWidth, immediate);
         widthSpring.set(nextWidth, immediate);
         gapSpring.set(nextGap, immediate);
         if (immediate) {
@@ -35,7 +38,7 @@ export function useTabFootprint(id: string, footprints: Map<string, TabFootprint
       widthSpring.stop();
       gapSpring.stop();
     };
-  }, [footprints, gapSpring, id, widthSpring]);
+  }, [footprints, gapSpring, id, setCloseTarget, widthSpring]);
 
   useLayoutEffect(() => {
     if (isPresent) return;
@@ -57,5 +60,5 @@ export function useTabFootprint(id: string, footprints: Map<string, TabFootprint
     };
   }, [gap, isPresent, safeToRemove, width]);
 
-  return { elementRef, width, gap, isPresent };
+  return { elementRef, closeRef, width, gap, isPresent };
 }
