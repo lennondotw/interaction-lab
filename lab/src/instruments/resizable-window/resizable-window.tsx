@@ -5,11 +5,15 @@ interface Size {
   width: number;
   height: number;
 }
+interface WindowSize {
+  width: number;
+  height: number | 'auto';
+}
 interface Drag {
   pointerId: number;
   x: number;
   y: number;
-  size: Size;
+  size: WindowSize;
   axis: Axis;
 }
 
@@ -17,15 +21,27 @@ interface Drag {
 const defaultInitialSize = { width: 560, height: 800 };
 const defaultMinimumSize = { width: 320, height: 560 };
 // Absolute insets start at the inner border edge. Half the 1px stroke places
-// each handle's center on the painted border center, rather than inside it.
+// each edge handle's center on the painted border center.
+// Edge endpoints are derived from the corner's half-size and inset so the hit areas meet.
+// The width handle's grid area follows the body row, excluding the title row.
 const handles = [
-  { axis: 'width', label: 'Resize width', className: 'inset-y-8 -right-[0.5px] w-2 translate-x-1/2 cursor-ew-resize' },
+  {
+    axis: 'width',
+    label: 'Resize width',
+    className:
+      'row-start-2 row-end-3 top-0 bottom-(--resize-edge-inset) -right-[0.5px] w-2 translate-x-1/2 cursor-ew-resize',
+  },
   {
     axis: 'height',
     label: 'Resize height',
-    className: 'inset-x-8 -bottom-[0.5px] h-2 translate-y-1/2 cursor-ns-resize',
+    className: 'inset-x-(--resize-edge-inset) -bottom-[0.5px] h-2 translate-y-1/2 cursor-ns-resize',
   },
-  { axis: 'both', label: 'Resize window', className: '-right-1 -bottom-1 size-6 cursor-nwse-resize' },
+  {
+    axis: 'both',
+    label: 'Resize window',
+    className:
+      'right-(--resize-corner-inset) bottom-(--resize-corner-inset) size-(--resize-corner-size) translate-x-1/2 translate-y-1/2 cursor-nwse-resize',
+  },
 ] as const;
 
 interface ResizableWindowProps {
@@ -34,8 +50,11 @@ interface ResizableWindowProps {
   title?: string;
   /** Accessible name of the window region. */
   label?: string;
-  initialSize?: Size;
+  /** Auto height follows content and enables only horizontal resizing. */
+  initialSize?: WindowSize;
   minimumSize?: Size;
+  /** Single-axis modes show only their edge handle; both also enables the corner. */
+  resizeAxis?: Axis;
 }
 
 /** A stable top-left origin makes pointer deltas equal actual window size changes. */
@@ -45,8 +64,9 @@ export function ResizableWindow({
   label: regionLabel = 'Resizable chat window',
   initialSize = defaultInitialSize,
   minimumSize = defaultMinimumSize,
+  resizeAxis = 'both',
 }: ResizableWindowProps) {
-  const [size, setSize] = useState<Size>(initialSize);
+  const [size, setSize] = useState<WindowSize>(initialSize);
   const drag = useRef<Drag | null>(null);
 
   function endDrag(target: HTMLButtonElement, pointerId: number, revert = false) {
@@ -72,7 +92,7 @@ export function ResizableWindow({
           ? current.size.width
           : Math.max(minimumSize.width, current.size.width + event.clientX - current.x),
       height:
-        current.axis === 'width'
+        current.axis === 'width' || current.size.height === 'auto'
           ? current.size.height
           : Math.max(minimumSize.height, current.size.height + event.clientY - current.y),
     });
@@ -81,60 +101,68 @@ export function ResizableWindow({
   return (
     <section
       aria-label={regionLabel}
-      className="relative flex shrink-0 flex-col rounded-xl border border-neutral-500/30"
+      className={`relative grid shrink-0 grid-rows-[auto_minmax(0,1fr)] rounded-xl border border-neutral-500/30
+        [--resize-corner-size:calc(var(--spacing)*6)] [--resize-corner-inset:calc(var(--spacing)*0.5)]
+        [--resize-edge-inset:calc(var(--resize-corner-size)/2+var(--resize-corner-inset))]`}
       style={size}
     >
       <header className="flex h-9 shrink-0 items-center justify-between border-b border-neutral-500/20 px-3 text-xs text-neutral-500 dark:text-neutral-400">
         <span>{title}</span>
         <span className="font-mono tabular-nums">
-          {size.width.toFixed(2)} × {size.height.toFixed(2)}
+          {size.width.toFixed(2)} × {size.height === 'auto' ? 'auto' : size.height.toFixed(2)}
         </span>
       </header>
-      <div className="min-h-0 flex-1 p-3">{children}</div>
-      {handles.map(({ axis, label, className }) => (
-        <button
-          key={axis}
-          type="button"
-          aria-label={label}
-          title={`${label} · Arrow keys to resize · Escape to cancel drag`}
-          className={`absolute z-20 flex touch-none items-center justify-center rounded-sm select-none focus-visible:outline-2 focus-visible:outline-blue-500 ${className}`}
-          onPointerDown={(event) => {
-            if (drag.current || !event.isPrimary || event.button !== 0) return;
-            drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, size, axis };
-            event.currentTarget.setPointerCapture(event.pointerId);
-            event.currentTarget.focus({ preventScroll: true });
-            event.preventDefault();
-          }}
-          onPointerMove={move}
-          onPointerUp={(event) => endDrag(event.currentTarget, event.pointerId)}
-          onLostPointerCapture={(event) => endDrag(event.currentTarget, event.pointerId)}
-          onPointerCancel={(event) => endDrag(event.currentTarget, event.pointerId, true)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && drag.current) {
-              endDrag(event.currentTarget, drag.current.pointerId, true);
+      <div className="min-h-0 min-w-0 p-3">{children}</div>
+      {handles
+        .filter((handle) => size.height !== 'auto' || handle.axis === 'width')
+        .filter((handle) => resizeAxis === 'both' || handle.axis === resizeAxis)
+        .map(({ axis, label, className }) => (
+          <button
+            key={axis}
+            type="button"
+            aria-label={label}
+            title={`${label} · Arrow keys to resize · Escape to cancel drag`}
+            className={`absolute z-20 flex items-center justify-center touch-none rounded-sm select-none focus-visible:outline-2 focus-visible:outline-blue-500 ${className}`}
+            onPointerDown={(event) => {
+              if (drag.current || !event.isPrimary || event.button !== 0) return;
+              drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, size, axis };
+              event.currentTarget.setPointerCapture(event.pointerId);
+              event.currentTarget.focus({ preventScroll: true });
               event.preventDefault();
-              return;
-            }
-            if (drag.current) return;
-            const dx = axis !== 'height' ? Number(event.key === 'ArrowRight') - Number(event.key === 'ArrowLeft') : 0;
-            const dy = axis !== 'width' ? Number(event.key === 'ArrowDown') - Number(event.key === 'ArrowUp') : 0;
-            if (!dx && !dy) return;
-            event.preventDefault();
-            const step = event.shiftKey ? 10 : 1;
-            setSize((previous) => ({
-              width: Math.max(minimumSize.width, previous.width + dx * step),
-              height: Math.max(minimumSize.height, previous.height + dy * step),
-            }));
-          }}
-        >
-          {axis !== 'both' && (
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none rounded-full bg-neutral-500/60 ${axis === 'width' ? 'h-6 w-[3px]' : 'h-[3px] w-6'}`}
-            />
-          )}
-        </button>
-      ))}
+            }}
+            onPointerMove={move}
+            onPointerUp={(event) => endDrag(event.currentTarget, event.pointerId)}
+            onLostPointerCapture={(event) => endDrag(event.currentTarget, event.pointerId)}
+            onPointerCancel={(event) => endDrag(event.currentTarget, event.pointerId, true)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && drag.current) {
+                endDrag(event.currentTarget, drag.current.pointerId, true);
+                event.preventDefault();
+                return;
+              }
+              if (drag.current) return;
+              const dx = axis !== 'height' ? Number(event.key === 'ArrowRight') - Number(event.key === 'ArrowLeft') : 0;
+              const dy = axis !== 'width' ? Number(event.key === 'ArrowDown') - Number(event.key === 'ArrowUp') : 0;
+              if (!dx && !dy) return;
+              event.preventDefault();
+              const step = event.shiftKey ? 10 : 1;
+              setSize((previous) => ({
+                width: axis === 'height' ? previous.width : Math.max(minimumSize.width, previous.width + dx * step),
+                height:
+                  axis === 'width' || previous.height === 'auto'
+                    ? previous.height
+                    : Math.max(minimumSize.height, previous.height + dy * step),
+              }));
+            }}
+          >
+            {axis !== 'both' && (
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none rounded-full bg-neutral-500/60 ${axis === 'width' ? 'h-6 w-[3px]' : 'h-[3px] w-6'}`}
+              />
+            )}
+          </button>
+        ))}
     </section>
   );
 }
