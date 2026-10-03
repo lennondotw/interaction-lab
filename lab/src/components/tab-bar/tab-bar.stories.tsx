@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ReactNode } from 'react';
 
+import { ResizableWindow } from '#src/instruments/resizable-window/resizable-window.js';
+
 import { TabBar, type TabBarItem } from './index.js';
 
 interface DemoProps {
@@ -88,15 +90,12 @@ const meta: Meta<typeof Demo> = {
     },
   },
   args: { initialCount: 3 },
-  decorators: [
-    (Story) => (
-      <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center gap-4 px-4 py-8">
-        <Story />
-        <ShortcutCaption />
-      </div>
-    ),
-  ],
-  render: (args) => <Demo key={args.initialCount} {...args} />,
+  render: (args) => (
+    <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center gap-4 px-4 py-8">
+      <Demo key={args.initialCount} {...args} />
+      <ShortcutCaption />
+    </div>
+  ),
 };
 
 export default meta;
@@ -110,4 +109,21 @@ export const Compressed: Story = {
 
 export const Empty: Story = {
   args: { initialCount: 0 },
+};
+
+export const Resizable: Story = {
+  render: (args) => (
+    <div className="flex min-h-screen flex-col items-start gap-4 p-8">
+      <ResizableWindow
+        title="Tab bar"
+        label="Resizable tab bar container"
+        resizeAxis="width"
+        initialSize={{ width: 640, height: 'auto' }}
+        minimumSize={{ width: 320, height: 0 }}
+      >
+        <Demo key={args.initialCount} {...args} />
+      </ResizableWindow>
+      <ShortcutCaption />
+    </div>
+  ),
 };
