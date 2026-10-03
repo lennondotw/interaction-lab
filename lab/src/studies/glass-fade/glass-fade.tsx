@@ -1,16 +1,19 @@
 import { cn } from '@monorepo/utils';
 import { animate, useReducedMotion } from 'motion/react';
-import { useEffect, useRef, useState, type CSSProperties, type FC } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type FC } from 'react';
 
 import {
   BACKDROP_STYLE,
+  CONVOLUTION_BLUR_NOTE,
   FADE_MODE_NOTE,
   FADE_MODE_TITLE,
   FADE_MODES,
   LOREM,
+  MAPPED_MATERIAL_BLUR_NOTE,
   type BackdropKind,
   type FadeMode,
 } from './glass-fade-modes.js';
+import { SvgConvolutionFilter } from './svg-convolution-filter.js';
 
 /*
  * One glass panel over a backdrop that shows whether the blur is running, and a
@@ -60,6 +63,7 @@ export type Interaction = 'hover' | 'toggle';
  * α is not what the eye reads; each axis converts it at its own rate. Measured on this backdrop
  * at 2× device pixels as the loss of multi-scale detail energy inside the panel — the full
  * instrument, and every number below, is `archive/2026-08-glass-fade-perceptual-alpha`.
+ * Those archived measurements use the original white tint and 20px target, not the current defaults.
  *
  * | axis        | perceived, α = ⅛ … 1              | mean error vs an even ramp |
  * | ----------- | --------------------------------- | -------------------------- |
@@ -69,42 +73,55 @@ export type Interaction = 'hover' | 'toggle';
  * | blur, γ = 4 | .00 .06 .28 .75 .92 .99 1.0 1.0   | 0.165, and unshippable     |
  *
  * So the tint stays linear — veiling removes backdrop contrast in proportion to (1 − α), so its
- * detail loss already *is* linear in α — and only the radius is remapped.
+ * detail loss already *is* linear in α — and only the radius is remapped by default. Tint and content have independent exponents too.
  *
  * γ = 4 measures best and cannot ship: 0.3⁴ of 20px is 0.16px, so the first third of the ramp is
  * a dead zone you can watch. The tension is real rather than a flaw in the metric — perceived
  * frostiness goes as roughly the log of the radius, one pixel of blur already delivering 71% of
  * everything the axis will ever deliver — so any mapping that evens the curve out has to crawl
- * through the low end. γ = 2 is about 1.4× more even than linear with nothing dead, which is the
- * default; `blurGamma` is a control because where to sit on that trade is a judgement no
+ * through the low end. The archived γ = 2 preset was about 1.4× more even than linear with nothing dead.
+ * The current default is γ = 2.6; `blurGamma` is a control because where to sit on that trade is a judgement no
  * measurement settles.
  *
- * Two findings underneath, both worth knowing before reaching for a bigger radius. Past about
- * 4px on this content the radius is nearly free of perceptual effect, so most of a 20px design
- * is spent where the eye cannot see it change. And the radius is *quantised* by the compositor —
- * a tread of 0.26px around radius 9, 0.54px around 18 — so a scrub steps rather than glides, and
- * γ makes the high end coarse in radius terms: one 0.01 of α moves the radius by 0.4·α px, which
- * near α = 1 crosses a whole tread.
+ * Past about 4px on this content the radius is nearly free of perceptual effect, so most of a
+ * 20px design is spent where the eye cannot see it change. The renderer also introduces steps,
+ * including larger jumps when its downsampling pass count changes. In Chrome 154, with this
+ * panel held in place and tint fixed, 8.888 → 8.889px and 17.777 → 17.778px visibly jump at both
+ * 1× and 2× device pixels. With radius = 20·α², these land at 66% → 67% and 94% → 95%.
+ *
+ * The measured boundaries match Skia's max linear sigma of 4 and its 0.9 multipass limit:
+ * 4·2/0.9 ≈ 8.889 and 4·4/0.9 ≈ 17.778. Crossing one adds a resampling pass, so a continuous
+ * CSS radius does not guarantee a continuous image. These are renderer implementation details,
+ * not universal CSS thresholds; higher DPR did not remove these two jumps in the current probe.
+ * Changing γ moves where they land in α; easing or finer radius serialization cannot remove
+ * the pass boundary. Keep this distinct from the smaller quantisation treads in the archive.
+ *
+ * https://github.com/google/skia/blob/main/src/core/SkBlurEngine.h
+ * https://github.com/google/skia/blob/main/src/core/SkImageFilterTypes.cpp (downscale_step_count)
  */
-const PERCEPTUAL_EXPONENT = { blur: 2, content: 1, tint: 1 } as const;
+const DEFAULT_REMAP_EXPONENT = { blur: 2.6, border: 1, content: 1, tint: 1 } as const;
 
-/** Whether α drives the axes directly, or through their measured perceptual rates. */
-export type Mapping = 'linear' | 'perceptual';
+/** Whether each parameter progress is used directly or remapped through its own power curve. */
+export type Mapping = 'linear' | 'remapped';
 
 /** Whether α itself moves at a constant rate over time, or is eased. */
 export type Timing = 'ease' | 'linear';
+
+export type BlurImplementation = 'css' | 'svg-convolution';
 
 export interface GlassFadeOptions {
   /** Which property the fade's α is hung on. Does not touch what the material is. */
   mode: FadeMode;
   /**
    * The fade's α. Read by every mode except `material`, which has no separate α — moving
-   * the material *is* its fade, so there the two progresses below are the parameters.
+   * the material *is* its fade, so there the four progresses below are the parameters.
    */
   progress: number;
   backdrop: BackdropKind;
   /** Blur radius of the material at full strength — the end of the radius ramp. */
   blurPx: number;
+  /** Experimental convolution bypasses Skia's Gaussian blur downsampling path. */
+  blurImplementation?: BlurImplementation;
   /** The colour of the material's tint. A dark glass is one value away. */
   tint: string;
   /**
@@ -113,28 +130,36 @@ export interface GlassFadeOptions {
    * alpha `tint` carries, so neither control is dead.
    */
   tintAlphaTarget: number;
+  /** Border colour and full-strength alpha are independent of the material tint. */
+  borderColor: string;
+  borderAlphaTarget: number;
   /**
    * Where along each ramp the surface currently is. Left out — which is every mode but
    * `material` — the material is simply at full strength; `material` is the one mode whose
    * fade *is* these, so there they follow `progress` unless split apart.
    *
-   * `contentProgress` is a third axis rather than a consequence of the tint, because in
+   * `contentProgress` is its own axis rather than a consequence of the tint, because in
    * production the content's own fade is its own curve — usually trailing the material,
    * sometimes not fading at all. The other modes cannot have it: fading the finished layer
    * takes the content with it, which is part of why they are wrong.
    */
   blurRadiusProgress?: number;
   tintAlphaProgress?: number;
+  borderAlphaProgress?: number;
   contentProgress?: number;
   /**
-   * Whether the axes read α directly or through their measured perceptual rates. A separate
+   * Whether each parameter reads its input progress directly or through its own remap curve. A separate
    * layer from easing, and the order is fixed: time → ease → **α** → mapping → axis value.
    * The ease decides *when* α gets somewhere; the mapping decides *how much material* being
-   * there means. Only the tint's rate is 1, so in practice this remaps the radius alone.
+   * there means. Each parameter has its own exponent; sharing input progress does not bind
+   * its output curve.
    */
   mapping?: Mapping;
-  /** The radius's perceptual exponent, exposed because the right value is a judgement. */
+  /** Each remap exponent is independent. Gamma 1 leaves that parameter linear. */
   blurGamma?: number;
+  tintGamma?: number;
+  borderGamma?: number;
+  contentGamma?: number;
   /** Whether the gesture's α is eased or runs at a constant rate. */
   timing?: Timing;
 }
@@ -142,6 +167,7 @@ export interface GlassFadeOptions {
 /** Full strength, unless this is the mode that expresses its fade by ramping the material. */
 function materialProgress({
   blurRadiusProgress,
+  borderAlphaProgress,
   contentProgress,
   mode,
   progress,
@@ -149,44 +175,40 @@ function materialProgress({
 }: GlassFadeOptions) {
   const all = mode === 'material' ? progress : 1;
 
-  return { blur: blurRadiusProgress ?? all, content: contentProgress ?? all, tint: tintAlphaProgress ?? all };
+  return {
+    blur: blurRadiusProgress ?? all,
+    border: borderAlphaProgress ?? all,
+    content: contentProgress ?? all,
+    tint: tintAlphaProgress ?? all,
+  };
 }
 
 /**
- * The perceptual layer, applied on the way to the styles and not before: the sliders and the
- * readouts stay in α, because α is the parameter a designer thinks in and holds across
- * materials. Only the material sees the mapped values.
+ * Remap each parameter after resolving its input progress. Sliders retain those input
+ * values; only the rendered material sees the outputs. Shared progress synchronises the
+ * inputs, while each exponent still controls a separate output curve.
  */
-function mapped(at: { blur: number; content: number; tint: number }, mapping: Mapping, blurGamma: number) {
+function remapped(
+  at: { blur: number; border: number; content: number; tint: number },
+  mapping: Mapping,
+  exponents: { blur: number; border: number; content: number; tint: number }
+) {
   if (mapping === 'linear') {
     return at;
   }
 
   return {
-    blur: at.blur ** blurGamma,
-    content: at.content ** PERCEPTUAL_EXPONENT.content,
-    tint: at.tint ** PERCEPTUAL_EXPONENT.tint,
+    blur: at.blur ** exponents.blur,
+    border: at.border ** exponents.border,
+    content: at.content ** exponents.content,
+    tint: at.tint ** exponents.tint,
   };
 }
 
-const DURATION = 0.4;
-/*
- * A deceleration curve — full speed from the first frame, decelerating into the end, which is
- * the convention for something entering. α at eighths of the duration, against the stock
- * `cubic-bezier(0.4, 0, 0.2, 1)` it replaces:
- *
- * | curve                  | α at 0 … 1 of the duration               |
- * | ---------------------- | ---------------------------------------- |
- * | standard (0.4,0,0.2,1) | .00 .04 .24 .56 .78 .89 .96 .99 1.00     |
- * | decelerate (0,0,0.2,1) | .00 .36 .58 .73 .84 .91 .96 .99 1.00     |
- *
- * The standard curve spends its first eighth going nowhere, and delaying the start is the one
- * thing this material cannot afford: the perceptual mapping is already slow through its low end,
- * so the two delays stack into a visible nothing. Decelerating makes the layers pull against
- * each other on purpose — the ease spends α early, exactly where the mapping is stingy with
- * material, so the surface commits on the first frame and still arrives without a snap.
- */
-const EASE_DECELERATE = [0, 0, 0.2, 1] as const;
+// Shared duration for hover and toggle, including the linear timing baseline.
+const DURATION = 0.5;
+// Front-load the shared progress, then decelerate. Parameter remaps run after this curve.
+const EASE_DECELERATE = [0, 0.4, 0.01, 1] as const;
 
 /*
  * Every property the material is made of is transitionable, so the cheap way to animate this
@@ -230,25 +252,22 @@ function useDrivenAlpha(target: number, timing: Timing, enabled: boolean) {
 
 /** The material's axes after both layers, which is what every style below is built from. */
 function axesOf(options: GlassFadeOptions) {
-  return mapped(materialProgress(options), options.mapping ?? 'linear', options.blurGamma ?? PERCEPTUAL_EXPONENT.blur);
+  return remapped(materialProgress(options), options.mapping ?? 'linear', {
+    blur: options.blurGamma ?? DEFAULT_REMAP_EXPONENT.blur,
+    border: options.borderGamma ?? DEFAULT_REMAP_EXPONENT.border,
+    content: options.contentGamma ?? DEFAULT_REMAP_EXPONENT.content,
+    tint: options.tintGamma ?? DEFAULT_REMAP_EXPONENT.tint,
+  });
 }
 
-function panelStyle(options: GlassFadeOptions, driven: boolean): CSSProperties {
-  const { blurPx, mode, progress, tint, tintAlphaTarget } = options;
+function panelStyle(options: GlassFadeOptions, driven: boolean, convolutionId: string): CSSProperties {
+  const { blurPx, borderColor, borderAlphaTarget, mode, progress, tint, tintAlphaTarget } = options;
   const at = axesOf(options);
   const radius = blurPx * at.blur;
-  /*
-   * Relative colour syntax rather than `color-mix(in srgb, tint x%, transparent)`, which
-   * would read better and does scale a colour's alpha correctly (mixing is premultiplied,
-   * so the hue survives). It loses on the hairline: mixing towards `transparent` can only
-   * ever move alpha *down* to the tint's own, and the hairline has to sit at twice it to
-   * stay visible at the alphas glass actually uses. `calc(alpha * k)` with k > 1 is the
-   * only one-expression way to say that, and mixing an opaque copy of the tint back in
-   * needs arithmetic on the tint's alpha to hit a target — which lands on `calc(alpha …)`
-   * again anyway.
-   */
-  const tintAt = (scale: number) =>
-    `rgb(from ${tint} r g b / calc(alpha * ${(tintAlphaTarget * at.tint * scale).toFixed(4)}))`;
+  // Each colour retains its own alpha; border progress and remapping do not affect the fill.
+  const tintColor = `rgb(from ${tint} r g b / calc(alpha * ${(tintAlphaTarget * at.tint).toFixed(4)}))`;
+
+  const borderTint = `rgb(from ${borderColor} r g b / calc(alpha * ${(borderAlphaTarget * at.border).toFixed(4)}))`;
 
   return {
     /*
@@ -257,9 +276,14 @@ function panelStyle(options: GlassFadeOptions, driven: boolean): CSSProperties {
      * a gesture that lands on 0 should release the layer, but one passing through 0 should
      * not create and destroy it per frame.
      */
-    backdropFilter: radius === 0 && !driven ? 'none' : `blur(${radius.toFixed(2)}px)`,
-    backgroundColor: tintAt(1),
-    boxShadow: `inset 0 0 0 1px ${tintAt(2)}`,
+    backdropFilter:
+      radius === 0 && !driven
+        ? 'none'
+        : options.blurImplementation === 'svg-convolution'
+          ? `url(#${convolutionId})`
+          : `blur(${radius.toFixed(2)}px)`,
+    backgroundColor: tintColor,
+    boxShadow: `inset 0 0 0 1px ${borderTint}`,
     maskImage:
       mode === 'mask-alpha' ? `linear-gradient(rgb(0 0 0 / ${progress}), rgb(0 0 0 / ${progress}))` : undefined,
     opacity: mode === 'layer-opacity' ? progress : 1,
@@ -272,13 +296,24 @@ function panelStyle(options: GlassFadeOptions, driven: boolean): CSSProperties {
  * ramps is the legitimate use of opacity here, and `material` is the only mode
  * that has to do it by hand — the others drag the label along with the layer.
  */
-const Panel: FC<GlassFadeOptions & { label: string; driven: boolean }> = ({ driven, label, ...options }) => (
-  <div className={PANEL} style={panelStyle(options, driven)}>
-    <span className={CHIP} style={{ opacity: options.mode === 'material' ? axesOf(options).content : 1 }}>
-      {label}
-    </span>
-  </div>
-);
+const Panel: FC<GlassFadeOptions & { label: string; driven: boolean }> = ({ driven, label, ...options }) => {
+  const convolutionId = useId();
+
+  return (
+    <div className={PANEL} style={panelStyle(options, driven, convolutionId)}>
+      {options.blurImplementation === 'svg-convolution' && (
+        <SvgConvolutionFilter
+          id={convolutionId}
+          radius={options.blurPx * axesOf(options).blur}
+          targetRadius={options.blurPx}
+        />
+      )}
+      <span className={CHIP} style={{ opacity: options.mode === 'material' ? axesOf(options).content : 1 }}>
+        {label}
+      </span>
+    </div>
+  );
+};
 
 /*
  * The sliders sit in the page as well as in Controls, because the whole demo is a scrub
@@ -363,6 +398,8 @@ const ProgressSlider: FC<{
 export const GlassFadeStage: FC<
   GlassFadeOptions & {
     className?: string;
+    /** A comparison can keep its explanation and layout fixed while switching renderers. */
+    captionNote?: string;
     onOptionsChange?: (patch: Partial<GlassFadeOptions>) => void;
     /**
      * Hand the α to a gesture instead of a slider. `hover` runs between the story's
@@ -371,12 +408,12 @@ export const GlassFadeStage: FC<
      */
     interaction?: Interaction;
   }
-> = ({ className, interaction, onOptionsChange, ...options }) => {
+> = ({ captionNote, className, interaction, onOptionsChange, ...options }) => {
   const [engaged, setEngaged] = useState(false);
   const scrub = useScrub(options, onOptionsChange);
   /*
    * An interaction owns the α outright, overriding both the slider and the arg — which is why
-   * the two are hidden while one is attached. It overrides `progress` alone, and the three
+   * the two are hidden while one is attached. It overrides `progress` alone, and the four
    * material axes then follow it through their own fallback, so a gesture drives the whole
    * material without knowing the axes exist.
    *
@@ -394,9 +431,11 @@ export const GlassFadeStage: FC<
   const resting = gesture === 'toggle' ? 0 : options.progress;
   const alpha = useDrivenAlpha(engaged ? 1 : resting, options.timing ?? 'linear', gesture !== null);
   const live = gesture === null ? scrub.live : { ...scrub.live, progress: alpha };
-  const { backdrop, blurRadiusProgress, contentProgress, mode, progress, tintAlphaProgress } = live;
+  const { backdrop, blurRadiusProgress, borderAlphaProgress, contentProgress, mode, progress, tintAlphaProgress } =
+    live;
   const at = materialProgress(live);
-  const split = blurRadiusProgress != null || contentProgress != null || tintAlphaProgress != null;
+  const split =
+    blurRadiusProgress != null || borderAlphaProgress != null || contentProgress != null || tintAlphaProgress != null;
   // Label what is actually driving this cell, so the number never reports a slider the mode
   // ignores. Split apart there is no single number, so it reports the tint — the axis that
   // reads as the material being there, and the one the label is sitting on.
@@ -442,8 +481,8 @@ export const GlassFadeStage: FC<
       )}
       {onOptionsChange !== undefined && gesture === null && (
         <div className="flex flex-col gap-1.5">
-          {/* One slider per live knob: the split pair appears only where a story supplies
-              it, so the merged case needs no flag of its own — not supplying the two axes
+          {/* One slider per input: the split controls appear only where a story supplies
+              overrides, so the bound case needs no flag of its own — omitting all four axes
               *is* the merged case. */}
           {split ? (
             <>
@@ -460,6 +499,12 @@ export const GlassFadeStage: FC<
                 value={at.tint}
               />
               <ProgressSlider
+                label="border alpha"
+                onInput={(borderAlphaProgress) => scrub.onInput({ borderAlphaProgress })}
+                onRelease={scrub.onRelease}
+                value={at.border}
+              />
+              <ProgressSlider
                 label="content"
                 onInput={(contentProgress) => scrub.onInput({ contentProgress })}
                 onRelease={scrub.onRelease}
@@ -468,7 +513,7 @@ export const GlassFadeStage: FC<
             </>
           ) : (
             <ProgressSlider
-              label="α"
+              label={mode === 'material' ? 'all progress' : 'α'}
               onInput={(next) => scrub.onInput({ progress: next })}
               onRelease={scrub.onRelease}
               value={progress}
@@ -476,9 +521,28 @@ export const GlassFadeStage: FC<
           )}
         </div>
       )}
-      <figcaption className={CAPTION}>
-        <span className="font-semibold text-neutral-700 dark:text-neutral-200">{FADE_MODE_TITLE[mode]}</span>{' '}
-        {FADE_MODE_NOTE[mode]}
+      <figcaption className={cn(CAPTION, 'flex flex-col gap-2')}>
+        <p>
+          <span className="font-semibold text-neutral-700 dark:text-neutral-200">{FADE_MODE_TITLE[mode]}</span>{' '}
+          {FADE_MODE_NOTE[mode]}
+        </p>
+        {mode === 'material' && (
+          <p>
+            {split
+              ? 'Independent progress values drive blur, tint alpha, border alpha and content opacity.'
+              : 'All four parameter progress values are bound to the shared progress.'}{' '}
+            {live.mapping === 'remapped'
+              ? `Each parameter remaps its input as progress^γ: blur γ = ${live.blurGamma ?? DEFAULT_REMAP_EXPONENT.blur}, tint γ = ${live.tintGamma ?? DEFAULT_REMAP_EXPONENT.tint}, border γ = ${live.borderGamma ?? DEFAULT_REMAP_EXPONENT.border}, content γ = ${live.contentGamma ?? DEFAULT_REMAP_EXPONENT.content}. Binding the input progress still leaves these curves independent.`
+              : 'Each parameter uses its input progress directly.'}
+          </p>
+        )}
+        {captionNote !== undefined ? (
+          <p>{captionNote}</p>
+        ) : live.blurImplementation === 'svg-convolution' ? (
+          <p>{CONVOLUTION_BLUR_NOTE}</p>
+        ) : (
+          mode === 'material' && live.mapping === 'remapped' && <p>{MAPPED_MATERIAL_BLUR_NOTE}</p>
+        )}
       </figcaption>
     </figure>
   );
@@ -487,16 +551,19 @@ export const GlassFadeStage: FC<
 /**
  * The composed view, because α = 0.5 is only damning next to the mode that gets it
  * right at the same α. One α drives every cell here: the three fade modes hang it on
- * their own property over a full-strength material, and `material` spends it on both of
- * its axes at once. Decoupling those two is what the material story's own sliders are
+ * their own property over a full-strength material, and `material` spends it on all four
+ * parameter progress values at once. Decoupling them is what the material story's own sliders are
  * for; on this board they would only make the cells incomparable.
  */
-export const GlassFadeComparison: FC<Omit<GlassFadeOptions, 'blurRadiusProgress' | 'mode' | 'tintAlphaProgress'>> = (
-  options
-) => (
+export const GlassFadeComparison: FC<
+  Omit<
+    GlassFadeOptions,
+    'blurRadiusProgress' | 'borderAlphaProgress' | 'contentProgress' | 'mode' | 'tintAlphaProgress'
+  >
+> = (options) => (
   <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-2">
     {FADE_MODES.map((mode) => (
-      // Leaving both material progresses unset is what makes the cells comparable: each
+      // Leaving all material progresses unset is what makes the cells comparable: each
       // one then reads the single α, and no cell can be scrubbed away from the others.
       <GlassFadeStage {...options} className="max-w-none" key={mode} mode={mode} />
     ))}

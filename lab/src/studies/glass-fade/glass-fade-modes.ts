@@ -15,7 +15,7 @@ export const FADE_MODE_TITLE: Record<FadeMode, string> = {
   'ancestor-opacity': 'opacity on an ancestor',
   'layer-opacity': 'opacity on the glass layer',
   'mask-alpha': 'uniform-alpha mask on the glass layer',
-  material: 'material strength — blur radius + tint alpha',
+  material: 'material strength — blur + tint + border + content',
 };
 
 export const FADE_MODE_NOTE: Record<FadeMode, string> = {
@@ -29,6 +29,12 @@ export const FADE_MODE_NOTE: Record<FadeMode, string> = {
     'Ship this. Every frame is real frost, just less of it. Note the radius saturates early — past the backdrop’s detail scale more radius changes nothing, so the tint carries the perceived ramp.',
 };
 
+export const MAPPED_MATERIAL_BLUR_NOTE =
+  'Chromium can visibly jump at downsampling thresholds near 8.889px and 17.778px. At a 16px target and γ = 2.6, the first is crossed at 79% → 80%; the second is above full strength. In the archived probe with a 20px target and γ = 2, the jumps at 66% → 67% and 94% → 95% cross roughly 8.889px and 17.778px: the browser changes how many times it resamples the backdrop. Both jumps were reproduced at 1× and 2× device pixels. Changing the mapping moves the jumps along the slider; smaller steps or easing do not remove them.';
+
+export const CONVOLUTION_BLUR_NOTE =
+  'Experimental SVG convolution — fixed-size Gaussian kernels run horizontally and vertically. Larger targets use more passes, fixed for the whole ramp. Only the weights follow the radius. The jumps near 8.889px and 17.778px disappeared in the Chromium probe; small pixel quantisation remains. This is an approximation with different edge sampling, and larger targets cost more work. Use the SVG convolution story’s Controls to compare with CSS blur.';
+
 /*
  * Colour fields under the copy. A blur is a low-pass filter, so copy alone only ever
  * shows what it destroys; these show what it keeps. At blur(20px) a 90px disc is
@@ -39,8 +45,8 @@ export const FADE_MODE_NOTE: Record<FadeMode, string> = {
  * Placed so at least one disc edge crosses the panel's boundary on each axis — an
  * edge wholly inside or wholly outside the panel has nothing to be compared against.
  * Alpha 0.5 rather than solid, so the copy stays legible over them and the other
- * instrument keeps working; and mid-saturation hues, so the white tint's
- * desaturation is visible as the material ramps.
+ * instrument keeps working; and mid-saturation hues, so the black tint's
+ * darkening is visible as the material ramps.
  */
 const COLOUR_FIELDS = [
   'radial-gradient(circle 92px at 14% 26%, rgb(244 63 94 / 0.5) 99%, transparent 100%)',

@@ -395,7 +395,7 @@ async function runTickPhase(browser) {
  */
 async function runStoryPhase(browser) {
   const page = await browser.newPage({ deviceScaleFactor: DPR, viewport: { width: 900, height: 700 } });
-  const storyId = 'studies-glass-fade--material-strength-mapped';
+  const storyId = 'studies-glass-fade-css-blur-issues--mapped-downsampling-jumps';
   const url = `${STORYBOOK_URL}/iframe.html?id=${storyId}&viewMode=story`;
   const response = await page.goto(url, { waitUntil: 'load' }).catch(() => null);
   if (response === null || !response.ok()) {
@@ -441,7 +441,10 @@ async function runStoryPhase(browser) {
     // reads as an off-by-one failure in every row.
     const set = async (args) => {
       const before = JSON.stringify(read());
-      channel.emit('updateStoryArgs', { storyId: id, updatedArgs: args });
+      channel.emit('updateStoryArgs', {
+        storyId: id,
+        updatedArgs: { ...args, blurPx: 20, tint: '#ffffff', tintAlphaTarget: 0.18 },
+      });
       for (let i = 0; i < 80; i++) {
         await new Promise((resolve) => setTimeout(resolve, 20));
         if (JSON.stringify(read()) !== before) break;
@@ -475,9 +478,9 @@ async function runStoryPhase(browser) {
         rows.push({
           mode: 'material',
           progress,
-          mapping: 'perceptual',
+          mapping: 'remapped',
           gamma,
-          got: await set({ mode: 'material', mapping: 'perceptual', blurGamma: gamma, progress }),
+          got: await set({ mode: 'material', mapping: 'remapped', blurGamma: gamma, progress }),
         });
       }
     }
@@ -489,7 +492,7 @@ async function runStoryPhase(browser) {
   let failures = 0;
   for (const { mode, progress, mapping, gamma, got } of matrix) {
     const axis = mode === 'material' ? progress : 1;
-    const mapped = mapping === 'perceptual' ? axis ** gamma : axis;
+    const mapped = mapping === 'remapped' ? axis ** gamma : axis;
     const wantRadius = 20 * mapped === 0 ? 'none' : 20 * mapped;
     const bad = [];
     if (wantRadius === 'none' ? got.radius !== 'none' : !near(got.radius, wantRadius, 0.02))
@@ -521,7 +524,7 @@ async function runStoryPhase(browser) {
           updatedArgs: {
             interaction: 'toggle',
             timing: ease,
-            mapping: 'perceptual',
+            mapping: 'remapped',
             blurGamma: 2,
             mode: 'material',
             blurRadiusProgress: null,
