@@ -1,12 +1,43 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { ResizableWindow } from '#src/instruments/resizable-window/resizable-window.js';
 
-import { TabBar, type TabBarItem } from './index.js';
+import { TabBar, type TabBarHoldState, type TabBarItem } from './index.js';
 
 interface DemoProps {
   initialCount: number;
+}
+
+// Storybook instrumentation only: classify destinations, not transient animation footprints.
+function useLayoutDisplay(root: RefObject<HTMLDivElement | null>, tabCount: number) {
+  const [layout, setLayout] = useState<{ compressed: boolean; hasSpace: boolean } | null>(null);
+  useLayoutEffect(() => {
+    const target = root.current!.querySelector<HTMLElement>('[data-tab-target-layout]')!;
+    const measure = () => {
+      const tabs = Array.from(target.querySelectorAll('[data-tab-target]'));
+      const widths = tabs.map((tab) => parseFloat(tab.getAttribute('data-tab-width-target')!));
+      // A CSS pixel of tolerance absorbs fractional flex layout rounding.
+      const compressed = tabs.some((tab, index) => widths[index]! < parseFloat(getComputedStyle(tab).flexBasis) - 1);
+      const gap = parseFloat(getComputedStyle(target).columnGap);
+      const addWidth = parseFloat(getComputedStyle(target.lastElementChild!).width);
+      const occupied = widths.reduce((sum, width) => sum + width, 0) + tabs.length * gap + addWidth;
+      const hasSpace = occupied < target.getBoundingClientRect().width - 1;
+      setLayout((previous) =>
+        previous?.compressed === compressed && previous.hasSpace === hasSpace ? previous : { compressed, hasSpace }
+      );
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(target);
+    const mutations = new MutationObserver(measure);
+    mutations.observe(target, { subtree: true, attributes: true, attributeFilter: ['data-tab-width-target'] });
+    measure();
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+    };
+  }, [root, tabCount]);
+  return layout;
 }
 
 function Kbd({ children }: { children: ReactNode }) {
@@ -28,19 +59,24 @@ function ShortcutCaption() {
       </p>
       <p>
         <Kbd>
-          Shift Option <span className="inline-block font-sans">←</span>
+          Shift <span className="inline-block font-sans">←</span>
         </Kbd>{' '}
         /{' '}
         <Kbd>
-          Shift Option <span className="inline-block font-sans">→</span>
+          Shift <span className="inline-block font-sans">→</span>
         </Kbd>{' '}
-        switches tabs. Stops at either end.
+        switches tabs. Stops at either end. Option also works.
+      </p>
+      <p>
+        Hold to repeat switching or closing. <Kbd>Shift T</Kbd> adds once per press.
       </p>
     </div>
   );
 }
 
 function Demo({ initialCount }: DemoProps) {
+  const root = useRef<HTMLDivElement>(null);
+  const [holdState, setHoldState] = useState<TabBarHoldState>('natural');
   const [state, setState] = useState(() => ({
     tabs: Array.from({ length: initialCount }, (_, index): TabBarItem => ({
       id: String(index + 1),
@@ -49,33 +85,55 @@ function Demo({ initialCount }: DemoProps) {
     activeId: initialCount === 0 ? null : '1',
     nextId: initialCount + 1,
   }));
+  const layout = useLayoutDisplay(root, state.tabs.length);
 
   return (
-    <TabBar
-      tabs={state.tabs}
-      activeId={state.activeId}
-      onSelect={(activeId) => setState((previous) => ({ ...previous, activeId }))}
-      onAdd={() =>
-        setState((previous) => ({
-          tabs: [...previous.tabs, { id: String(previous.nextId), title: `New tab ${previous.nextId}` }],
-          activeId: String(previous.nextId),
-          nextId: previous.nextId + 1,
-        }))
-      }
-      onClose={(id) =>
-        setState((previous) => {
-          const index = previous.tabs.findIndex((tab) => tab.id === id);
-          const tabs = previous.tabs.filter((tab) => tab.id !== id);
-          const activeId =
-            previous.activeId === id
-              ? tabs.length === 0
-                ? null
-                : tabs[Math.min(index, tabs.length - 1)]!.id
-              : previous.activeId;
-          return { ...previous, tabs, activeId };
-        })
-      }
-    />
+    <div ref={root} className="w-full">
+      <TabBar
+        onHoldStateChange={setHoldState}
+        tabs={state.tabs}
+        activeId={state.activeId}
+        onSelect={(activeId) => setState((previous) => ({ ...previous, activeId }))}
+        onAdd={() =>
+          setState((previous) => ({
+            tabs: [...previous.tabs, { id: String(previous.nextId), title: `New tab ${previous.nextId}` }],
+            activeId: String(previous.nextId),
+            nextId: previous.nextId + 1,
+          }))
+        }
+        onClose={(id) =>
+          setState((previous) => {
+            const index = previous.tabs.findIndex((tab) => tab.id === id);
+            const tabs = previous.tabs.filter((tab) => tab.id !== id);
+            const activeId =
+              previous.activeId === id
+                ? tabs.length === 0
+                  ? null
+                  : tabs[Math.min(index, tabs.length - 1)]!.id
+                : previous.activeId;
+            return { ...previous, tabs, activeId };
+          })
+        }
+      />
+      <div className="mt-3 font-mono text-xs text-neutral-700 dark:text-neutral-300" data-testid="tab-hold-status">
+        <p>
+          status: <strong>{holdState}</strong>
+          {layout !== null && (
+            <>
+              {' · '}size: <strong>{layout.compressed ? 'compressed' : 'natural'}</strong>
+              {' · '}space: <strong>{layout.hasSpace ? 'available' : 'full'}</strong>
+            </>
+          )}
+        </p>
+        <p className="text-neutral-500 dark:text-neutral-400">
+          {holdState === 'holding'
+            ? 'Pointer is in the tab strip. Closing holds the tab widths.'
+            : holdState === 'waiting'
+              ? 'Pointer left. Natural widths resume after the hold is released.'
+              : 'Tabs use their natural widths, up to their base size.'}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -126,4 +184,9 @@ export const Resizable: Story = {
       <ShortcutCaption />
     </div>
   ),
+};
+
+export const HoverHolds: Story = {
+  ...Resizable,
+  args: { initialCount: 8 },
 };
