@@ -1,6 +1,14 @@
+import { motion, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
 
-type Axis = 'width' | 'height' | 'both';
+import { indicatorSize } from './resize-indicator-geometry.js';
+import {
+  ResizeIndicators,
+  useIndicatorStyle,
+  type HandleAxis as Axis,
+  type HoveredHandle,
+} from './resize-indicators.js';
+
 interface Size {
   width: number;
   height: number;
@@ -44,6 +52,57 @@ const handles = [
   },
 ] as const;
 
+function ResizeGrip({
+  axis,
+  hoveredAxis,
+  activeAxis,
+}: {
+  axis: Exclude<Axis, 'both'>;
+  hoveredAxis: MotionValue<HoveredHandle>;
+  activeAxis: MotionValue<HoveredHandle>;
+}) {
+  const vertical = axis === 'width';
+  const { readStyle, thickness, color, opacity } = useIndicatorStyle(axis, hoveredAxis, activeAxis);
+  const canvas = {
+    width: vertical ? indicatorSize.hover.thickness : indicatorSize.hover.length,
+    height: vertical ? indicatorSize.hover.length : indicatorSize.hover.thickness,
+  };
+  const path = useTransform(() => {
+    const appearance = readStyle();
+    const halfLength = (appearance.length - appearance.thickness) / 2;
+    const x = canvas.width / 2;
+    const y = canvas.height / 2;
+    return vertical
+      ? `M ${x} ${y - halfLength} L ${x} ${y + halfLength}`
+      : `M ${x - halfLength} ${y} L ${x + halfLength} ${y}`;
+  });
+
+  // The side hit area excludes the corner clearance; add it back before taking the body center.
+  const centerY = vertical ? 'calc((100% + var(--resize-edge-inset)) / 2)' : '50%';
+
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      className="pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-1/2"
+      style={{ top: centerY }}
+      width={canvas.width}
+      height={canvas.height}
+      viewBox={`0 0 ${canvas.width} ${canvas.height}`}
+    >
+      <motion.path
+        data-resize-indicator={axis}
+        d={path}
+        fill="none"
+        stroke={color}
+        strokeOpacity={opacity}
+        strokeWidth={thickness}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 interface ResizableWindowProps {
   children: ReactNode;
   /** Shown in the header. */
@@ -68,6 +127,10 @@ export function ResizableWindow({
 }: ResizableWindowProps) {
   const [size, setSize] = useState<WindowSize>(initialSize);
   const drag = useRef<Drag | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const hoveredAxis = useMotionValue<HoveredHandle>('none');
+  const activeAxis = useMotionValue<HoveredHandle>('none');
+  const bothAxes = resizeAxis === 'both' && size.height !== 'auto';
 
   function endDrag(target: HTMLButtonElement, pointerId: number, revert = false) {
     const current = drag.current;
@@ -75,6 +138,7 @@ export function ResizableWindow({
     if (revert) setSize(current.size);
     // Clear ownership before releasing capture; lostpointercapture can follow.
     drag.current = null;
+    activeAxis.set('none');
     if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
   }
 
@@ -112,20 +176,29 @@ export function ResizableWindow({
           {size.width.toFixed(2)} × {size.height === 'auto' ? 'auto' : size.height.toFixed(2)}
         </span>
       </header>
-      <div className="min-h-0 min-w-0 p-3">{children}</div>
+      <div ref={bodyRef} className="min-h-0 min-w-0 p-3">
+        {children}
+      </div>
       {handles
         .filter((handle) => size.height !== 'auto' || handle.axis === 'width')
         .filter((handle) => resizeAxis === 'both' || handle.axis === resizeAxis)
         .map(({ axis, label, className }) => (
-          <button
+          <motion.button
             key={axis}
             type="button"
             aria-label={label}
+            onHoverStart={() => hoveredAxis.set(axis)}
+            onHoverEnd={() => {
+              if (hoveredAxis.get() === axis) hoveredAxis.set('none');
+            }}
             title={`${label} · Arrow keys to resize · Escape to cancel drag`}
-            className={`absolute z-20 flex items-center justify-center touch-none rounded-sm select-none focus-visible:outline-2 focus-visible:outline-blue-500 ${className}`}
+            className={`absolute z-20 touch-none rounded-sm select-none focus-visible:outline-2 focus-visible:outline-blue-500 ${className}`}
             onPointerDown={(event) => {
               if (drag.current || !event.isPrimary || event.button !== 0) return;
               drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, size, axis };
+              // Active follows drag ownership, not hover/tap hit testing: capture keeps
+              // the press alive outside the handle until release, cancellation or Escape.
+              activeAxis.set(axis);
               event.currentTarget.setPointerCapture(event.pointerId);
               event.currentTarget.focus({ preventScroll: true });
               event.preventDefault();
@@ -155,14 +228,12 @@ export function ResizableWindow({
               }));
             }}
           >
-            {axis !== 'both' && (
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none rounded-full bg-neutral-500/60 ${axis === 'width' ? 'h-6 w-[3px]' : 'h-[3px] w-6'}`}
-              />
+            {!bothAxes && axis !== 'both' && (
+              <ResizeGrip axis={axis} hoveredAxis={hoveredAxis} activeAxis={activeAxis} />
             )}
-          </button>
+          </motion.button>
         ))}
+      {bothAxes && <ResizeIndicators bodyRef={bodyRef} hoveredAxis={hoveredAxis} activeAxis={activeAxis} />}
     </section>
   );
 }
