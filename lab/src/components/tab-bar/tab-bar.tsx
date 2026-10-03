@@ -13,7 +13,16 @@ import { useTabLayout } from './use-tab-layout.js';
 
 export type { TabBarItem, TabBarProps } from './tab-bar.types.js';
 
-export const TabBar: FC<TabBarProps> = ({ tabs, activeId, onSelect, onClose, onAdd, onHoldStateChange, className }) => {
+export const TabBar: FC<TabBarProps> = ({
+  tabs,
+  activeId,
+  onSelect,
+  onClose,
+  onAdd,
+  onHoldStateChange,
+  animationSpeed = 1,
+  className,
+}) => {
   const { heldWidths, setHeldWidths, holdState, hoverHold } = useTabHoverHold(onHoldStateChange);
   const { targetLayoutRef, addRef, footprints, addGap, close } = useTabLayout({
     tabs,
@@ -21,6 +30,7 @@ export const TabBar: FC<TabBarProps> = ({ tabs, activeId, onSelect, onClose, onA
     heldWidths,
     setHeldWidths,
     hoverHold,
+    animationSpeed,
   });
   useTabKeyboard({ tabs, activeId, onSelect, onAdd, onClose: close });
 

@@ -11,6 +11,8 @@ export interface TabBarProps {
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onAdd: () => void;
+  /** Positive playback multiplier for tab motion; hover and keyboard timers use real time. */
+  animationSpeed?: number;
   /** Reports hover/leave-delay transitions for hosts that visualize the hold. */
   onHoldStateChange?: (state: TabBarHoldState) => void;
   className?: string;
@@ -18,5 +20,6 @@ export interface TabBarProps {
 
 export interface TabFootprint {
   set: (width: number, gap: number, immediate: boolean) => void;
+  setSpeed: (speed: number) => void;
   getTargetWidth: () => number;
 }
