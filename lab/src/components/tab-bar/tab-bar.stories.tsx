@@ -1,43 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { ResizableWindow } from '#src/instruments/resizable-window/resizable-window.js';
 
 import { TabBar, type TabBarHoldState, type TabBarItem } from './index.js';
+import { useTabLayoutDisplay } from './use-tab-layout-display.js';
 
 interface DemoProps {
   initialCount: number;
-}
-
-// Storybook instrumentation only: classify destinations, not transient animation footprints.
-function useLayoutDisplay(root: RefObject<HTMLDivElement | null>, tabCount: number) {
-  const [layout, setLayout] = useState<{ compressed: boolean; hasSpace: boolean } | null>(null);
-  useLayoutEffect(() => {
-    const target = root.current!.querySelector<HTMLElement>('[data-tab-target-layout]')!;
-    const measure = () => {
-      const tabs = Array.from(target.querySelectorAll('[data-tab-target]'));
-      const widths = tabs.map((tab) => parseFloat(tab.getAttribute('data-tab-width-target')!));
-      // A CSS pixel of tolerance absorbs fractional flex layout rounding.
-      const compressed = tabs.some((tab, index) => widths[index]! < parseFloat(getComputedStyle(tab).flexBasis) - 1);
-      const gap = parseFloat(getComputedStyle(target).columnGap);
-      const addWidth = parseFloat(getComputedStyle(target.lastElementChild!).width);
-      const occupied = widths.reduce((sum, width) => sum + width, 0) + tabs.length * gap + addWidth;
-      const hasSpace = occupied < target.getBoundingClientRect().width - 1;
-      setLayout((previous) =>
-        previous?.compressed === compressed && previous.hasSpace === hasSpace ? previous : { compressed, hasSpace }
-      );
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(target);
-    const mutations = new MutationObserver(measure);
-    mutations.observe(target, { subtree: true, attributes: true, attributeFilter: ['data-tab-width-target'] });
-    measure();
-    return () => {
-      observer.disconnect();
-      mutations.disconnect();
-    };
-  }, [root, tabCount]);
-  return layout;
 }
 
 function Kbd({ children }: { children: ReactNode }) {
@@ -85,7 +55,7 @@ function Demo({ initialCount }: DemoProps) {
     activeId: initialCount === 0 ? null : '1',
     nextId: initialCount + 1,
   }));
-  const layout = useLayoutDisplay(root, state.tabs.length);
+  const layout = useTabLayoutDisplay(root, state.tabs.length);
 
   return (
     <div ref={root} className="w-full">
