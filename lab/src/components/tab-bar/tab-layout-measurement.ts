@@ -16,5 +16,5 @@ export function readTabTargets(layout: HTMLDivElement) {
       width: parseFloat(getComputedStyle(element).width),
       gap: index === 0 ? 0 : gap,
     }));
-  return { gap, targets };
+  return { width: layout.getBoundingClientRect().width, gap, targets };
 }

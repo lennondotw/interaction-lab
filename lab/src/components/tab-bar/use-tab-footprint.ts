@@ -15,6 +15,10 @@ export function useTabFootprint(id: string, footprints: Map<string, TabFootprint
   useLayoutEffect(() => {
     footprints.set(id, {
       getTargetWidth: () => widthSpring.getTarget(),
+      setSpeed(speed) {
+        widthSpring.setSpeed(speed);
+        gapSpring.setSpeed(speed);
+      },
       set(nextWidth, nextGap, immediate) {
         widthSpring.set(nextWidth, immediate);
         gapSpring.set(nextGap, immediate);

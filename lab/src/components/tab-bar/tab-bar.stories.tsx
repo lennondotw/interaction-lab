@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type FC, type ReactNode } from 'react';
+import { useArgs } from 'storybook/preview-api';
 
+import { Segmented } from '#src/instruments/controls/controls.js';
 import { ResizableWindow } from '#src/instruments/resizable-window/resizable-window.js';
 
 import { TabBar, type TabBarHoldState, type TabBarItem } from './index.js';
@@ -8,6 +10,7 @@ import { useTabLayoutDisplay } from './use-tab-layout-display.js';
 
 interface DemoProps {
   initialCount: number;
+  animationSpeed?: number;
 }
 
 function Kbd({ children }: { children: ReactNode }) {
@@ -44,7 +47,7 @@ function ShortcutCaption() {
   );
 }
 
-function Demo({ initialCount }: DemoProps) {
+function Demo({ initialCount, animationSpeed = 1 }: DemoProps) {
   const root = useRef<HTMLDivElement>(null);
   const [holdState, setHoldState] = useState<TabBarHoldState>('natural');
   const [state, setState] = useState(() => ({
@@ -60,6 +63,7 @@ function Demo({ initialCount }: DemoProps) {
   return (
     <div ref={root} className="w-full">
       <TabBar
+        animationSpeed={animationSpeed}
         onHoldStateChange={setHoldState}
         tabs={state.tabs}
         activeId={state.activeId}
@@ -116,8 +120,13 @@ const meta: Meta<typeof Demo> = {
       control: { type: 'range', min: 0, max: 12, step: 1 },
       description: 'Starting tab count. Changing this resets the demo.',
     },
+    animationSpeed: {
+      control: { type: 'select' },
+      options: [0.1, 0.25, 0.5, 1],
+      description: 'Playback multiplier for tab motion. Hover and keyboard timers use real time.',
+    },
   },
-  args: { initialCount: 3 },
+  args: { initialCount: 3, animationSpeed: 1 },
   render: (args) => (
     <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center gap-4 px-4 py-8">
       <Demo key={args.initialCount} {...args} />
@@ -139,8 +148,12 @@ export const Empty: Story = {
   args: { initialCount: 0 },
 };
 
-export const Resizable: Story = {
-  render: (args) => (
+const ResizableDemo: FC<DemoProps & { onAnimationSpeedChange: (speed: number) => void }> = ({
+  initialCount,
+  animationSpeed = 1,
+  onAnimationSpeedChange,
+}) => {
+  return (
     <div className="flex min-h-screen flex-col items-start gap-4 p-8">
       <ResizableWindow
         title="Tab bar"
@@ -149,11 +162,29 @@ export const Resizable: Story = {
         initialSize={{ width: 640, height: 'auto' }}
         minimumSize={{ width: 320, height: 0 }}
       >
-        <Demo key={args.initialCount} {...args} />
+        <Demo key={initialCount} initialCount={initialCount} animationSpeed={animationSpeed} />
       </ResizableWindow>
+      <fieldset aria-label="Animation speed" className="m-0 flex flex-wrap items-center gap-3 border-0 p-0">
+        <span className="text-xs text-neutral-500 dark:text-neutral-400">Animation speed</span>
+        <Segmented
+          options={[0.1, 0.25, 0.5, 1].map((speed) => ({
+            value: speed,
+            label: speed === 1 ? '1.0×' : `${speed}×`,
+          }))}
+          value={animationSpeed}
+          onChange={onAnimationSpeedChange}
+        />
+      </fieldset>
       <ShortcutCaption />
     </div>
-  ),
+  );
+};
+
+export const Resizable: Story = {
+  render: (args) => {
+    const [, updateArgs] = useArgs();
+    return <ResizableDemo {...args} onAnimationSpeedChange={(animationSpeed) => updateArgs({ animationSpeed })} />;
+  },
 };
 
 export const HoverHolds: Story = {
