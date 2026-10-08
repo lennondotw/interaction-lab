@@ -21,11 +21,14 @@ Explicit interaction with the scrolling viewport stops all active flights and re
 - Downward non-zoom `wheel` input while the scroll controller is `animating`; native scrolling takes over catch-up in either direction.
 - Mouse `pointerdown` in the viewport when `interruptOnMouseDown` is enabled. It defaults to `false`. Touch contact during active catch-up interrupts independently; pen contact alone does not.
 - Actual unowned upward scrolling, including a drag after a non-blocking pointer press.
-- `ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`, `Home`, `End`, or Space received by the viewport.
+- Keyboard scroll commands that take over active catch-up or move away from following. They replace
+  the scroll destination with a velocity-preserving spring and end the old flight. Downward commands
+  already at the bottom preserve settled following. Descendant editing/activation and consumed,
+  composing, or Ctrl key events do not interrupt.
 
 The scroll controller owns these decisions and emits a shared interruption event consumed by flight. This is not a generic `scroll` listener. Programmatic catch-up, browser clamping after layout changes,
 and downward wheel input outside `animating` do not cancel flight. Cancellation removes the visual copies, restores
-real-bubble visibility, and clears pending departures; it does not delete messages or prevent native input.
+real-bubble visibility, and clears pending departures; it does not delete messages. Recognized keyboard commands prevent the browser scroll default; wheel and pointer input remain native.
 
 The flight predicts a destination at the final bottom, and normal handoff assumes the real row will
 reach it. Once the user interrupts catch-up, that assumption is no longer reliable. Immediate handoff

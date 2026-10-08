@@ -29,9 +29,42 @@ or pen. Touch pointer-down and touchstart implement the same policy, including t
 They do not wait for movement to interrupt an active catch-up. Preserving a pen contact does not assume
 that pens cannot scroll: subsequent unowned upward movement still detaches.
 
-Upward non-zoom wheel and scrolling keys detach. Downward non-zoom wheel interrupts active catch-up,
-then evaluates the normal restoration gate. Horizontal-only and zoom wheel do not interrupt. Input
-handlers do not call `preventDefault()`.
+Upward non-zoom wheel detaches. Downward wheel interrupts active animation, then evaluates the normal
+restoration gate. Horizontal-only and zoom wheel do not interrupt. Wheel and pointer input remain
+native; recognized keyboard scrolling commands prevent the native scroll default and own a spring.
+
+### Keyboard scrolling
+
+Focus the message viewport with Tab or a click. Keyboard commands drive the controller's existing
+15/1 spring and MotionValue, including its playback speed and reduced-motion policy:
+
+| Key                     | Spring target                                  |
+| ----------------------- | ---------------------------------------------- |
+| Arrow up / down         | Current keyboard target ±40px                  |
+| Space / Shift+Space     | One viewport down / up, retaining 40px overlap |
+| PageDown / PageUp       | One viewport down / up, retaining 40px overlap |
+| Option+Arrow up / down  | The same page step                             |
+| Home / End              | Top / projected final bottom                   |
+| Command+Arrow up / down | Top / projected final bottom                   |
+
+The 40px small increment matches the measured native arrow step. Page size comes from the current
+viewport height. Consecutive keys accumulate against the pending keyboard destination, not the
+partially animated scroll position. Retargeting preserves the spring's exact position and analytic
+generator velocity, including same-frame repeats and direction reversal.
+
+A reading destination enters `animating` and completes as `detached`. A command reaching the bottom
+uses the ordinary projected-bottom path and completes as `following`. Downward commands already at
+the bottom preserve following. Keyboard takeover of bottom catch-up ends the old message flight
+without resetting the scroll spring's velocity. Receive/layout changes retain a reading destination;
+reading-anchor compensation shifts both its current position and destination. Local send and explicit
+bottom commands can replace it with bottom catch-up. Wheel or touch contact interrupts either spring.
+The public state target reports the active animation destination. Its `following` flag distinguishes
+bottom intent from a keyboard reading animation even while both use `animating`.
+
+Only key events targeted at the viewport are handled. Descendant editors, buttons, and nested widgets
+retain editing/activation. Consumed events, composition, Ctrl chords, and unrecognized combinations
+are left alone. Recognized commands stop propagation, so Option+Arrow does not reach Storybook's
+outer story-navigation handler. No global shortcuts or native smooth-scroll animation are involved.
 
 Pointer and touch lifetimes are independent: `pointercancel` can occur when native scrolling takes
 over while the finger remains down. It must not clear touch contacts. Following cannot be restored
@@ -46,7 +79,7 @@ controller, not a message, slot, or flight; it remains interruptible and uses th
 
 After native takeover, old position notifications continue updating the shared observation cursor without
 canceling catch-up. A new pointer/touch contact or vertical non-zoom wheel clears that exemption; the input
-policy above decides whether contact interrupts immediately. Scrolling keys detach directly. Merely
+policy above decides whether contact interrupts immediately. Keyboard commands acquire their own spring destination. Merely
 receiving a delayed notification does not make it a new gesture.
 
 Following may finish before the last native delta arrives, especially with reduced motion. During this
@@ -75,6 +108,10 @@ A changed final target still requires ordinary following/catch-up; this does not
 bounce when a concurrent layout mutation requires repositioning. No bounce state or timer is added.
 
 ## Verification
+
+[Keyboard contracts](../../../../../scripts/test-chat-keyboard.mjs) cover real keys, intermediate spring
+progress, target accumulation, velocity continuity, direction reversal, receive/layout changes,
+boundary following, wheel interruption, reduced motion, and descendant/consumed/composition isolation.
 
 [Interaction contracts](../../../../../scripts/test-chat-contracts.mjs) cover contact lifetimes, mouse
 opt-in stories, restoration, and flight interruption. [Touch takeover regressions](../../../../../scripts/test-chat-touch-takeover.mjs)

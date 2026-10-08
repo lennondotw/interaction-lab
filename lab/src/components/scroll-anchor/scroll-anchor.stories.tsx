@@ -332,7 +332,7 @@ function WireframeDemo({ interruptOnMouseDown = false }: { interruptOnMouseDown?
         </fieldset>
         <Toggle label="Animate row slots" checked={animateRows} onChange={setAnimateRows} />
         <div className="grid grid-cols-2 gap-x-4">
-          <span>Following: {scrollState?.mode === 'detached' ? 'No' : 'Yes'}</span>
+          <span>Following: {scrollState?.following === false ? 'No' : 'Yes'}</span>
           <span>Near bottom: {scrollState?.nearBottom ? 'Yes' : 'No'}</span>
           <span>Distance: {scrollState?.distance.toFixed(2) ?? '0.00'} px</span>
           <span>Velocity: {scrollState?.velocity.toFixed(0) ?? '0'} px/s</span>

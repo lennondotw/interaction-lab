@@ -1,5 +1,5 @@
 import { toSpringPhysics } from '@monorepo/utils';
-import { animate, motionValue } from 'motion/react';
+import { JSAnimation, motionValue } from 'motion/react';
 
 import { finalScrollBottom } from './pending-layout.js';
 import type { ReadingAnchor, ReadingAnchorSource } from './reading-anchor.js';
@@ -11,15 +11,17 @@ export type ScrollAnchorMode = 'following' | 'animating' | 'detached';
 
 export interface ScrollAnchorState {
   mode: ScrollAnchorMode;
+  /** Bottom intent, including catch-up; false during keyboard reading animation. */
+  following: boolean;
   /** Pixels between the current position and the current bottom. */
   distance: number;
   nearBottom: boolean;
   threshold: number;
   scrollTop: number;
-  /** The projected final bottom, including pending layout. */
+  /** Active spring destination, or the projected final bottom while idle. */
   target: number;
   velocity: number;
-  /** The last intent transition, for debugging. */
+  /** The last controller cause, for debugging. */
   reason: string;
 }
 
@@ -59,10 +61,14 @@ const spring = {
   restSpeed: 1,
 } as const;
 const positionTolerance = 0.5;
+// Match the measured browser arrow increment; page steps retain one increment
+// of overlap so the last visible line remains readable after paging.
+const keyboardStep = 40;
+type ScrollDestination = { kind: 'bottom'; source: 'command' | 'keyboard' } | { kind: 'position'; top: number };
 
 /**
- * Owns programmatic scrolling; input handlers never prevent native default
- * actions. Following is explicit intent, not a boolean recomputed from
+ * Owns programmatic and keyboard scrolling. Pointer/wheel input stays native.
+ * Following is explicit intent, not a boolean recomputed from
  * proximity on every scroll event.
  */
 export function createScrollAnchorController(
@@ -79,7 +85,8 @@ export function createScrollAnchorController(
   let previousHeight = viewport.scrollHeight;
   let previousViewportHeight = viewport.clientHeight;
   let animationTarget = 0;
-  let animation: ReturnType<typeof animate> | undefined;
+  let destination: ScrollDestination = { kind: 'bottom', source: 'command' };
+  let animation: JSAnimation<number> | undefined;
   let pointerHeld = false;
   // A touch move can leave native inertia running after contact ends. scrollend
   // clears this eligibility, but is never used to decide follow intent.
@@ -97,6 +104,12 @@ export function createScrollAnchorController(
   const bottom = () => Math.max(0, viewport.scrollHeight - viewport.clientHeight);
   const distance = () => Math.max(0, bottom() - viewport.scrollTop);
   const projectedBottom = () => options.projectBottom?.() ?? finalScrollBottom(viewport, content);
+  const destinationTop = (instant = false) =>
+    destination.kind === 'bottom'
+      ? instant
+        ? bottom()
+        : projectedBottom()
+      : Math.max(0, Math.min(projectedBottom(), destination.top));
 
   function readScrollPosition() {
     return {
@@ -152,11 +165,12 @@ export function createScrollAnchorController(
       reportFrame = 0;
       options.onStateChange?.({
         mode,
+        following: mode !== 'detached' && destination.kind === 'bottom',
         distance: distance(),
         nearBottom: distance() <= options.threshold,
         threshold: options.threshold,
         scrollTop: viewport.scrollTop,
-        target: projectedBottom(),
+        target: mode === 'animating' ? animationTarget : projectedBottom(),
         velocity: mode === 'animating' ? position.getVelocity() : 0,
         reason,
       });
@@ -189,6 +203,7 @@ export function createScrollAnchorController(
   function resumeFollowing(cause: string) {
     if (mode !== 'detached' || interactionHeld() || distance() > options.threshold) return;
     mode = 'following';
+    destination = { kind: 'bottom', source: 'command' };
     reason = cause;
     // Intent only: leave the remaining threshold pixels and native input alone.
     report();
@@ -204,18 +219,23 @@ export function createScrollAnchorController(
 
   /** Explicit commands own a new position baseline; layout retargets do not. */
   function requestBottom(cause: string, instant = false) {
+    requestScroll(cause, { kind: 'bottom', source: 'command' }, instant);
+  }
+
+  function requestScroll(cause: string, next: ScrollDestination, instant = false) {
+    destination = next;
     if (takeover) {
       cancelTakeover();
       // No spring exists yet; an equivalent old target cannot skip this command.
       mode = 'following';
     }
     const current = readScrollPosition();
-    const target = projectedBottom();
+    const target = destinationTop(instant);
     // A satisfied command grants follow intent without changing native geometry.
     // Clamp positive overscroll: bounce cannot satisfy an unexpanded future target.
     if (Math.abs(target - Math.min(current.top, current.bottom)) <= positionTolerance) {
       generation++;
-      mode = 'following'; // Close the write gate before resetting a previous spring.
+      mode = destination.kind === 'bottom' ? 'following' : 'detached';
       position.jump(current.top);
       observedScroll = current;
       animationTarget = target;
@@ -226,7 +246,7 @@ export function createScrollAnchorController(
     }
     if (!nativeTouchScroll || activeTouches.size > 0) {
       observedScroll = readScrollPosition();
-      scrollToBottom(cause, { instant });
+      startScroll(cause, { instant });
       return;
     }
 
@@ -239,6 +259,7 @@ export function createScrollAnchorController(
     mode = 'following'; // Close the spring write gate before resetting its value.
     position.jump(viewport.scrollTop);
     mode = 'animating';
+    animationTarget = target;
     reason = cause;
     const overflow = viewport.style.getPropertyValue('overflow-y');
     const priority = viewport.style.getPropertyPriority('overflow-y');
@@ -264,13 +285,13 @@ export function createScrollAnchorController(
         // A queued pre-command scroll must not look like a fresh upward gesture.
         observedScroll = readScrollPosition();
         mode = 'following'; // Do not reuse the previous target/velocity for this new owner.
-        scrollToBottom(cause, { instant });
+        startScroll(cause, { instant });
       });
     });
   }
 
-  function scrollToBottom(cause: string, { instant = false } = {}) {
-    const target = instant ? bottom() : projectedBottom();
+  function startScroll(cause: string, { instant = false, from }: { instant?: boolean; from?: number } = {}) {
+    const target = destinationTop(instant);
     if (
       mode === 'animating' &&
       Math.abs(target - animationTarget) <= positionTolerance &&
@@ -278,33 +299,49 @@ export function createScrollAnchorController(
       !instant
     )
       return;
-    // The generator runs in normal-speed time; MotionValue reports wall-clock velocity.
-    const velocity = mode === 'animating' ? position.getVelocity() / options.animationSpeed : 0;
+    // Generator velocity stays in normal-speed units, including repeated keys
+    // within one frame and playback rates other than 1.
+    const active = mode === 'animating';
+    const velocity = active ? (position.animation as JSAnimation<number>).getGeneratorVelocity() : 0;
+    const start = from ?? (active ? position.get() : viewport.scrollTop);
     const run = ++generation;
     position.stop();
-    mode = 'following';
-    position.jump(viewport.scrollTop);
-    reason = cause;
+    mode = destination.kind === 'bottom' ? 'following' : 'detached';
+    position.jump(start);
     animationTarget = target;
     if (instant || options.reducedMotion || Math.abs(target - viewport.scrollTop) <= positionTolerance) {
+      reason = cause;
       write(target);
       report();
       return;
     }
     mode = 'animating';
+    reason = cause;
     report();
-    animation = animate(position, target, {
-      ...spring,
-      velocity,
-      onComplete: () => {
-        if (generation !== run) return;
-        write(bottom());
-        mode = 'following';
-        reason = 'Reached bottom';
-        report();
-      },
+    void position.start((complete) => {
+      const owned = new JSAnimation({
+        ...spring,
+        keyframes: [start, target],
+        velocity,
+        onUpdate: (top) => position.set(top),
+        onComplete: () => {
+          if (generation !== run) return;
+          write(destination.kind === 'bottom' ? bottom() : destinationTop());
+          mode = destination.kind === 'bottom' ? 'following' : 'detached';
+          const cause = destination.kind === 'bottom' ? 'Reached bottom' : 'Reached keyboard target';
+          reason = cause;
+          report();
+          // Completion can coincide with a new command in the same frame.
+          // Only the current owner may clear the MotionValue's animation.
+          queueMicrotask(() => {
+            if (position.animation === owned) complete();
+          });
+        },
+      });
+      animation = owned;
+      owned.speed = options.animationSpeed;
+      return owned;
     });
-    animation.speed = options.animationSpeed;
   }
 
   const unsubscribe = position.on('change', (top) => {
@@ -333,7 +370,7 @@ export function createScrollAnchorController(
       paddingDelta === 0 &&
       previousHeight === viewport.scrollHeight &&
       previousViewportHeight === viewport.clientHeight &&
-      (mode !== 'animating' || Math.abs(projectedBottom() - animationTarget) <= positionTolerance)
+      (mode !== 'animating' || Math.abs(destinationTop() - animationTarget) <= positionTolerance)
     ) {
       report();
       return;
@@ -341,18 +378,27 @@ export function createScrollAnchorController(
     previousBottomPadding = bottomPadding;
     previousHeight = viewport.scrollHeight;
     previousViewportHeight = viewport.clientHeight;
-    if (!follow && mode === 'detached' && anchor?.element.isConnected) {
+    const keyboardAnimating = mode === 'animating' && destination.kind === 'position';
+    if (!follow && (mode === 'detached' || keyboardAnimating) && anchor?.element.isConnected) {
       const currentBottom = anchor.element.getBoundingClientRect().bottom - viewport.getBoundingClientRect().top;
       const requestedTop = viewport.scrollTop + currentBottom - anchor.bottom + anchorRemainder;
+      const delta = requestedTop - viewport.scrollTop;
       write(requestedTop);
+      if (keyboardAnimating && destination.kind === 'position') {
+        destination.top += delta;
+        if (takeover) animationTarget = destinationTop();
+        else startScroll('Keyboard reading anchor moved', { from: position.get() + delta });
+      }
       // Native scrollTop may round fractional CSS pixels. Carry that fraction
       // into the next layout tick instead of accumulating visible reading drift.
       anchorRemainder = Math.max(-1, Math.min(1, requestedTop - viewport.scrollTop));
     }
     if (follow) {
       requestBottom('Followed new content', mode === 'following');
+    } else if (!takeover && keyboardAnimating) {
+      startScroll('Keyboard content resized');
     } else if (!takeover && mode !== 'detached') {
-      scrollToBottom(clearanceChanged ? 'Clearance resized' : 'Content resized', {
+      startScroll(clearanceChanged ? 'Clearance resized' : 'Content resized', {
         // Follow intent owns the current bottom across ALL layout changes, including
         // natural reflow. No resize-cause inference or second spring is needed.
         // Reconcile user movement above first; detached readers keep their anchor,
@@ -427,9 +473,63 @@ export function createScrollAnchorController(
   }
 
   function onKeyDown(event: KeyboardEvent) {
-    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) {
-      detach('Keyboard scrolling');
+    // Descendants own editing, activation, and nested scrolling. Only the
+    // focused viewport owns keyboard scroll commands.
+    if (event.target !== viewport || event.defaultPrevented || event.isComposing) return;
+    if (event.ctrlKey || (event.metaKey && event.altKey)) return;
+    const keyboardDestination = destination.kind === 'position' || destination.source === 'keyboard';
+    const base = mode === 'animating' && keyboardDestination ? animationTarget : viewport.scrollTop;
+    const page = Math.max(keyboardStep, viewport.clientHeight - keyboardStep);
+    let target: number;
+    switch (event.key) {
+      case 'ArrowUp':
+      case 'ArrowDown': {
+        const direction = event.key === 'ArrowUp' ? -1 : 1;
+        target = event.metaKey
+          ? direction < 0
+            ? 0
+            : projectedBottom()
+          : base + direction * (event.altKey ? page : keyboardStep);
+        break;
+      }
+      case 'PageUp':
+      case 'PageDown':
+        if (event.metaKey || event.altKey) return;
+        target = base + (event.key === 'PageUp' ? -page : page);
+        break;
+      case ' ':
+        if (event.metaKey || event.altKey) return;
+        target = base + (event.shiftKey ? -page : page);
+        break;
+      case 'Home':
+      case 'End':
+        if (event.metaKey || event.altKey) return;
+        target = event.key === 'Home' ? 0 : projectedBottom();
+        break;
+      default:
+        return;
     }
+    event.preventDefault();
+    // Storybook's outer manager also handles Option+Arrow. The focused scroll
+    // region owns this command; neither a native scroll nor the manager should run.
+    event.stopPropagation();
+    ownsNativeTail = false;
+    target = Math.max(0, Math.min(projectedBottom(), target));
+    const next: ScrollDestination =
+      target === projectedBottom() ? { kind: 'bottom', source: 'keyboard' } : { kind: 'position', top: target };
+    if (mode !== 'following' || next.kind !== 'bottom') {
+      viewport.dispatchEvent(new Event(scrollAnchorInterrupted));
+    }
+    anchorRemainder = 0;
+    const key = [
+      event.metaKey && 'Meta',
+      event.altKey && 'Option',
+      event.shiftKey && 'Shift',
+      event.key === ' ' ? 'Space' : event.key,
+    ]
+      .filter(Boolean)
+      .join('+');
+    requestScroll(`Keyboard ${key}`, next);
   }
 
   viewport.addEventListener('scroll', onScroll, { passive: true });
@@ -454,7 +554,12 @@ export function createScrollAnchorController(
       initialLayoutMeasured = true;
     } else {
       const source = options.readingAnchor;
-      layoutChanged({ anchor: source && mode === 'detached' ? source.fromSnapshot() : undefined });
+      layoutChanged({
+        anchor:
+          source && (mode === 'detached' || (mode === 'animating' && destination.kind === 'position'))
+            ? source.fromSnapshot()
+            : undefined,
+      });
       source?.remember();
     }
   });
@@ -474,7 +579,7 @@ export function createScrollAnchorController(
       const needsReport = options.threshold !== next.threshold || (!options.onStateChange && next.onStateChange);
       options = next;
       if (animation) animation.speed = options.animationSpeed;
-      if (options.reducedMotion && mode === 'animating' && !takeover) scrollToBottom('Reduced motion');
+      if (options.reducedMotion && mode === 'animating' && !takeover) startScroll('Reduced motion');
       if (needsReport) report();
     },
     dispose() {
