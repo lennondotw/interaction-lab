@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatc
 
 import type { TabBarProps, TabFootprint } from './tab-bar.types.js';
 import { closeTabWidths } from './tab-close-layout.js';
+import { sameTabStrip, tabStripGeometry, type TabStripGeometry } from './tab-geometry.js';
 import type { createTabHoverHold } from './tab-hover-hold.js';
 import { getTabLayoutChange, type TabLayoutSnapshot } from './tab-layout-change.js';
 import { readTabLayoutConstraints, readTabTargets } from './tab-layout-measurement.js';
@@ -27,7 +28,8 @@ export function useTabLayout({
   animationSpeed,
 }: TabLayoutOptions) {
   const targetLayoutRef = useRef<HTMLDivElement>(null);
-  const addRef = useRef<HTMLButtonElement>(null);
+  const addRef = useRef<HTMLDivElement>(null);
+  const [targetGeometry, setTargetGeometry] = useState<TabStripGeometry | null>(null);
   const previousLayout = useRef<TabLayoutSnapshot | null>(null);
   const [footprints] = useState(() => new Map<string, TabFootprint>());
   const addGap = useMotionValue(0);
@@ -53,7 +55,7 @@ export function useTabLayout({
 
   const measureTargets = useCallback(() => {
     const layout = targetLayoutRef.current!;
-    const { width: availableWidth, gap, targets } = readTabTargets(layout);
+    const { width: availableWidth, gap, targets, closeBasis, addWidth } = readTabTargets(layout);
     const snapshot = { width: availableWidth, ids: targets.map((target) => target.id), heldWidths };
     const previous = previousLayout.current;
     const reason = getTabLayoutChange(previous, snapshot);
@@ -71,17 +73,29 @@ export function useTabLayout({
       if (target.element.getAttribute('data-tab-width-target') !== value) {
         target.element.setAttribute('data-tab-width-target', value);
       }
-      footprints.get(target.id)!.set(width, target.gap, immediate);
+      footprints.get(target.id)!.set(width, target.gap, immediate, closeBasis);
     });
     const presentIds = new Set(targets.map((target) => target.id));
     // AnimatePresence keeps removed tabs in flow, but the sizing row excludes
     // them. Their old pixel footprint collapses while survivors expand together.
     for (const [id, footprint] of footprints) {
-      if (!presentIds.has(id)) footprint.set(0, 0, immediate);
+      if (!presentIds.has(id)) footprint.set(0, 0, immediate, closeBasis);
     }
     const nextAddGap = targets.length === 0 ? 0 : gap;
     addGapSpring.set(nextAddGap, immediate);
     if (immediate) addRef.current!.style.marginLeft = `${nextAddGap}px`;
+    const geometry = tabStripGeometry(
+      targets.map((target, index) => ({
+        id: target.id,
+        width: widths[index]!,
+        gap: target.gap,
+        closeCapacity: Math.min(closeBasis, widths[index]!),
+        present: true,
+      })),
+      addWidth,
+      nextAddGap
+    );
+    setTargetGeometry((previous) => (sameTabStrip(previous, geometry) ? previous : geometry));
   }, [addGapSpring, animationSpeed, footprints, heldWidths, reducedMotion]);
 
   // Child layout effects register the newly mounted tabs before this reads the
@@ -94,5 +108,5 @@ export function useTabLayout({
   }, [measureTargets]);
   useEffect(() => () => addGapSpring.stop(), [addGapSpring]);
 
-  return { targetLayoutRef, addRef, footprints, addGap, close };
+  return { targetLayoutRef, addRef, footprints, addGap, close, targetGeometry };
 }

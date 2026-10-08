@@ -11,7 +11,7 @@ export function useTabLayoutDisplay(root: RefObject<HTMLDivElement | null>, tabC
       // A CSS pixel of tolerance absorbs fractional flex layout rounding.
       const compressed = tabs.some((tab, index) => widths[index]! < parseFloat(getComputedStyle(tab).flexBasis) - 1);
       const gap = parseFloat(getComputedStyle(target).columnGap);
-      const addWidth = parseFloat(getComputedStyle(target.lastElementChild!).width);
+      const addWidth = parseFloat(getComputedStyle(target.querySelector('[data-tab-add-target]')!).width);
       const occupied = widths.reduce((sum, width) => sum + width, 0) + tabs.length * gap + addWidth;
       const hasSpace = occupied < target.getBoundingClientRect().width - 1;
       setLayout((previous) =>

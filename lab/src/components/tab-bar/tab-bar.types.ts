@@ -1,3 +1,4 @@
+import type { TabGeometryInput } from './tab-geometry.js';
 import type { TabBarHoldState } from './tab-hover-hold.js';
 
 export interface TabBarItem {
@@ -19,7 +20,9 @@ export interface TabBarProps {
 }
 
 export interface TabFootprint {
-  set: (width: number, gap: number, immediate: boolean) => void;
+  set: (width: number, gap: number, immediate: boolean, closeBasis: number) => void;
   setSpeed: (speed: number) => void;
   getTargetWidth: () => number;
+  read: () => TabGeometryInput;
+  subscribe: (changed: () => void) => () => void;
 }

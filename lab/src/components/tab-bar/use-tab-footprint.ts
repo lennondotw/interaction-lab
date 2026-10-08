@@ -8,21 +8,37 @@ import { useTabCloseLayout } from './use-tab-close-layout.js';
 export function useTabFootprint(id: string, footprints: Map<string, TabFootprint>) {
   const [isPresent, safeToRemove] = usePresence();
   const elementRef = useRef<HTMLDivElement>(null);
+  const closeElementRef = useRef<HTMLDivElement>(null);
   const width = useMotionValue(0);
   const gap = useMotionValue(0);
-  const { closeRef, setTarget: setCloseTarget } = useTabCloseLayout(isPresent, width);
+  const present = useRef(isPresent);
+  useLayoutEffect(() => {
+    present.current = isPresent;
+  }, [isPresent]);
+  const { closeCapacity, setCloseTarget } = useTabCloseLayout(isPresent, width);
   const [widthSpring] = useState(() => createTabSpring(width));
   const [gapSpring] = useState(() => createTabSpring(gap));
 
   useLayoutEffect(() => {
     footprints.set(id, {
       getTargetWidth: () => widthSpring.getTarget(),
+      read: () => ({
+        id,
+        width: width.get(),
+        gap: gap.get(),
+        closeCapacity: closeCapacity.get(),
+        present: present.current,
+      }),
+      subscribe(changed) {
+        const subscriptions = [width, gap, closeCapacity].map((value) => value.on('change', changed));
+        return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+      },
       setSpeed(speed) {
         widthSpring.setSpeed(speed);
         gapSpring.setSpeed(speed);
       },
-      set(nextWidth, nextGap, immediate) {
-        setCloseTarget(nextWidth, immediate);
+      set(nextWidth, nextGap, immediate, closeBasis) {
+        setCloseTarget(nextWidth, immediate, closeBasis);
         widthSpring.set(nextWidth, immediate);
         gapSpring.set(nextGap, immediate);
         if (immediate) {
@@ -30,6 +46,7 @@ export function useTabFootprint(id: string, footprints: Map<string, TabFootprint
           // without waiting for Motion's scheduled style render.
           elementRef.current!.style.width = `${nextWidth}px`;
           elementRef.current!.style.marginLeft = `${nextGap}px`;
+          closeElementRef.current!.style.width = `${closeCapacity.get()}px`;
         }
       },
     });
@@ -38,7 +55,7 @@ export function useTabFootprint(id: string, footprints: Map<string, TabFootprint
       widthSpring.stop();
       gapSpring.stop();
     };
-  }, [footprints, gapSpring, id, setCloseTarget, widthSpring]);
+  }, [closeCapacity, footprints, gap, gapSpring, id, setCloseTarget, width, widthSpring]);
 
   useLayoutEffect(() => {
     if (isPresent) return;
@@ -60,5 +77,5 @@ export function useTabFootprint(id: string, footprints: Map<string, TabFootprint
     };
   }, [gap, isPresent, safeToRemove, width]);
 
-  return { elementRef, closeRef, width, gap, isPresent };
+  return { elementRef, closeElementRef, closeCapacity, width, gap, isPresent };
 }
