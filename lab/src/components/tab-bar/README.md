@@ -13,7 +13,9 @@ that every browser scenario has an automated regression test.
 | Natural destination widths and CSS spacing                                   | Independent hidden flex sizing row                 |
 | Held destination widths and release intent                                   | Hover-hold controller and width snapshot           |
 | Current pixel widths, leading gaps, velocity, and visual lifetime            | Footprint springs and AnimatePresence              |
-| Close-slot geometry during entry and exit                                    | Close-layout hook                                  |
+| Close-slot capacity during entry, compression, and exit                      | Numeric capacity controller and MotionValue        |
+| Final/presentation rectangles and pointer arbitration                        | Pure geometry model and interaction hook           |
+| Native semantics and shared hover/press/focus feedback                       | One final button tree and interaction context      |
 | Shortcut dispatch and repeat clock                                           | Shared keyboard helper and TabBar bindings         |
 | Status, size, space, and speed demonstration                                 | Story composition and display-only instrumentation |
 
@@ -25,6 +27,8 @@ Hover holding is independent of that motion: stopping springs does not release t
 
 | Topic                                                                  | Scope                                                                                            |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [Numeric layout geometry](./docs/numeric-geometry.md)                  | Final snapshots, prefix sums, clipped close slots, and CSS allocation.                           |
+| [Interaction and presentation](./docs/interaction-and-presentation.md) | One semantic tree, dual-position hits, priority, press cancellation, and shared feedback.        |
 | [Micro-decision registry](./docs/design-decisions.md)                  | Individual layout, animation, hover, clipping, keyboard, and instrumentation choices.            |
 | [Spring scheduling and lifetime](./docs/spring-lifecycle.md)           | Pending targets, callback coalescing, cancellation ordering, and completion ownership.           |
 | [Animation batch timing](./docs/animation-batch-timing.md)             | Shared frame samples, integer clock alignment, rapid-close conservation, and numerical evidence. |
@@ -32,9 +36,9 @@ Hover holding is independent of that motion: stopping springs does not release t
 | [Presence and footprint ownership](./docs/presence-and-footprints.md)  | Leading gaps, simultaneous entry/exit, visual lifetime, and zero-footprint removal.              |
 | [Spring parameters and continuity](./docs/spring-parameters.md)        | 25/1 physics, pixel/velocity handoff, playback scaling, and rest thresholds.                     |
 | [Preserving close targets](./docs/close-targets.md)                    | Middle versus tail closing, destination budgets, base-size cap, and empty state.                 |
-| [Hover holding and release](./docs/hover-hold.md)                      | Actual hover rectangle, 500 ms leave delay, keyboard independence, and cleanup.                  |
+| [Hover holding and release](./docs/hover-hold.md)                      | Final/presentation hover envelope, 500 ms leave delay, keyboard independence, and cleanup.       |
 | [Animation intent and resize interruption](./docs/animation-intent.md) | Change-reason priority, immediate reflow, stopping all active springs, and reduced motion.       |
-| [Close-button geometry](./docs/close-button-layout.md)                 | Flex compression, centered X, fixed entry/exit slots, and restoration.                           |
+| [Close-button geometry](./docs/close-button-layout.md)                 | Numeric capacity, centered X, fixed entry/exit slots, and restoration.                           |
 | [Title clipping and overflow mask](./docs/title-clipping.md)           | Inner padding, real overflow detection, clipping, and the 20 px alpha ramp.                      |
 | [Stroke and focus ownership](./docs/strokes-and-focus.md)              | One outer stroke, one separator, alpha hierarchy, and accessible controls.                       |
 | [Held keyboard shortcuts](./docs/keyboard-shortcuts.md)                | Repeat timing, ignored native repeats, modifier ownership, and fresh callbacks.                  |
@@ -71,10 +75,14 @@ selection and sequential new IDs are demonstration policies, not component requi
 
 ## Module boundaries
 
-[TabBar](./tab-bar.tsx) wires controlled props, the sizing row, hover region, shortcuts, and add button.
-[AnimatedTab](./animated-tab.tsx) renders each tab, while [TabTitle](./tab-title.tsx) owns text overflow.
-The layout, footprint, close-slot, hover, and keyboard hooks own their respective browser resources and
-cleanup. Pure close-width, held-width, change-reason, spring, and hover controllers are tested separately.
+[TabBar](./tab-bar.tsx) composes the sizing row, shared context, pointer envelope, semantic row,
+animated row, shortcuts, and painted add control. [TabInteractionRow](./tab-interaction-row.tsx) owns
+one native button tree at final geometry. [AnimatedTab](./animated-tab.tsx) paints noninteractive tabs;
+[TabTitle](./tab-title.tsx) owns text overflow. [Geometry](./tab-geometry.ts) computes local rectangles
+and hit priority. [The interaction hook](./use-tab-interaction.ts) owns pointer/focus resources and
+shared feedback. [The close capacity controller](./tab-close-capacity.ts) owns compression/presence
+capacity independently of DOM. Layout, footprint, hover, and keyboard hooks own their respective
+resources and cleanup. Pure controllers and geometry are tested separately from browser integration.
 
 This split keeps measured destinations out of presentation code and keeps display-only story labels
 out of production layout decisions. Structural refs and footprint registrations are invariants:

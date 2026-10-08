@@ -47,6 +47,33 @@ also expose the public speed prop through a select control. Changing speed prese
 selection, and active animation resources; changing `initialCount` deliberately changes the demo key
 and resets it. The initial-count control ranges from zero through twelve; that is not a runtime cap.
 
+## Interaction-layer overlay
+
+Every TabBar story exposes a `Show interaction layer` Toggle and synchronized boolean Storybook arg,
+defaulting off. In Resizable/HoverHolds it sits next to animation speed. The explanation distinguishes
+animated presentation/visual hover from final-layout native actions/focus, and notes the visible-X
+click alias. Blue rectangles identify selection targets; amber rectangles identify close/add targets.
+The legend text uses the surrounding neutral text's lightness in each theme, with low OKLCH chroma
+(0.06) and muted blue/amber hues. This keeps the explanation quiet while retaining the color mapping.
+
+The overlay reveals the **existing semantic row**, using story-only ancestor data-attribute styles.
+It does not create a duplicate hit-test tree, read new geometry, change opacity on presentation, or
+add a production prop. Inset outlines and translucent backgrounds consume no layout space. Those
+fills are diagnostic target paint, independent of the foreground-only presentation hover policy.
+The toggle preserves tab IDs, selection, springs, held caps and destination calculations. Moving the
+pointer to this control outside the strip can still legitimately begin the hover-release timer.
+Changing the arg by keyboard does not manufacture a pointer leave.
+
+Browser checks on October 8 confirmed the overlay is off by default, toggles the existing row's
+opacity between 0 and 1, paints the intended blue/amber targets, and leaves the semantic control count
+unchanged. During 0.1× entry, keyboard toggling preserved nine tabs, active ID 9 and holding; the new
+footprint continued from roughly 6.51 to 7.48 px toward its 59.34 px target. With the overlay on, closing
+tab 2 removed its native controls while retaining its visual exit. Default also retained three tabs
+when enabling the overlay, and fresh-load browser console checks were clean.
+
+The overlay represents final native rectangles; the additional clipped visible-X alias remains
+part of the centralized action resolver, not a second highlighted semantic button.
+
 The demo host uses sequential IDs, selects a new tab, and selects the following survivor when the
 active tab closes, or the preceding survivor when closing the tail. These are host policies illustrated
 by [the stories](../tab-bar.stories.tsx), not state hidden inside TabBar.

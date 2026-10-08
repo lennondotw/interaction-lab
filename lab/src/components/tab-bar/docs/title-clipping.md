@@ -48,4 +48,13 @@ Verification is currently browser-based: compare long and short titles, inspect 
 resize through the threshold while checking that padding and the clipping edge stay inside the title
 slot. See the [verification guide](./verification.md) for the evidence boundary.
 
+## Presentation title centering
+
+The title presentation div uses `flex items-center`; the clipping span uses `w-full min-w-0` so it
+can shrink without its inner padded text imposing a min-content width. Replacing the original native
+button with a block div removed the browser's automatic vertical centering: a 24 px line sat 6 px
+above center in a 36 px tab. A browser comparison with the base-commit component confirmed 0 px on
+the original and -6 px on the first refactor. Explicit flex centering restored 0 px while preserving
+the viewport width and overflow mask. Padding remains on the inner text span.
+
 [Architecture index](../README.md)

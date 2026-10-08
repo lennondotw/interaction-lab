@@ -6,18 +6,19 @@ feedback between animation and layout.
 
 ## An independent CSS destination
 
-[TabSizingRow](../tab-sizing-row.tsx) contains one placeholder per logical tab and a final add-button
-placeholder. It is invisible, absolute, noninteractive, and hidden from accessibility. It occupies the
+[TabSizingRow](../tab-sizing-row.tsx) contains one placeholder per logical tab and an add-button
+placeholder, plus an absolute close-basis probe excluded from flex allocation. It is invisible, absolute, noninteractive, and hidden from accessibility. It occupies the
 same available width as the visible row but excludes tabs retained only for exit by AnimatePresence.
 
 The CSS tokens are intentional:
 
-| Element                | Declaration                   | Default CSS pixels              |
-| ---------------------- | ----------------------------- | ------------------------------- |
-| Tab placeholder        | `basis-44 shrink min-w-0 h-9` | 176 px base width, 36 px height |
-| Inter-item gap         | `gap-1`                       | 4 px                            |
-| Add-button placeholder | `size-9 shrink-0`             | 36 × 36 px                      |
-| Outer fieldset padding | `p-1`                         | 4 px per side                   |
+| Element                | Declaration                   | Default CSS pixels                     |
+| ---------------------- | ----------------------------- | -------------------------------------- |
+| Tab placeholder        | `basis-44 shrink min-w-0 h-9` | 176 px base width, 36 px height        |
+| Inter-item gap         | `gap-1`                       | 4 px                                   |
+| Add-button placeholder | `size-9 shrink-0`             | 36 × 36 px                             |
+| Close-basis probe      | `absolute basis-7`            | 28 px capacity, no allocated footprint |
+| Outer fieldset padding | `p-1`                         | 4 px per side                          |
 
 These are CSS sizing contracts, not title measurements. Long and short titles have the same tab base
 width. Explicit `min-w-0` permits tabs to shrink below the close-button basis; fixed gaps and the add
@@ -34,7 +35,7 @@ At widths below the fixed gap/add budget, this component has no special scrollin
 
 [readTabTargets](../tab-layout-measurement.ts) reads the row width, column gap, and every placeholder's
 computed width. [useTabLayout](../use-tab-layout.ts) resolves held-width caps and publishes all width/gap
-targets in the same layout pass. Changed springs start together in the next Motion `preRender` phase,
+targets and the final numeric geometry snapshot in the same layout pass. Changed springs start together in the next Motion `preRender` phase,
 after existing animations update to that frame. Existing tabs can therefore compress while the new tab grows directly
 toward its final compressed destination, without first growing to 176 px.
 

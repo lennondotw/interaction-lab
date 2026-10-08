@@ -19,8 +19,8 @@ a controller unit test proves its complete DOM integration.
 | Close outside a hold                          | Use natural post-close destinations; do not create waiting.                                                                  | Hover-controller tests; browser shortcuts.                     |
 | Close during waiting                          | Preserve the existing release deadline.                                                                                      | Hover-controller tests.                                        |
 | Close before entrance finishes                | Exit inherits current footprint/velocity and retains DOM until width and gap are zero.                                       | Spring tests; browser presence timing.                         |
-| Ordinary compression below close basis        | Title reaches zero first; close slot then shrinks with X centered.                                                           | Browser geometry probe.                                        |
-| Entrance / exit crosses close basis           | Reveal destination-sized entry slot / clip current-sized exit slot; retain right-edge alignment even below its frozen width. | Browser geometry probe.                                        |
+| Ordinary compression below close basis        | Title reaches zero first; numeric close capacity then shrinks with X centered.                                               | Capacity/geometry tests; browser geometry probe.               |
+| Entrance / exit crosses close basis           | Reveal destination-sized entry slot / clip current-sized exit slot; retain right-edge alignment even below its frozen width. | Capacity/geometry tests; browser geometry probe.               |
 | Leave and return within 500 ms                | Cancel release; the next leave starts a full new delay.                                                                      | Hover-controller tests; browser hover.                         |
 | Any container-width change                    | Interrupt all width/gap springs, including entry and exit, and apply final held/natural layout.                              | Change-reason and immediate spring tests; browser integration. |
 | Resize during holding or waiting              | Retain held caps, state, and original deadline; real pointer events still apply.                                             | Browser integration and controller source.                     |
@@ -41,13 +41,31 @@ The scheduling contract additionally distinguishes requested destinations from d
 | Old spring completes in the replacement frame            | Keep the replacement owner active and suppress obsolete completion.               | Completion-ownership regression.                                    |
 | Immediate update with a queued start                     | Cancel pending start before jumping, including an identical destination.          | Pending/immediate cancellation regression.                          |
 | Stop with a queued start                                 | The queued callback cannot create new animation work after cleanup.               | Pending cleanup regression.                                         |
-| New width completes before its gap                       | Restore ordinary close-slot flex; gap does not gate this transition.              | Close-layout source and browser probes.                             |
+| New width completes before its gap                       | Restore ordinary close capacity; gap does not gate this transition.               | Capacity controller tests and browser probes.                       |
 | Current value equals a changed target while still moving | Preserve the handoff's velocity; equality alone cannot declare rest.              | Spring-controller source; no dedicated equality-crossing assertion. |
+
+The separated interaction contract adds these animation-period guarantees:
+
+| Trigger                                                  | Expected behavior                                                                                                     | Evidence                                                       |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Add or close changes destinations                        | One semantic button tree moves to final geometry before paint; painted tree follows springs.                          | Browser addition/rapid-close probes; snapshot source.          |
+| Pointer is over final X while paint lags                 | Dispatch the final control ID; hover/pressed follow the painted control under the pointer.                            | Geometry tests; fixed-coordinate browser closes.               |
+| Pointer is over visible X outside all final X rectangles | Dispatch the eligible visible ID, bounded by current clipping.                                                        | Geometry tests; browser tiny-entry click.                      |
+| Final X overlaps another visible X                       | Final ID wins; visible X otherwise wins over titles.                                                                  | Geometry tests.                                                |
+| Logical ID is removed while footprint persists           | No semantic control, action, active stroke, or feedback for that exit.                                                | Geometry tests; browser close/selection checks.                |
+| Down and up resolve different control/ID                 | Cancel instead of activating the new target.                                                                          | Stable-hit comparison test; held-click browser check.          |
+| Final action X overlaps another painted X                | Final ID receives the action; only the painted ID receives pointer color feedback.                                    | Geometry tests; real held-pointer overlap probe.               |
+| Hover or pointer press                                   | Whole text/icon layer opacity changes (70% idle, 100% hover/pressed); color stays opaque and backgrounds transparent. | Browser computed-style check during held pointer.              |
+| Title is painted in a div                                | Text line stays centered vertically, including narrow/clipped titles.                                                 | Browser base comparison: -6 px regression, 0 px after fix.     |
+| Tab/Space/Enter uses semantic buttons                    | One focus stop per control, painted focus ring, one native activation.                                                | Browser keyboard focus/Space/Enter checks.                     |
+| Pointer remains stationary after close                   | Hover follows presentation geometry; hold membership follows the combined envelope.                                   | Browser successive same-coordinate closes; hook subscriptions. |
+| Leave, return, wait beyond old deadline                  | Holding persists; next leave starts a new 500 ms deadline.                                                            | Hover controller tests and browser return/expiry checks.       |
 
 See [spring lifetime](./spring-lifecycle.md) for ordering and [the decision registry](./design-decisions.md)
 for individual rules across the component.
 
-Automated entry points: [springs](../__tests__/tab-spring.test.ts),
+Automated entry points: [geometry](../__tests__/tab-geometry.test.ts),
+[close capacity](../__tests__/tab-close-capacity.test.ts), [springs](../__tests__/tab-spring.test.ts),
 [close widths](../__tests__/tab-close-layout.test.ts),
 [held widths](../__tests__/tab-target-layout.test.ts),
 [hover hold](../__tests__/tab-hover-hold.test.ts),

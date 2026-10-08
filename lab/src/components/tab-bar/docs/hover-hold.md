@@ -3,15 +3,19 @@
 Hover holding preserves a close-friendly width budget until the pointer has been outside the tab
 strip for 500 ms. Its lifetime represents pointer intent and is independent of spring lifetime.
 
-## The actual occupied rectangle
+## The occupied envelope
 
-The hover element is the visible `flex w-fit` row, from the first tab through the add button. It
-includes inter-item gaps and the add-button rectangle. It excludes unused container width, fieldset
-padding, diagnostic text, shortcut captions, and speed controls. With no tabs it is the add-button row.
+The hover surface extends from the first tab through the furthest final or painted add edge:
+`max(finalStrip.width, presentationStrip.width)`. It includes gaps and the span between moving/final
+controls. It excludes unrelated empty container width, fieldset padding, diagnostics, and speed
+controls. Empty state still contains the add rectangle; retained exits can temporarily extend the
+painted extent.
 
-[TabBar](../tab-bar.tsx) sends non-touch pointer enter/leave events to the controller. Touch does not
-create this hover policy. The region can change size as tabs collapse or expand; a real pointer leave
-caused by the changing rectangle is still a leave and can start waiting.
+[The interaction hook](../use-tab-interaction.ts) caches non-touch pointer coordinates and checks
+membership on pointer movement/entry and footprint changes. It calls enter/leave only when membership
+changes. This keeps a stationary pointer's hold consistent with the same two surfaces used for
+[hit arbitration](./interaction-and-presentation.md). Touch does not enter this policy. The envelope
+can genuinely move away from the pointer as layout changes, which still starts waiting.
 
 ## State transitions
 
@@ -34,8 +38,8 @@ does not call `leave()`, create a timer in `natural`, or renew a waiting deadlin
 do not move the pointer; closing with Shift+W must not change `holding` to `waiting` by itself.
 
 Container resize stops spring animations but retains the held map, current hold state, and existing
-release deadline. A real pointer event following the geometry change can still affect the controller
-normally. A later timer expiry can initiate the usual held-width release animation.
+release deadline. Envelope membership is reevaluated after the geometry change; a genuine exit can still affect
+the controller normally, independently of spring cancellation. A later timer expiry can initiate the usual held-width release animation.
 
 The [React hook](../use-tab-hover-hold.ts) keeps one controller instance and refreshes the optional host
 callback through a ref. Re-rendering does not restart timers. State notifications occur on transitions;
