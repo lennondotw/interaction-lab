@@ -9,6 +9,14 @@ export const scrollAnchorInterrupted = 'scroll-anchor-interrupted';
 
 export type ScrollAnchorMode = 'following' | 'animating' | 'detached';
 
+/** Independent histories: input and position observations are not state transitions. */
+export interface ScrollAnchorDiagnostics {
+  state: string;
+  input: string | null;
+  scroll: string | null;
+  animation: string | null;
+}
+
 export interface ScrollAnchorState {
   mode: ScrollAnchorMode;
   /** Bottom intent, including catch-up; false during keyboard reading animation. */
@@ -21,8 +29,9 @@ export interface ScrollAnchorState {
   /** Active spring destination, or the projected final bottom while idle. */
   target: number;
   velocity: number;
-  /** The last controller cause, for debugging. */
+  /** Last controller cause; repeated observations can replace it without a state change. */
   reason: string;
+  diagnostics: ScrollAnchorDiagnostics;
 }
 
 export interface ScrollAnchorControllerOptions {
@@ -79,6 +88,14 @@ export function createScrollAnchorController(
   let options = initialOptions;
   let mode: ScrollAnchorMode = 'following';
   let reason = 'Initial position';
+  let recordedMode: ScrollAnchorMode = mode;
+  let recordedFollowing = true;
+  const diagnostics: ScrollAnchorDiagnostics = {
+    state: 'Initial position · following',
+    input: null,
+    scroll: null,
+    animation: null,
+  };
   let generation = 0;
   let reportFrame = 0;
   let anchorRemainder = 0;
@@ -111,6 +128,17 @@ export function createScrollAnchorController(
         : projectedBottom()
       : Math.max(0, Math.min(projectedBottom(), destination.top));
 
+  function recordState(cause: string) {
+    reason = cause;
+    const following = mode !== 'detached' && destination.kind === 'bottom';
+    if (mode === recordedMode && following === recordedFollowing) return;
+    const label = (value: ScrollAnchorMode, follows: boolean) =>
+      value === 'animating' ? `${value} (${follows ? 'following' : 'reading'})` : value;
+    diagnostics.state = `${label(recordedMode, recordedFollowing)} → ${label(mode, following)} · ${cause}`;
+    recordedMode = mode;
+    recordedFollowing = following;
+  }
+
   function readScrollPosition() {
     return {
       top: viewport.scrollTop,
@@ -122,7 +150,7 @@ export function createScrollAnchorController(
   }
   let observedScroll = readScrollPosition();
 
-  function observeScroll() {
+  function readScrollChange() {
     const previous = observedScroll;
     const current = readScrollPosition();
     const delta = current.top - previous.top;
@@ -143,6 +171,24 @@ export function createScrollAnchorController(
     // region is bounce, not movement into history. Keep raw downward movement for
     // contact/restoration intent, but never detach solely for this rebound.
     const bottomRebound = delta < 0 && previous.top >= previous.bottom && current.top >= current.bottom;
+    return { current, delta, clamped, bottomRebound };
+  }
+
+  function recordScroll(change: ReturnType<typeof readScrollChange>) {
+    if (change.delta === 0) return;
+    const observation = change.clamped
+      ? 'Layout boundary clamp'
+      : change.bottomRebound
+        ? 'Bottom rebound'
+        : change.delta < 0
+          ? 'Upward native scroll'
+          : 'Downward native scroll';
+    diagnostics.scroll = `${observation} · ${change.delta.toFixed(2)} px`;
+  }
+
+  function observeScroll() {
+    const change = readScrollChange();
+    const { current, delta, clamped, bottomRebound } = change;
     observedScroll = current;
     // After takeover, notifications cannot reclaim ownership without new input.
     // Reduced motion may finish before the compositor delivers its final delta;
@@ -151,6 +197,7 @@ export function createScrollAnchorController(
       if (!takeover && mode === 'following' && current.top !== current.bottom) write(current.bottom);
       return;
     }
+    if (!takeover) recordScroll(change);
     if (!takeover && !clamped && !bottomRebound && delta !== 0) {
       anchorRemainder = 0;
       if (interactionHeld()) interactionMovedDown = delta > 0;
@@ -173,6 +220,7 @@ export function createScrollAnchorController(
         target: mode === 'animating' ? animationTarget : projectedBottom(),
         velocity: mode === 'animating' ? position.getVelocity() : 0,
         reason,
+        diagnostics: { ...diagnostics },
       });
     });
   }
@@ -186,14 +234,20 @@ export function createScrollAnchorController(
   }
 
   function detach(cause: string) {
+    const observeMovement = !ownsNativeTail && !takeover;
+    if (mode === 'animating') diagnostics.animation = `Interrupted · ${cause}`;
     anchorRemainder = 0;
     cancelTakeover();
     ownsNativeTail = false;
     mode = 'detached'; // Close the write gate before stopping/resetting MotionValue.
     generation++;
     position.jump(viewport.scrollTop);
-    observedScroll = readScrollPosition();
-    reason = cause;
+    const change = readScrollChange();
+    // Passive wheel delivery can follow compositor movement. Preserve that
+    // observation before interruption establishes its new position baseline.
+    if (observeMovement) recordScroll(change);
+    observedScroll = change.current;
+    recordState(cause);
     // Dependent visuals share interruption ownership, including real upward movement
     // after a non-blocking pointer press. Layout clamps never reach this branch.
     viewport.dispatchEvent(new Event(scrollAnchorInterrupted));
@@ -204,7 +258,7 @@ export function createScrollAnchorController(
     if (mode !== 'detached' || interactionHeld() || distance() > options.threshold) return;
     mode = 'following';
     destination = { kind: 'bottom', source: 'command' };
-    reason = cause;
+    recordState(cause);
     // Intent only: leave the remaining threshold pixels and native input alone.
     report();
   }
@@ -223,6 +277,7 @@ export function createScrollAnchorController(
   }
 
   function requestScroll(cause: string, next: ScrollDestination, instant = false) {
+    const replacingAnimation = mode === 'animating';
     destination = next;
     if (takeover) {
       cancelTakeover();
@@ -240,7 +295,8 @@ export function createScrollAnchorController(
       observedScroll = current;
       animationTarget = target;
       ownsNativeTail = false;
-      reason = cause;
+      if (replacingAnimation) diagnostics.animation = `Settled at target · ${cause}`;
+      recordState(cause);
       report();
       return;
     }
@@ -260,7 +316,8 @@ export function createScrollAnchorController(
     position.jump(viewport.scrollTop);
     mode = 'animating';
     animationTarget = target;
-    reason = cause;
+    diagnostics.animation = `Taking over native inertia · ${cause}`;
+    recordState(cause);
     const overflow = viewport.style.getPropertyValue('overflow-y');
     const priority = viewport.style.getPropertyPriority('overflow-y');
     const pending = {
@@ -310,13 +367,15 @@ export function createScrollAnchorController(
     position.jump(start);
     animationTarget = target;
     if (instant || options.reducedMotion || Math.abs(target - viewport.scrollTop) <= positionTolerance) {
-      reason = cause;
+      if (active || !instant) diagnostics.animation = `Skipped spring · ${cause}`;
+      recordState(cause);
       write(target);
       report();
       return;
     }
     mode = 'animating';
-    reason = cause;
+    diagnostics.animation = `${active ? 'Retargeted' : 'Started'} · ${cause}`;
+    recordState(cause);
     report();
     void position.start((complete) => {
       const owned = new JSAnimation({
@@ -329,7 +388,8 @@ export function createScrollAnchorController(
           write(destination.kind === 'bottom' ? bottom() : destinationTop());
           mode = destination.kind === 'bottom' ? 'following' : 'detached';
           const cause = destination.kind === 'bottom' ? 'Reached bottom' : 'Reached keyboard target';
-          reason = cause;
+          diagnostics.animation = `Completed · ${cause}`;
+          recordState(cause);
           report();
           // Completion can coincide with a new command in the same frame.
           // Only the current owner may clear the MotionValue's animation.
@@ -415,7 +475,9 @@ export function createScrollAnchorController(
   }
 
   function onWheel(event: WheelEvent) {
-    if (event.ctrlKey) return;
+    if (event.ctrlKey || event.deltaY === 0) return;
+    diagnostics.input = event.deltaY < 0 ? 'Upward wheel' : 'Downward wheel';
+    report();
     if (event.deltaY !== 0) ownsNativeTail = false;
     if (event.deltaY < 0) detach('Upward wheel');
     else if (event.deltaY > 0) {
@@ -427,6 +489,8 @@ export function createScrollAnchorController(
   }
 
   function onPointerDown(event: PointerEvent) {
+    diagnostics.input = `${event.pointerType} press`;
+    report();
     ownsNativeTail = false;
     if (!interactionHeld()) interactionMovedDown = false;
     pointerHeld = true;
@@ -446,6 +510,8 @@ export function createScrollAnchorController(
   }
 
   function onTouchStart(event: TouchEvent) {
+    diagnostics.input = 'Touch contact';
+    report();
     ownsNativeTail = false;
     // Fallback for touch-only browsers; pointerdown may already have detached.
     if (mode === 'animating') detach('Touch interrupted catch-up');
@@ -529,7 +595,8 @@ export function createScrollAnchorController(
     ]
       .filter(Boolean)
       .join('+');
-    requestScroll(`Keyboard ${key}`, next);
+    diagnostics.input = `Keyboard ${key}`;
+    requestScroll(diagnostics.input, next);
   }
 
   viewport.addEventListener('scroll', onScroll, { passive: true });

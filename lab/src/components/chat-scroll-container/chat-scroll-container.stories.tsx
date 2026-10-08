@@ -446,7 +446,20 @@ function ChatDemo({
           <span>Position: {scrollState?.scrollTop.toFixed(2) ?? '0.00'} px</span>
           <span>Target: {scrollState?.target.toFixed(2) ?? '0.00'} px</span>
         </div>
-        <span>Last transition: {scrollState?.reason ?? 'Initial position'}</span>
+        <div className="grid min-w-0">
+          <span className="truncate" title={scrollState?.diagnostics.state ?? 'Initial position · following'}>
+            Last state transition: {scrollState?.diagnostics.state ?? 'Initial position · following'}
+          </span>
+          <span className="truncate" title={scrollState?.diagnostics.input ?? 'None'}>
+            Last input: {scrollState?.diagnostics.input ?? 'None'}
+          </span>
+          <span className="truncate" title={scrollState?.diagnostics.scroll ?? 'None'}>
+            Last scroll observation: {scrollState?.diagnostics.scroll ?? 'None'}
+          </span>
+          <span className="truncate" title={scrollState?.diagnostics.animation ?? 'None'}>
+            Last animation transition: {scrollState?.diagnostics.animation ?? 'None'}
+          </span>
+        </div>
       </div>
     </>
   );

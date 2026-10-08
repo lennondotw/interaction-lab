@@ -82,7 +82,7 @@
           state: [...d.querySelectorAll('strong')]
             .map((e) => e.textContent)
             .find((s) => ['following', 'animating', 'detached'].includes(s)),
-          reason: d.body.innerText.match(/Last transition:([^\n]*)/)?.[1],
+          stateTransition: d.body.innerText.match(/Last state transition:([^\n]*)/)?.[1],
         });
         const descriptor = Object.getOwnPropertyDescriptor(w.Element.prototype, 'scrollTop');
         Object.defineProperty(v, 'scrollTop', {

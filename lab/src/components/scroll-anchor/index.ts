@@ -20,6 +20,7 @@ export {
   type ScrollAnchorControllerOptions,
   type ScrollAnchorMode,
   type ScrollAnchorState,
+  type ScrollAnchorDiagnostics,
 } from './scroll-anchor-controller.js';
 export {
   captureReadingAnchor,
