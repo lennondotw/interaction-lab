@@ -17,6 +17,7 @@ export const TabSizingRow: FC<TabSizingRowProps> = ({ tabs, ref }) => (
     {tabs.map((tab) => (
       <div key={tab.id} data-tab-target={tab.id} className="h-9 min-w-0 shrink basis-44" />
     ))}
-    <div className="size-9 shrink-0" />
+    <div data-tab-add-target="" className="size-9 shrink-0" />
+    <div data-tab-close-basis="" className="absolute basis-7" />
   </div>
 );
