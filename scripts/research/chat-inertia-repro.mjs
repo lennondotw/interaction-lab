@@ -38,7 +38,7 @@ try {
           .map((e) => e.textContent)
           .filter((s) => ['following', 'animating', 'detached'].includes(s))
           .join(','),
-        reason: document.body.innerText.match(/Last transition:([^\n]*)/)?.[1],
+        stateTransition: document.body.innerText.match(/Last state transition:([^\n]*)/)?.[1],
       });
       const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop');
       Object.defineProperty(v, 'scrollTop', {

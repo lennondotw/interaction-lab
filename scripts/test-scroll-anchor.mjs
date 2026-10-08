@@ -98,6 +98,11 @@ try {
   await wheel(-300);
   await waitMode('detached');
   await button('Jump to latest').waitFor();
+  await page.getByText(/Last scroll observation: Upward native scroll/).waitFor();
+  const stateTransition = page.getByText(/^Last state transition:/);
+  const firstDetach = await stateTransition.textContent();
+  assert.equal(firstDetach, 'Last state transition: following → detached · Upward wheel');
+  assert.equal(await page.getByText(/^Last input:/).textContent(), 'Last input: Upward wheel');
   const detached = await geometry();
   assert.ok(detached.distance > 100, `Escaped the bottom: ${JSON.stringify(detached)}`);
   assert.ok(detached.anchorId, 'A reading anchor row is highlighted while detached');
@@ -150,10 +155,14 @@ try {
   await waitSettled();
   const afterResize = await geometry();
   assert.equal(afterResize.mode, 'detached');
-  assert.equal(afterResize.anchorId, detached.anchorId);
+  // Shrinking this row can reveal its predecessor, which becomes the first
+  // visible candidate. Verify the original row's edge, independently of selection.
+  const resizedAnchorBottom = await viewport.locator(`[data-row-id="${detached.anchorId}"]`).evaluate((row) => {
+    return row.getBoundingClientRect().bottom;
+  });
   assert.ok(
-    Math.abs(afterResize.anchorBottom - afterBelow.anchorBottom) <= 1,
-    `Resizing the anchor row keeps its bottom edge: ${JSON.stringify(afterResize)}`
+    Math.abs(resizedAnchorBottom - afterBelow.anchorBottom) <= 1,
+    `Resizing the anchor row keeps its bottom edge: ${afterBelow.anchorBottom} -> ${resizedAnchorBottom}`
   );
 
   // The explicit bottom command animates, then follows; clearance changes while settled stay pinned.
@@ -253,6 +262,90 @@ try {
       element.scrollHeight - element.clientHeight - element.scrollTop <= 1
     );
   });
+
+  // Each diagnostic history survives unrelated events; retargeting is not a mode change.
+  const diagnostics = await page.evaluate(async () => {
+    const { createScrollAnchorController } = await import('/src/components/scroll-anchor/scroll-anchor-controller.ts');
+    const v = document.createElement('div');
+    v.style.cssText = 'position:fixed;inset:0 auto auto 0;width:200px;height:100px;overflow:auto';
+    const content = document.createElement('div');
+    content.style.cssText = 'height:2000px;padding-bottom:0';
+    v.append(content);
+    document.body.append(v);
+    let state;
+    const controller = createScrollAnchorController(v, content, {
+      threshold: 2,
+      reducedMotion: false,
+      animationSpeed: 1,
+      onStateChange: (next) => {
+        state = next;
+      },
+    });
+    const flush = async () => {
+      for (let i = 0; i < 3; i++) await new Promise(requestAnimationFrame);
+    };
+    const samples = [];
+    try {
+      await flush();
+      for (let i = 0; i < 3; i++) {
+        v.dispatchEvent(new WheelEvent('wheel', { deltaY: -40 }));
+        await flush();
+        samples.push(state);
+        v.scrollTop -= 40;
+        v.dispatchEvent(new Event('scroll'));
+        await flush();
+        samples.push(state);
+      }
+      v.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+      await flush();
+      samples.push(state);
+      v.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true, cancelable: true }));
+      await flush();
+      samples.push(state);
+      const deadline = performance.now() + 5000;
+      while (state.mode === 'animating') {
+        if (performance.now() > deadline) throw new Error('Diagnostic fixture did not settle');
+        await flush();
+      }
+      samples.push(state);
+      // A fresh command changes following intent while the mode remains animating.
+      v.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+      await flush();
+      v.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+      await flush();
+      samples.push(state);
+      v.dispatchEvent(new WheelEvent('wheel', { deltaY: -40 }));
+      await flush();
+      samples.push(state);
+      return samples;
+    } finally {
+      controller.dispose();
+      v.remove();
+    }
+  });
+  for (const sample of diagnostics.slice(0, 6)) {
+    assert.equal(sample.mode, 'detached');
+    assert.equal(sample.diagnostics.state, 'following → detached · Upward wheel');
+    assert.equal(sample.diagnostics.input, 'Upward wheel');
+    assert.equal(sample.diagnostics.animation, null);
+  }
+  assert.equal(diagnostics[0].diagnostics.scroll, null, 'Historical reports are immutable snapshots');
+  assert.equal(diagnostics[1].diagnostics.scroll, 'Upward native scroll · -40.00 px');
+  assert.equal(diagnostics[6].diagnostics.state, 'detached → animating (reading) · Keyboard ArrowUp');
+  assert.equal(diagnostics[7].diagnostics.state, diagnostics[6].diagnostics.state);
+  assert.equal(diagnostics[7].diagnostics.input, 'Keyboard PageUp');
+  assert.equal(diagnostics[7].diagnostics.animation, 'Retargeted · Keyboard PageUp');
+  assert.equal(diagnostics[8].diagnostics.state, 'animating (reading) → detached · Reached keyboard target');
+  assert.equal(diagnostics[8].diagnostics.input, 'Keyboard PageUp');
+  assert.equal(diagnostics[8].diagnostics.animation, 'Completed · Reached keyboard target');
+  assert.equal(
+    diagnostics[8].diagnostics.scroll,
+    diagnostics[1].diagnostics.scroll,
+    'Spring writes are not native input'
+  );
+  assert.equal(diagnostics[9].diagnostics.state, 'animating (reading) → animating (following) · Keyboard End');
+  assert.equal(diagnostics[10].diagnostics.state, 'animating (following) → detached · Upward wheel');
+  assert.equal(diagnostics[10].diagnostics.animation, 'Interrupted · Upward wheel');
 
   assert.deepEqual(errors, []);
   console.log('PASS: scroll anchor contracts');

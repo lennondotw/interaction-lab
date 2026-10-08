@@ -75,10 +75,22 @@ viewport tracks every layout change directly; catch-up keeps its velocity and pr
 
 ## Debugging
 
-`onStateChange` reports mode, following intent, distance, velocity, position, active spring target
-(projected bottom while idle) and the latest controller cause once per frame. The **Wireframe** story
-shows all of it, highlights the current reading anchor row, labels each entering row's slot progress,
-and styles the viewport border from `data-scroll-anchor-mode`.
+`onStateChange` reports mode, following intent, distance, velocity, position, active spring target (projected bottom while idle) and independent diagnostic histories once per frame:
+
+- **Last state transition** changes only when mode or following intent changes; temporary spring write gates are excluded.
+- **Last input** records recognized keyboard commands, vertical non-zoom wheel input and pointer/touch contact.
+- **Last scroll observation** records unowned native movement, boundary clamps and bottom rebound; spring writes are excluded.
+- **Last animation transition** records spring start, retarget, completion, interruption or native inertia takeover.
+
+An upward wheel followed by an upward native scroll keeps the state transition
+`following → detached · Upward wheel`, while the input and scroll observations update separately.
+The legacy `reason` field remains the latest controller cause, so it can change without a state transition.
+The stories group the histories without extra row gaps and truncate each to one line, with full text
+in a hover title; changing diagnostic text cannot resize the viewport.
+
+The **Wireframe** story shows all of it, highlights the current reading
+anchor row, labels each entering row's slot progress, and styles the viewport border from
+`data-scroll-anchor-mode`.
 
 ## Boundaries
 
