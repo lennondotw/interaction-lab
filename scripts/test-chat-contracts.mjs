@@ -85,6 +85,7 @@ try {
       'pointer-opt-in',
       'native-up',
       'key',
+      'down-key',
       'down-wheel',
       'zoom-wheel',
       'scroll',
@@ -103,8 +104,15 @@ try {
         if (signal === 'zoom-wheel') fire(v, new WheelEvent('wheel', { deltaY: -1, ctrlKey: true, cancelable: true }));
         if (signal === 'pointer' || signal === 'pointer-opt-in')
           fire(v, new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true, cancelable: true }));
-        if (signal === 'key')
-          fire(v, new KeyboardEvent('keydown', { key: 'PageDown', bubbles: true, cancelable: true }));
+        if (signal === 'key' || signal === 'down-key') {
+          const event = new KeyboardEvent('keydown', {
+            key: signal === 'key' ? 'PageUp' : 'PageDown',
+            bubbles: true,
+            cancelable: true,
+          });
+          v.dispatchEvent(event);
+          check(event.defaultPrevented, 'Keyboard spring owns the native scroll default');
+        }
         if (signal === 'scroll') v.dispatchEvent(new Event('scroll'));
         if (signal === 'native-up') {
           fire(v, new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));

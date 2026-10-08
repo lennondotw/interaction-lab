@@ -6,13 +6,13 @@ viewer's intent. The chat list builds on it; the wireframe story exercises it wi
 
 ## What it decides
 
-| Concern                                                            | Mechanism                                                           |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| Whether new content may move the viewport                          | Explicit `following` / `animating` / `detached` intent              |
-| Whether a decreasing `scrollTop` is user escape or a browser clamp | One observation cursor shared by layout callbacks and scroll events |
-| Where catch-up should land while layout is still expanding         | Projected bottom from content height plus pending layout            |
-| Keeping a detached reader's place when space changes above them    | Reading anchor snapshot and compensation with a rounding remainder  |
-| Which gestures interrupt, and which restore, following             | Wheel, keyboard, mouse and touch policies; touch inertia takeover   |
+| Concern                                                            | Mechanism                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Whether new content may move the viewport                          | `following` intent flag plus `following` / `animating` / `detached` mode |
+| Whether a decreasing `scrollTop` is user escape or a browser clamp | One observation cursor shared by layout callbacks and scroll events      |
+| Where catch-up should land while layout is still expanding         | Projected bottom from content height plus pending layout                 |
+| Keeping a detached reader's place when space changes above them    | Reading anchor snapshot and compensation with a rounding remainder       |
+| Which gestures interrupt, and which restore, following             | Wheel, keyboard, mouse and touch policies; touch inertia takeover        |
 
 The design rationale lives with the chat architecture notes, which still describe this behavior in
 depth: [bottom following](../chat-scroll-container/docs/bottom-following.md),
@@ -75,13 +75,13 @@ viewport tracks every layout change directly; catch-up keeps its velocity and pr
 
 ## Debugging
 
-`onStateChange` reports mode, distance, velocity, position, projected target and the last intent
-transition once per frame. The **Wireframe** story shows all of it, highlights the current reading
-anchor row, labels each entering row's slot progress, and styles the viewport border from
-`data-scroll-anchor-mode`.
+`onStateChange` reports mode, following intent, distance, velocity, position, active spring target
+(projected bottom while idle) and the latest controller cause once per frame. The **Wireframe** story
+shows all of it, highlights the current reading anchor row, labels each entering row's slot progress,
+and styles the viewport border from `data-scroll-anchor-mode`.
 
 ## Boundaries
 
 No virtualization, no arbitrary transforms that reorder row boxes, and no preservation of a removed
-anchor. Native input is never prevented. Convergence assumes a mounted viewport and finite layout
+anchor. Recognized keyboard scroll commands own the spring and prevent the browser scroll default. Pointer and wheel input remain native. Convergence assumes a mounted viewport and finite layout
 changes; a real user interruption is intentional and ends any catch-up.

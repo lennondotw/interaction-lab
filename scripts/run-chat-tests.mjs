@@ -16,6 +16,7 @@ const fullSuite = [
   'scroll-anchor',
   'resize-window',
   'contracts',
+  'keyboard',
   'item-debug',
   'scroll-velocity',
   'scroll',
@@ -35,7 +36,7 @@ const fullSuite = [
   'layout-transactions',
   'insertion',
 ];
-const ciSuite = ['scroll-anchor', 'contracts', 'item-debug', 'scroll', 'send-flight', 'typing-handoff'];
+const ciSuite = ['scroll-anchor', 'contracts', 'keyboard', 'item-debug', 'scroll', 'send-flight', 'typing-handoff'];
 const suiteName = process.argv[2] ?? 'full';
 const suites = { full: fullSuite, ci: ciSuite };
 const names = suites[suiteName];

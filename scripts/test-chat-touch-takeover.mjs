@@ -147,7 +147,12 @@ try {
         if (action === 'touch') f.touch('touchstart');
         if (action.startsWith('wheel'))
           f.v.dispatchEvent(new WheelEvent('wheel', { deltaY: action === 'wheel-up' ? -1 : 1 }));
-        if (action === 'key') f.v.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp' }));
+        const keyboardTarget = f.v.scrollTop - (f.v.clientHeight - 40);
+        if (action === 'key') {
+          const event = new KeyboardEvent('keydown', { key: 'PageUp', cancelable: true });
+          f.v.dispatchEvent(event);
+          check(event.defaultPrevented, 'Keyboard owns the replacement spring');
+        }
         if (action === 'dispose') f.c.dispose();
         if (action === 'supersede') f.c.scrollToBottom();
         if (action === 'send') f.c.layoutChanged({ follow: true });
@@ -157,7 +162,7 @@ try {
           f.v.scrollTop -= 9;
           f.v.dispatchEvent(new Event('scroll'));
         }
-        const cancelled = ['pen-scroll', 'touch', 'wheel-up', 'wheel-down', 'key', 'dispose'].includes(action);
+        const cancelled = ['pen-scroll', 'touch', 'wheel-up', 'wheel-down', 'dispose'].includes(action);
         if (cancelled) f.restored();
         const stoppedTop = f.v.scrollTop;
         await flush(6);
@@ -165,6 +170,13 @@ try {
         if (cancelled) {
           check(f.v.scrollTop === stoppedTop, `${action}: cancelled callbacks cannot resume scrolling`);
           if (action !== 'dispose') check(f.state().mode === 'detached', `${action}: remains detached`);
+        } else if (action === 'key') {
+          const deadline = performance.now() + 3000;
+          while (f.state().mode !== 'detached' && performance.now() < deadline) await flush(1);
+          check(
+            f.state().mode === 'detached' && Math.abs(f.v.scrollTop - keyboardTarget) <= 1,
+            'Keyboard supersedes pending bottom takeover and reaches its reading destination'
+          );
         } else {
           const deadline = performance.now() + 3000;
           while (f.state().mode !== 'following' && performance.now() < deadline) await flush(1);

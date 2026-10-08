@@ -66,7 +66,7 @@ and replaces it. Interrupting input or disposal immediately restores overflow an
 callbacks; an obsolete callback must not restart scrolling or overwrite a replacement's styles.
 
 Pending takeover is independent of any message or flight. Concurrent insertion changes the target read
-after restoration, without acquiring a separate handoff. Input handlers never call `preventDefault()`.
+after restoration, without acquiring a separate handoff. Wheel and pointer handlers do not prevent native defaults; recognized keyboard commands prevent native scrolling and acquire the same spring ownership.
 No bounce timer or velocity-based inertia detector is needed.
 
 ## Evidence and limits
