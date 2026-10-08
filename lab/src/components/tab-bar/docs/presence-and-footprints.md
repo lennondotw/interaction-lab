@@ -27,8 +27,9 @@ so the zero styles are painted into the DOM before the presence hold is released
 also covers a tab closed before its first entering frame and immediate reduced-motion/resize updates.
 Removal has no fixed timeout and is not tied to the hover delay.
 
-Exiting tabs are marked `data-exiting` and become inert, preventing actions and focus on a tab that the
-host has already removed. Cleanup cancels queued removal checks, unsubscribes listeners, removes the
+Exiting tabs are marked `data-exiting` in the aria-hidden, noninteractive painted tree. Their semantic
+buttons are removed immediately, and hit arbitration excludes their IDs, preventing actions and focus
+on a tab that the host has already removed. Current active/feedback context also excludes exits. Cleanup cancels queued removal checks, unsubscribes listeners, removes the
 footprint registration, and stops its width/gap springs.
 
 ## Consecutive operations retain identity
@@ -42,7 +43,7 @@ The close icon has a separate [presence geometry policy](./close-button-layout.m
 continues to animate real layout width; there is no general FLIP transform or content-scale animation.
 
 Verification: [spring tests](../__tests__/tab-spring.test.ts) cover simultaneous expansion/compression,
-width/gap collapse, and growing-to-exiting handoff. Presence timing, inert controls, and zero-before-
+width/gap collapse, and growing-to-exiting handoff. Presence timing, input exclusion, and zero-before-
 unmount behavior require the browser scenarios in the [verification guide](./verification.md).
 
 [Architecture index](../README.md)

@@ -9,7 +9,7 @@ the title/close boundary and at outer edges, making a nominal 1 px stroke thicke
 stroke stays inside its box without consuming layout width. The title and close controls have
 transparent idle outlines; the whole tab owns the visible outer stroke.
 
-The title button's `::before` paints the divider: `right-0 w-px`, neutral-500 at 15% alpha, inset by
+The painted title slot's `::before` paints the divider: `right-0 w-px`, neutral-500 at 15% alpha, inset by
 1 px at the top and bottom. It is one standalone pixel-wide separator, not two adjacent button borders.
 The vertical inset prevents overlapping the tab's horizontal outer strokes and darkening their
 intersection. It is noninteractive, and a zero-width title slot clips it away.
@@ -28,7 +28,8 @@ bottom, right edge, and internal divider instead of blending several translucent
 | Keyboard focus-visible control   | Neutral-500 at 70% alpha         |
 
 The 15/20/40 hierarchy matches the repository's wireframe time-wheel treatment. Focus outlines are
-intentional emphasis owned by the focused control; idle uniformity does not require suppressing them.
+intentional emphasis drawn by the painted control from shared `data-focus-visible`; the invisible
+native tree owns focus. Idle uniformity does not require suppressing this emphasis.
 X and plus icons use 1.5 px SVG strokes at 14 px and 18 px sizes respectively.
 
 ## Accessible controls and typography
@@ -36,11 +37,16 @@ X and plus icons use 1.5 px SVG strokes at 14 px and 18 px sizes respectively.
 The outer fieldset is labeled “Tabs”. Selection, close, and add are separate native buttons. Selection
 uses `aria-pressed`, a full-title accessible label, and the native title tooltip. Icons are aria-hidden.
 The active close button advertises Shift+W, add advertises Shift+T, and the fieldset advertises supported
-arrow chords. Exiting tabs are inert; the sizing row is aria-hidden and noninteractive.
+arrow chords. Only the final semantic row contains buttons. The painted row and sizing probes are aria-hidden
+and noninteractive; exiting IDs have no semantic buttons.
 
 The fieldset explicitly uses base text size, 24 px line height, normal weight, and normal tracking to
-keep host typography from changing this demo's geometry. Controls retain native button focus/action
-semantics. The component does not implement an ARIA tablist/tabpanel pairing, roving tabindex, or panel
+keep host typography from changing this demo's geometry. Controls retain native button keyboard/assistive action semantics. Pointer actions use
+[the shared geometry resolver](./interaction-and-presentation.md), and focus paint follows
+its shared state. Pointer hover/pressed use presentation-only hits and content-layer opacity
+(70% idle, 100% hover or pressed); they never add a background fill. Colors and SVG `currentColor`
+remain opaque. Opacity belongs to the title viewport and each SVG, so intersecting strokes flatten
+before alpha is applied, while the divider and focus/outer outlines remain unaffected. The component does not implement an ARIA tablist/tabpanel pairing, roving tabindex, or panel
 content ownership; hosts requiring those semantics need an explicit integration design.
 
 Implementation: [AnimatedTab](../animated-tab.tsx) and [TabBar](../tab-bar.tsx). Visual alpha, single-pixel
