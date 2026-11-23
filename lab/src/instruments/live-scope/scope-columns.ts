@@ -27,3 +27,14 @@ export function collectScopeColumns(
   }
   return visibleMax;
 }
+
+/**
+ * Device pixels one bar covers: one nominal sampling period, rounded up and at least one pixel, so
+ * samples arriving at their nominal rate leave no empty column between them. Rounded to the nearest
+ * pixel, a period of 1.28 device pixels (93.75 samples a second at 120 device pixels a second) drew
+ * 1-pixel bars with every third or fourth column empty: a thin dark line through a steady scope.
+ * Overlapping bars keep each column's peak, so a wider bar never adds.
+ */
+export function scopeBarWidth(pixelsPerSecond: number, devicePixelRatio: number, sampleRate: number): number {
+  return Math.max(1, Math.ceil((pixelsPerSecond * devicePixelRatio) / sampleRate - 1e-9));
+}

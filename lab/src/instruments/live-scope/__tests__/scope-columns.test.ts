@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectScopeColumns } from '../scope-columns.js';
+import { collectScopeColumns, scopeBarWidth } from '../scope-columns.js';
 
 describe('scope device-pixel columns', () => {
   it.each([1, 1.25, 2, 3])('scrolls the entire raster rigidly at %sx DPR', (dpr) => {
@@ -103,4 +103,15 @@ describe('scope device-pixel columns', () => {
       expect(narrowShift).toBe(-Math.round(12 * dpr));
     }
   );
+
+  it('leaves no empty column between samples at their nominal rate', () => {
+    // 93.75 samples a second (512-frame audio callbacks) at 60 points a second and 2x.
+    const sampleRate = 48000 / 512;
+    const samples = Array.from({ length: 400 }, (_, index) => ({ at: (index * 1000) / sampleRate, value: 1 }));
+    const barWidth = scopeBarWidth(60, 2, sampleRate);
+    const columns = new Float64Array(300);
+    collectScopeColumns(columns, samples, 3000, (60 * 2) / 1000, barWidth);
+    expect(barWidth).toBe(2);
+    expect(columns.includes(-Infinity)).toBe(false);
+  });
 });

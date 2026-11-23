@@ -35,7 +35,7 @@ import { cn } from '@monorepo/utils';
 import { useAnimationFrame } from 'motion/react';
 import { useRef, type FC } from 'react';
 
-import { collectScopeColumns } from './scope-columns.js';
+import { collectScopeColumns, scopeBarWidth } from './scope-columns.js';
 import { ScopeScale } from './scope-scale.js';
 
 export interface LiveScopeSample {
@@ -147,9 +147,9 @@ export const LiveScope: FC<LiveScopeProps> = ({
 
     if (columnsRef.current.length !== plotWidthPixels) columnsRef.current = new Float64Array(plotWidthPixels);
     const columns = columnsRef.current;
-    // One bar covers one nominal sampling period. Missed samples leave real gaps. Its
+    // One bar covers one nominal sampling period, rounded up. Missed samples leave real gaps. Its
     // device-pixel footprint stays fixed when the viewport is resized.
-    const barWidthPixels = Math.max(1, Math.round((pixelsPerSecond * dpr) / sampleRate));
+    const barWidthPixels = scopeBarWidth(pixelsPerSecond, dpr, sampleRate);
     const visibleMax = collectScopeColumns(columns, samples, now, pixelsPerMs, barWidthPixels);
     const target = Math.max(visibleMax * headroom, minScale);
     const scale = scaleRef.current!.sample(now, target).value;
